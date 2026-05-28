@@ -1,0 +1,183 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { MapPin, Users, Fuel, Settings2, Calendar } from 'lucide-react';
+import toast from 'react-hot-toast';
+import Navbar from '@/components/layout/Navbar';
+import Footer from '@/components/layout/Footer';
+import BookingProgress from '@/components/booking/BookingProgress';
+import PaymentModal from '@/components/payment/PaymentModal';
+import api from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import { formatCurrency, formatDate } from '@/lib/utils';
+
+export default function VehicleDetailPage() {
+  const { id } = useParams();
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
+  const [vehicle, setVehicle] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [step, setStep] = useState(2);
+  const [dates, setDates] = useState({ startDate: '', endDate: '' });
+  const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+
+  useEffect(() => {
+    api.get(`/vehicles/${id}`).then((res) => setVehicle(res.data.data)).catch(() => toast.error('Vehicle not found')).finally(() => setLoading(false));
+  }, [id]);
+
+  const days = dates.startDate && dates.endDate
+    ? Math.max(Math.ceil((new Date(dates.endDate).getTime() - new Date(dates.startDate).getTime()) / 86400000) + 1, 1)
+    : 0;
+  const total = vehicle ? days * parseFloat(String(vehicle.price_per_day)) : 0;
+
+  const handleBook = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to book');
+      router.push('/auth/login');
+      return;
+    }
+    if (!dates.startDate || !dates.endDate) {
+      toast.error('Please select dates');
+      return;
+    }
+    setBookingLoading(true);
+    try {
+      const res = await api.post('/bookings', { vehicleId: id, ...dates });
+      setBooking(res.data.data);
+      setStep(4);
+      toast.success('Booking created! Proceed to payment.');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Booking failed');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  if (loading) return (
+    <>
+      <Navbar />
+      <div className="pt-24 flex justify-center"><div className="skeleton w-full max-w-4xl h-96 rounded-2xl" /></div>
+    </>
+  );
+
+  if (!vehicle) return null;
+
+  return (
+    <>
+      <Navbar />
+      <main className="pt-24 pb-16 min-h-screen">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <BookingProgress currentStep={booking ? 4 : step} />
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-card overflow-hidden">
+              <div className="h-72 bg-gradient-to-br from-sky-500/20 to-violet-500/20 flex items-center justify-center text-8xl">
+                🚗
+              </div>
+              <div className="p-6">
+                <h1 className="text-3xl font-bold mb-2">{String(vehicle.title)}</h1>
+                <p className="text-[var(--muted)] mb-4">{String(vehicle.brand)} {String(vehicle.model)} · {String(vehicle.year)}</p>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {[
+                    { icon: MapPin, val: vehicle.location },
+                    { icon: Users, val: `${vehicle.seats} seats` },
+                    { icon: Fuel, val: vehicle.fuel_type },
+                    { icon: Settings2, val: vehicle.transmission },
+                  ].map(({ icon: Icon, val }) => (
+                    <div key={String(val)} className="flex items-center gap-2 text-[var(--muted)]">
+                      <Icon className="w-4 h-4 text-[var(--primary)]" />{String(val)}
+                    </div>
+                  ))}
+                </div>
+                {Boolean(vehicle.description) && (
+                  <p className="mt-4 text-sm text-[var(--muted)]">{String(vehicle.description)}</p>
+                )}
+              </div>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="glass-card p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <span className="text-3xl font-bold text-[var(--primary)]">{formatCurrency(Number(vehicle.price_per_day))}</span>
+                  <span className="text-[var(--muted)]">/day</span>
+                </div>
+                <span className="px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-500 capitalize">{String(vehicle.status)}</span>
+              </div>
+
+              {!booking ? (
+                <>
+                  <h3 className="font-semibold mb-4 flex items-center gap-2"><Calendar className="w-4 h-4" /> Select Dates</h3>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="text-sm text-[var(--muted)]">Start Date</label>
+                      <input type="date" className="input-field mt-1" value={dates.startDate}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setDates({ ...dates, startDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-sm text-[var(--muted)]">End Date</label>
+                      <input type="date" className="input-field mt-1" value={dates.endDate}
+                        min={dates.startDate || new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setDates({ ...dates, endDate: e.target.value })} />
+                    </div>
+                  </div>
+
+                  {days > 0 && (
+                    <div className="bg-[var(--primary)]/10 rounded-xl p-4 mb-6">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>{formatCurrency(Number(vehicle.price_per_day))} × {days} days</span>
+                        <span>{formatCurrency(total)}</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-lg">
+                        <span>Total</span>
+                        <span className="text-[var(--primary)]">{formatCurrency(total)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={handleBook} disabled={bookingLoading || days === 0} className="btn-primary w-full">
+                    {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+                  </button>
+                </>
+              ) : (
+                <div>
+                  <h3 className="font-semibold mb-4 text-green-500">✓ Booking Created</h3>
+                  <div className="space-y-2 text-sm mb-6">
+                    <p>From: {formatDate(String(booking.start_date))}</p>
+                    <p>To: {formatDate(String(booking.end_date))}</p>
+                    <p>Total: {formatCurrency(Number(booking.total_amount))}</p>
+                    <p>Paid: {formatCurrency(Number(booking.paid_amount || 0))}</p>
+                    <p>Status: <span className="capitalize">{String(booking.payment_status)}</span></p>
+                  </div>
+                  {booking.payment_status !== 'fully_paid' && (
+                    <button onClick={() => setShowPayment(true)} className="btn-primary w-full mb-3">
+                      Make Payment
+                    </button>
+                  )}
+                  <button onClick={() => router.push('/dashboard/customer/bookings')} className="btn-outline w-full">
+                    View My Bookings
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+
+      {booking && (
+        <PaymentModal
+          booking={{ id: String(booking.id), total_amount: Number(booking.total_amount), paid_amount: Number(booking.paid_amount || 0), title: String(vehicle.title) }}
+          isOpen={showPayment}
+          onClose={() => setShowPayment(false)}
+          onSuccess={() => api.get(`/bookings/${booking.id}`).then((res) => setBooking(res.data.data))}
+        />
+      )}
+    </>
+  );
+}
