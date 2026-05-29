@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { MapPin, Users, Fuel, Settings2, Calendar } from 'lucide-react';
+import { Calendar, Fuel, Hash, MapPin, Phone, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -67,6 +67,17 @@ export default function VehicleDetailPage() {
 
   if (!vehicle) return null;
 
+  const city = String(vehicle.city || vehicle.location || 'Cebu City');
+  const barangay = vehicle.barangay ? String(vehicle.barangay) : '';
+  const pickupAddress = vehicle.pickup_address ? String(vehicle.pickup_address) : 'Owner-provided pickup point';
+  const latitude = Number(vehicle.latitude || 10.3157);
+  const longitude = Number(vehicle.longitude || 123.8854);
+  const pickupQuery = encodeURIComponent(
+    [pickupAddress, barangay, city, 'Cebu', 'Philippines'].filter(Boolean).join(', ')
+  );
+  const mapSrc = `https://maps.google.com/maps?q=${pickupQuery || `${latitude},${longitude}`}&z=17&output=embed`;
+  const images = Array.isArray(vehicle.images) ? vehicle.images as string[] : [];
+
   return (
     <>
       <Navbar />
@@ -76,23 +87,61 @@ export default function VehicleDetailPage() {
 
           <div className="grid lg:grid-cols-2 gap-8">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-card overflow-hidden">
-              <div className="h-72 bg-gradient-to-br from-sky-500/20 to-violet-500/20 flex items-center justify-center text-8xl">
-                🚗
+              <div className="h-72 bg-gradient-to-br from-sky-500/20 via-emerald-500/10 to-amber-400/20 overflow-hidden">
+                {images[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={images[0]} alt={String(vehicle.title)} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-4xl font-bold text-[var(--primary)]">No photo</div>
+                )}
               </div>
               <div className="p-6">
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <span className="px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-semibold">Available in {city}</span>
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">Cebu Province Verified</span>
+                </div>
                 <h1 className="text-3xl font-bold mb-2">{String(vehicle.title)}</h1>
-                <p className="text-[var(--muted)] mb-4">{String(vehicle.brand)} {String(vehicle.model)} · {String(vehicle.year)}</p>
+                <p className="text-[var(--muted)] mb-4">{String(vehicle.brand)} {String(vehicle.model)} - {String(vehicle.year)}</p>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
-                    { icon: MapPin, val: vehicle.location },
+                    { icon: MapPin, val: [city, barangay].filter(Boolean).join(', ') },
                     { icon: Users, val: `${vehicle.seats} seats` },
                     { icon: Fuel, val: vehicle.fuel_type },
                     { icon: Settings2, val: vehicle.transmission },
+                    ...(vehicle.plate_number ? [{ icon: Hash, val: `Plate: ${vehicle.plate_number}` }] : []),
                   ].map(({ icon: Icon, val }) => (
                     <div key={String(val)} className="flex items-center gap-2 text-[var(--muted)]">
                       <Icon className="w-4 h-4 text-[var(--primary)]" />{String(val)}
                     </div>
                   ))}
+                </div>
+                <div className="mt-5 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4">
+                  <p className="font-semibold mb-3">Owner Contact</p>
+                  <div className="grid sm:grid-cols-2 gap-3 text-sm text-[var(--muted)]">
+                    <p className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-[var(--primary)]" />
+                      {String(vehicle.owner_name || 'Vehicle owner')}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-[var(--primary)]" />
+                      {String(vehicle.owner_phone || 'No phone provided')}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 overflow-hidden rounded-xl border border-[var(--card-border)]">
+                  <div className="px-4 py-3 bg-[var(--primary)]/10 text-sm">
+                    <p className="font-semibold">Static pickup preview</p>
+                    <p className="text-[var(--muted)]">City: {city}</p>
+                    {barangay && <p className="text-[var(--muted)]">Barangay: {barangay}</p>}
+                    <p className="text-[var(--muted)]">Pickup area: {pickupAddress}</p>
+                  </div>
+                  <iframe
+                    title="Static pickup map preview"
+                    src={mapSrc}
+                    className="h-56 w-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
                 </div>
                 {Boolean(vehicle.description) && (
                   <p className="mt-4 text-sm text-[var(--muted)]">{String(vehicle.description)}</p>
@@ -130,7 +179,7 @@ export default function VehicleDetailPage() {
                   {days > 0 && (
                     <div className="bg-[var(--primary)]/10 rounded-xl p-4 mb-6">
                       <div className="flex justify-between text-sm mb-1">
-                        <span>{formatCurrency(Number(vehicle.price_per_day))} × {days} days</span>
+                        <span>{formatCurrency(Number(vehicle.price_per_day))} x {days} days</span>
                         <span>{formatCurrency(total)}</span>
                       </div>
                       <div className="flex justify-between font-bold text-lg">
@@ -141,12 +190,12 @@ export default function VehicleDetailPage() {
                   )}
 
                   <button onClick={handleBook} disabled={bookingLoading || days === 0} className="btn-primary w-full">
-                    {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+                    {bookingLoading ? 'Booking...' : 'Confirm Cebu Booking'}
                   </button>
                 </>
               ) : (
                 <div>
-                  <h3 className="font-semibold mb-4 text-green-500">✓ Booking Created</h3>
+                  <h3 className="font-semibold mb-4 text-green-500">Booking Created</h3>
                   <div className="space-y-2 text-sm mb-6">
                     <p>From: {formatDate(String(booking.start_date))}</p>
                     <p>To: {formatDate(String(booking.end_date))}</p>

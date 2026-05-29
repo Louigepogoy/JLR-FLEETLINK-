@@ -29,6 +29,9 @@ async function setup() {
     console.log('Database connection OK:', rows[0].now);
 
     const schemaPath = path.join(__dirname, '../database/schema.sql');
+    const cebuMigrationPath = path.join(__dirname, '../database/migration_cebu_vehicle_locations.sql');
+    const ownerSubscriptionMigrationPath = path.join(__dirname, '../database/migration_owner_subscriptions.sql');
+    const plateNumberMigrationPath = path.join(__dirname, '../database/migration_vehicle_plate_number.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -42,7 +45,13 @@ async function setup() {
       await runSqlFile(schemaPath);
       console.log('Schema created.');
     } else {
-      console.log('Tables already exist — skipping schema.');
+      console.log('Tables already exist - skipping schema.');
+      await runSqlFile(cebuMigrationPath);
+      console.log('Cebu vehicle location migration applied.');
+      await runSqlFile(ownerSubscriptionMigrationPath);
+      console.log('Owner subscription migration applied.');
+      await runSqlFile(plateNumberMigrationPath);
+      console.log('Vehicle plate number migration applied.');
     }
 
     await runSqlFile(seedPath);

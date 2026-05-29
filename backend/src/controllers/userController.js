@@ -1,4 +1,5 @@
 const { body, validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
 
@@ -128,7 +129,11 @@ const rejectRegistration = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { fullName, phone, avatarUrl } = req.body;
+    const avatarFile = req.files?.avatar?.[0];
+    const avatarUrl = avatarFile
+      ? `${req.protocol}://${req.get('host')}/uploads/${avatarFile.filename}`
+      : req.body.avatarUrl;
+    const { fullName, phone } = req.body;
     const result = await query(
       `UPDATE users SET
          full_name = COALESCE($1, full_name),
@@ -140,6 +145,33 @@ const updateProfile = async (req, res, next) => {
       [fullName, phone, avatarUrl, req.user.id]
     );
     res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and a new password with at least 8 characters are required',
+      });
+    }
+
+    const userResult = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    const valid = await bcrypt.compare(currentPassword, userResult.rows[0]?.password_hash || '');
+
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, req.user.id]);
+
+    res.json({ success: true, message: 'Password changed successfully' });
   } catch (error) {
     next(error);
   }
@@ -183,6 +215,7 @@ module.exports = {
   approveRegistration,
   rejectRegistration,
   updateProfile,
+  changePassword,
   toggleUserStatus,
   updateUserRole,
 };

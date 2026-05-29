@@ -41,6 +41,7 @@ export default function AdminDashboard() {
           { href: '/dashboard/admin/approvals', title: 'Registration Approvals', desc: 'Review license & selfie verifications' },
           { href: '/dashboard/admin/users', title: 'Manage Users', desc: 'View and manage all platform users' },
           { href: '/dashboard/admin/bookings', title: 'All Bookings', desc: 'Monitor all booking activity' },
+          { href: '/dashboard/admin/reports', title: 'User Reports', desc: 'Review customer and owner complaints' },
           { href: '/dashboard/admin/settings', title: 'Commission Settings', desc: 'Configure platform commission rate' },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="glass-card p-6 hover:border-[var(--primary)] transition-colors">

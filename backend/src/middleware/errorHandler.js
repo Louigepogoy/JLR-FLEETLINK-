@@ -34,6 +34,17 @@ const errorHandler = (err, req, res, next) => {
     return res.status(409).json({ success: false, message: err.message });
   }
 
+  if (err.upgradeRequired) {
+    return res.status(err.status || 403).json({
+      success: false,
+      message: err.message,
+      upgradeRequired: true,
+      currentCount: err.currentCount,
+      vehicleLimit: err.vehicleLimit,
+      planId: err.planId,
+    });
+  }
+
   res.status(err.status || 500).json({
     success: false,
     message: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,

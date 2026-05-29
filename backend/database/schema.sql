@@ -10,6 +10,7 @@ CREATE TYPE payment_method AS ENUM ('gcash', 'card', 'cash');
 CREATE TYPE transaction_type AS ENUM ('payment', 'refund', 'commission', 'payout');
 CREATE TYPE notification_type AS ENUM ('booking', 'payment', 'system', 'alert');
 CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+CREATE TYPE report_status AS ENUM ('pending', 'reviewed', 'resolved', 'dismissed');
 
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -44,6 +45,7 @@ CREATE TABLE vehicles (
   title VARCHAR(255) NOT NULL,
   brand VARCHAR(100) NOT NULL,
   model VARCHAR(100) NOT NULL,
+  plate_number VARCHAR(30),
   year INTEGER NOT NULL,
   vehicle_type VARCHAR(50) NOT NULL,
   transmission VARCHAR(50) NOT NULL,
@@ -51,12 +53,32 @@ CREATE TABLE vehicles (
   seats INTEGER NOT NULL DEFAULT 4,
   price_per_day DECIMAL(12,2) NOT NULL,
   location VARCHAR(255) NOT NULL,
+  city VARCHAR(100) NOT NULL,
+  barangay VARCHAR(100),
+  pickup_address VARCHAR(255),
+  latitude DECIMAL(10,7) NOT NULL,
+  longitude DECIMAL(10,7) NOT NULL,
   description TEXT,
   images TEXT[] DEFAULT '{}',
   features TEXT[] DEFAULT '{}',
   status vehicle_status DEFAULT 'available',
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT vehicles_cebu_city_check CHECK (
+    city IN (
+      'Cebu City',
+      'Mandaue City',
+      'Lapu-Lapu City',
+      'Talisay City',
+      'Toledo City',
+      'Minglanilla',
+      'Consolacion',
+      'Cordova',
+      'Carcar',
+      'Naga Cebu',
+      'Other Cebu municipalities'
+    )
+  )
 );
 
 CREATE TABLE bookings (
@@ -112,6 +134,44 @@ CREATE TABLE commissions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE owner_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id VARCHAR(50) NOT NULL,
+  plan_name VARCHAR(100) NOT NULL,
+  price DECIMAL(12,2) NOT NULL DEFAULT 0,
+  billing_cycle VARCHAR(50) NOT NULL,
+  vehicle_limit INTEGER NOT NULL,
+  photo_limit INTEGER NOT NULL DEFAULT 5,
+  payment_method VARCHAR(50) NOT NULL,
+  payment_reference VARCHAR(100),
+  card_last_four VARCHAR(4),
+  starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ends_at TIMESTAMPTZ,
+  status VARCHAR(50) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT owner_subscription_plan_check CHECK (plan_id IN ('basic', 'pro', 'premium')),
+  CONSTRAINT owner_subscription_payment_check CHECK (payment_method IN ('trial', 'gcash', 'card')),
+  CONSTRAINT owner_subscription_status_check CHECK (status IN ('active', 'cancelled', 'expired'))
+);
+
+CREATE TABLE reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  reporter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reported_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason VARCHAR(100) NOT NULL,
+  description TEXT NOT NULL,
+  status report_status DEFAULT 'pending',
+  admin_notes TEXT,
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT reports_not_self CHECK (reporter_id <> reported_user_id)
+);
+
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -146,11 +206,18 @@ CREATE TRIGGER booking_overlap_check
 
 CREATE INDEX idx_vehicles_owner ON vehicles(owner_id);
 CREATE INDEX idx_vehicles_status ON vehicles(status);
+CREATE INDEX idx_vehicles_city ON vehicles(city);
 CREATE INDEX idx_bookings_customer ON bookings(customer_id);
 CREATE INDEX idx_bookings_vehicle ON bookings(vehicle_id);
 CREATE INDEX idx_payments_booking ON payments(booking_id);
 CREATE INDEX idx_transactions_booking ON transactions(booking_id);
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_users_approval_status ON users(approval_status);
+CREATE INDEX idx_owner_subscriptions_owner ON owner_subscriptions(owner_id);
+CREATE INDEX idx_owner_subscriptions_status ON owner_subscriptions(status);
+CREATE INDEX idx_reports_reporter ON reports(reporter_id);
+CREATE INDEX idx_reports_reported_user ON reports(reported_user_id);
+CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_booking ON reports(booking_id);
 
 INSERT INTO platform_settings (commission_percentage) VALUES (10.00);

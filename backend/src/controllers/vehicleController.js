@@ -1,9 +1,130 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 
+const CEBU_LOCATIONS = [
+  'Cebu City',
+  'Mandaue City',
+  'Lapu-Lapu City',
+  'Talisay City',
+  'Toledo City',
+  'Minglanilla',
+  'Consolacion',
+  'Cordova',
+  'Carcar',
+  'Naga Cebu',
+  'Other Cebu municipalities',
+];
+
+const CEBU_LOCATION_COORDS = {
+  'Cebu City': { latitude: 10.3157, longitude: 123.8854 },
+  'Mandaue City': { latitude: 10.3403, longitude: 123.9416 },
+  'Lapu-Lapu City': { latitude: 10.3103, longitude: 123.9494 },
+  'Talisay City': { latitude: 10.2447, longitude: 123.8494 },
+  'Toledo City': { latitude: 10.3773, longitude: 123.6386 },
+  Minglanilla: { latitude: 10.2447, longitude: 123.7964 },
+  Consolacion: { latitude: 10.3776, longitude: 123.9570 },
+  Cordova: { latitude: 10.2538, longitude: 123.9494 },
+  Carcar: { latitude: 10.1061, longitude: 123.6402 },
+  'Naga Cebu': { latitude: 10.2088, longitude: 123.7580 },
+  'Other Cebu municipalities': { latitude: 10.3157, longitude: 123.8854 },
+};
+
+const NEARBY_CEBU_AREAS = [
+  'Mandaue City',
+  'Lapu-Lapu City',
+  'Talisay City',
+  'Minglanilla',
+  'Consolacion',
+  'Cordova',
+  'Naga Cebu',
+];
+
+const VEHICLE_LIMIT_BY_PLAN = {
+  basic: 5,
+  pro: 10,
+  premium: 20,
+};
+
+const normalizeVehicleLocation = (bodyData) => {
+  const city = bodyData.city || bodyData.location;
+
+  if (!CEBU_LOCATIONS.includes(city)) {
+    const error = new Error('Vehicle location must be within Cebu City or Cebu Province.');
+    error.status = 400;
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const fallbackCoords = CEBU_LOCATION_COORDS[city];
+  const latitude = bodyData.latitude === undefined || bodyData.latitude === ''
+    ? fallbackCoords.latitude
+    : Number(bodyData.latitude);
+  const longitude = bodyData.longitude === undefined || bodyData.longitude === ''
+    ? fallbackCoords.longitude
+    : Number(bodyData.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    const error = new Error('Pickup latitude and longitude must be valid numbers.');
+    error.status = 400;
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    city,
+    location: city,
+    barangay: bodyData.barangay || null,
+    pickupAddress: bodyData.pickupAddress || bodyData.pickup_address || null,
+    latitude,
+    longitude,
+  };
+};
+
+const getOwnerVehicleLimit = async (ownerId) => {
+  const subscription = await query(
+    `SELECT plan_id, vehicle_limit
+     FROM owner_subscriptions
+     WHERE owner_id = $1 AND status = 'active'
+     ORDER BY created_at DESC LIMIT 1`,
+    [ownerId]
+  );
+
+  const planId = subscription.rows[0]?.plan_id || 'basic';
+  const limit = Number(subscription.rows[0]?.vehicle_limit || VEHICLE_LIMIT_BY_PLAN[planId] || 5);
+
+  return { planId, limit };
+};
+
+const enforceOwnerVehicleLimit = async (ownerId) => {
+  const [{ rows: countRows }, plan] = await Promise.all([
+    query('SELECT COUNT(*)::int AS count FROM vehicles WHERE owner_id = $1', [ownerId]),
+    getOwnerVehicleLimit(ownerId),
+  ]);
+
+  const currentCount = Number(countRows[0]?.count || 0);
+  if (currentCount >= plan.limit) {
+    const error = new Error(
+      `Your ${plan.planId} plan allows up to ${plan.limit} vehicles. Please select a higher subscription plan to add more vehicles.`
+    );
+    error.status = 403;
+    error.upgradeRequired = true;
+    error.currentCount = currentCount;
+    error.vehicleLimit = plan.limit;
+    error.planId = plan.planId;
+    throw error;
+  }
+};
+
+const getVehicleImageUrls = (req, existingImages = []) => {
+  const uploaded = req.files?.vehicleImage || [];
+  const fileUrls = uploaded.map((file) => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`);
+  const bodyImages = Array.isArray(existingImages) ? existingImages : [];
+  return [...fileUrls, ...bodyImages].filter(Boolean);
+};
+
 const getVehicles = async (req, res, next) => {
   try {
-    const { search, type, minPrice, maxPrice, location, status = 'available' } = req.query;
+    const { search, type, minPrice, maxPrice, location, area, status = 'available' } = req.query;
     let sql = `
       SELECT v.*, u.full_name as owner_name
       FROM vehicles v
@@ -27,8 +148,13 @@ const getVehicles = async (req, res, next) => {
       params.push(type);
     }
     if (location) {
-      sql += ` AND v.location ILIKE $${idx++}`;
+      sql += ` AND (v.city ILIKE $${idx} OR v.location ILIKE $${idx})`;
       params.push(`%${location}%`);
+      idx++;
+    }
+    if (area === 'nearby') {
+      sql += ` AND v.city = ANY($${idx++}::text[])`;
+      params.push(NEARBY_CEBU_AREAS);
     }
     if (minPrice) {
       sql += ` AND v.price_per_day >= $${idx++}`;
@@ -73,18 +199,31 @@ const createVehicle = async (req, res, next) => {
 
     const {
       title, brand, model, year, vehicleType, transmission, fuelType,
-      seats, pricePerDay, location, description, images, features,
+      seats, pricePerDay, plateNumber, description, images, features,
     } = req.body;
+    const vehicleLocation = normalizeVehicleLocation(req.body);
+    const vehicleImages = getVehicleImageUrls(req, images);
+    await enforceOwnerVehicleLimit(req.user.id);
+
+    if (!vehicleImages.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle photo/proof is required before publishing a listing.',
+      });
+    }
 
     const result = await query(
-      `INSERT INTO vehicles (owner_id, title, brand, model, year, vehicle_type, transmission,
-        fuel_type, seats, price_per_day, location, description, images, features)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      `INSERT INTO vehicles (owner_id, title, brand, model, plate_number, year, vehicle_type, transmission,
+        fuel_type, seats, price_per_day, location, city, barangay, pickup_address,
+        latitude, longitude, description, images, features)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING *`,
       [
-        req.user.id, title, brand, model, year, vehicleType, transmission,
-        fuelType, seats || 4, pricePerDay, location, description || null,
-        images || [], features || [],
+        req.user.id, title, brand, model, plateNumber || null, year, vehicleType, transmission,
+        fuelType, seats || 4, pricePerDay, vehicleLocation.location, vehicleLocation.city,
+        vehicleLocation.barangay, vehicleLocation.pickupAddress, vehicleLocation.latitude,
+        vehicleLocation.longitude, description || null,
+        vehicleImages, features || [],
       ]
     );
 
@@ -104,17 +243,36 @@ const updateVehicle = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    const fields = ['title', 'brand', 'model', 'year', 'vehicle_type', 'transmission',
-      'fuel_type', 'seats', 'price_per_day', 'location', 'description', 'images', 'features', 'status'];
+    const fields = ['title', 'brand', 'model', 'plate_number', 'year', 'vehicle_type', 'transmission',
+      'fuel_type', 'seats', 'price_per_day', 'location', 'city', 'barangay',
+      'pickup_address', 'latitude', 'longitude', 'description', 'images', 'features', 'status'];
     const mapping = {
       vehicleType: 'vehicle_type', pricePerDay: 'price_per_day', fuelType: 'fuel_type',
+      pickupAddress: 'pickup_address', plateNumber: 'plate_number',
     };
+    const bodyData = { ...req.body };
+    const uploadedImages = getVehicleImageUrls(req);
+
+    if (uploadedImages.length) {
+      bodyData.images = uploadedImages;
+    }
+
+    if (bodyData.location !== undefined || bodyData.city !== undefined) {
+      const vehicleLocation = normalizeVehicleLocation(bodyData);
+      bodyData.location = vehicleLocation.location;
+      bodyData.city = vehicleLocation.city;
+      bodyData.barangay = vehicleLocation.barangay;
+      bodyData.pickup_address = vehicleLocation.pickupAddress;
+      bodyData.latitude = vehicleLocation.latitude;
+      bodyData.longitude = vehicleLocation.longitude;
+      delete bodyData.pickupAddress;
+    }
 
     const updates = [];
     const values = [];
     let i = 1;
 
-    Object.entries(req.body).forEach(([key, val]) => {
+    Object.entries(bodyData).forEach(([key, val]) => {
       const col = mapping[key] || key;
       if (fields.includes(col) && val !== undefined) {
         updates.push(`${col} = $${i++}`);
@@ -172,12 +330,21 @@ const vehicleValidation = [
   body('title').trim().notEmpty(),
   body('brand').trim().notEmpty(),
   body('model').trim().notEmpty(),
+  body('plateNumber').optional().trim(),
   body('year').isInt({ min: 1990, max: new Date().getFullYear() + 1 }),
   body('vehicleType').trim().notEmpty(),
   body('transmission').trim().notEmpty(),
   body('fuelType').trim().notEmpty(),
   body('pricePerDay').isFloat({ min: 0 }),
-  body('location').trim().notEmpty(),
+  body('city').optional().isIn(CEBU_LOCATIONS).withMessage('City must be in Cebu only'),
+  body('location').optional().isIn(CEBU_LOCATIONS).withMessage('Location must be in Cebu only'),
+  body().custom((value) => {
+    const city = value.city || value.location;
+    if (!city || !CEBU_LOCATIONS.includes(city)) {
+      throw new Error('Vehicle location must be within Cebu City or Cebu Province.');
+    }
+    return true;
+  }),
 ];
 
 module.exports = {

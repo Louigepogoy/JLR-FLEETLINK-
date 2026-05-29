@@ -32,4 +32,20 @@ const uploadRegistrationDocs = multer({
   { name: 'selfieImage', maxCount: 1 },
 ]);
 
-module.exports = { uploadRegistrationDocs, uploadDir };
+const uploadVehicleImages = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter,
+}).fields([
+  { name: 'vehicleImage', maxCount: 1 },
+]);
+
+const uploadProfileAvatar = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter,
+}).fields([
+  { name: 'avatar', maxCount: 1 },
+]);
+
+module.exports = { uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadDir };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Car, Calendar, TrendingUp } from 'lucide-react';
+import { Car, Calendar, Crown, TrendingUp } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -44,7 +44,7 @@ export default function OwnerDashboard() {
           <p className="text-sm text-[var(--muted)]">Pending Bookings</p>
         </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid md:grid-cols-3 gap-6">
         <Link href="/dashboard/owner/vehicles" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
           <h3 className="font-semibold mb-2">Manage Vehicles</h3>
           <p className="text-sm text-[var(--muted)]">Add, edit, or remove your vehicle listings</p>
@@ -52,6 +52,11 @@ export default function OwnerDashboard() {
         <Link href="/dashboard/owner/bookings" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
           <h3 className="font-semibold mb-2">Review Bookings</h3>
           <p className="text-sm text-[var(--muted)]">Approve or reject customer booking requests</p>
+        </Link>
+        <Link href="/dashboard/owner/subscription" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
+          <Crown className="w-6 h-6 text-blue-500 mb-3" />
+          <h3 className="font-semibold mb-2">Subscription</h3>
+          <p className="text-sm text-[var(--muted)]">Choose a plan to publish and grow your fleet</p>
         </Link>
       </div>
     </DashboardLayout>

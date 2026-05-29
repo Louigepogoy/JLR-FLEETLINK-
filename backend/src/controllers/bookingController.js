@@ -52,7 +52,8 @@ const createBooking = async (req, res, next) => {
 const getMyBookings = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT b.*, v.title, v.brand, v.model, v.images, v.price_per_day,
+      `SELECT b.*, v.owner_id, v.title, v.brand, v.model, v.images, v.price_per_day,
+              v.city, v.barangay, v.pickup_address, v.latitude, v.longitude,
               u.full_name as owner_name
        FROM bookings b
        JOIN vehicles v ON b.vehicle_id = v.id
@@ -70,7 +71,8 @@ const getMyBookings = async (req, res, next) => {
 const getOwnerBookings = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT b.*, v.title, v.brand, v.model,
+      `SELECT b.*, v.owner_id, v.title, v.brand, v.model, v.images,
+              v.city, v.barangay, v.pickup_address,
               c.full_name as customer_name, c.email as customer_email, c.phone as customer_phone
        FROM bookings b
        JOIN vehicles v ON b.vehicle_id = v.id
@@ -88,7 +90,8 @@ const getOwnerBookings = async (req, res, next) => {
 const getAllBookings = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT b.*, v.title, v.brand, v.model,
+      `SELECT b.*, v.title, v.brand, v.model, v.images,
+              v.city, v.barangay, v.pickup_address,
               c.full_name as customer_name, o.full_name as owner_name
        FROM bookings b
        JOIN vehicles v ON b.vehicle_id = v.id
@@ -155,6 +158,7 @@ const getBookingById = async (req, res, next) => {
   try {
     const result = await query(
       `SELECT b.*, v.title, v.brand, v.model, v.images, v.owner_id,
+              v.city, v.barangay, v.pickup_address, v.latitude, v.longitude,
               c.full_name as customer_name
        FROM bookings b
        JOIN vehicles v ON b.vehicle_id = v.id
