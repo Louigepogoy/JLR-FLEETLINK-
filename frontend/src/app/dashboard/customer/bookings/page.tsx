@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Clock, FileText, MapPin } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
+import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 type CustomerBooking = {
   id: string;
@@ -15,6 +17,8 @@ type CustomerBooking = {
   model: string;
   start_date: string;
   end_date: string;
+  pickup_time?: string;
+  dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
   status: string;
@@ -28,6 +32,7 @@ type CustomerBooking = {
 };
 
 export default function CustomerBookingsPage() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
@@ -38,6 +43,20 @@ export default function CustomerBookingsPage() {
   };
 
   useEffect(() => { fetchBookings(); }, []);
+
+  const viewReceipt = async (bookingId: string) => {
+    try {
+      const res = await api.get(`/payments/booking/${bookingId}/receipt`);
+      const latest = res.data.data.payments?.find((p: { invoice_number?: string }) => p.invoice_number);
+      if (latest?.invoice_number) {
+        router.push(`/dashboard/customer/receipt/${latest.invoice_number}`);
+      } else {
+        toast.error('No payment receipt found for this booking');
+      }
+    } catch {
+      toast.error('Could not load receipt');
+    }
+  };
 
   const statusColor: Record<string, string> = {
     pending: 'bg-yellow-500/20 text-yellow-500',
@@ -67,7 +86,10 @@ export default function CustomerBookingsPage() {
                 <div>
                   <h3 className="font-semibold text-lg">{b.title}</h3>
                   <p className="text-sm text-[var(--muted)]">{b.brand} {b.model}</p>
-                  <p className="text-sm mt-1">{formatDate(b.start_date)} to {formatDate(b.end_date)}</p>
+                  <p className="text-sm mt-1 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-[var(--primary)]" />
+                    {formatDate(b.start_date)} {formatTime(b.pickup_time)} — {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
+                  </p>
                   <p className="mt-2 flex items-center gap-1 text-sm text-[var(--muted)]">
                     <MapPin className="h-4 w-4 text-[var(--primary)]" />
                     {[b.pickup_address, b.barangay, b.city].filter(Boolean).join(', ')}
@@ -83,14 +105,24 @@ export default function CustomerBookingsPage() {
                 </div>
               </div>
             </div>
-            {b.payment_status !== 'fully_paid' && ['approved', 'active', 'pending'].includes(b.status) && (
-              <button
-                className="btn-primary mt-4 text-sm"
-                onClick={() => { setSelected(b as unknown as Record<string, unknown>); setShowPayment(true); }}
-              >
-                Make Payment
-              </button>
-            )}
+            <div className="flex flex-wrap gap-3 mt-4">
+              {b.payment_status !== 'fully_paid' && ['approved', 'active', 'pending'].includes(b.status) && (
+                <button
+                  className="btn-primary text-sm"
+                  onClick={() => { setSelected(b as unknown as Record<string, unknown>); setShowPayment(true); }}
+                >
+                  Make Payment
+                </button>
+              )}
+              {(b.paid_amount || 0) > 0 && (
+                <button
+                  className="btn-outline text-sm flex items-center gap-2"
+                  onClick={() => viewReceipt(b.id)}
+                >
+                  <FileText className="h-4 w-4" /> View Receipt
+                </button>
+              )}
+            </div>
             <button
               className="btn-outline mt-4 text-sm text-red-500 sm:ml-3"
               onClick={() => setReportBooking(b)}

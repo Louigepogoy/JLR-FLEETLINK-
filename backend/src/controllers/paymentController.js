@@ -85,11 +85,12 @@ const processPayment = async (req, res, next) => {
       newPaidAmount >= parseFloat(booking.total_amount) ? 'fully_paid' : 'partially_paid';
 
     const paymentInsert = await client.query(
-      `INSERT INTO payments (booking_id, amount, payment_method, status, reference_number, card_last_four)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO payments (booking_id, amount, payment_method, status, reference_number, card_last_four, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         bookingId, amount, paymentMethod, paymentStatus,
         paymentResult.referenceNumber, paymentResult.cardLastFour || null,
+        JSON.stringify(paymentResult.metadata || {}),
       ]
     );
 
@@ -132,10 +133,13 @@ const processPayment = async (req, res, next) => {
       data: {
         payment: paymentInsert.rows[0],
         invoiceNumber,
+        transactionId: paymentResult.metadata?.transactionId,
+        referenceNumber: paymentResult.referenceNumber,
         paidAmount: newPaidAmount,
         remainingBalance: parseFloat(booking.total_amount) - newPaidAmount,
         paymentStatus,
         commission: { percentage: commissionPct, platformAmount, ownerAmount },
+        receiptUrl: `/dashboard/customer/receipt/${invoiceNumber}`,
       },
     });
   } catch (error) {
@@ -175,13 +179,21 @@ const getPaymentsByBooking = async (req, res, next) => {
 const getInvoice = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT t.*, b.start_date, b.end_date, b.total_amount,
-              v.title as vehicle_title, c.full_name as customer_name,
-              p.payment_method, p.reference_number
+      `SELECT t.*, b.id as booking_id, b.customer_id, b.start_date, b.end_date,
+              b.pickup_time, b.dropoff_time, b.total_amount as booking_total,
+              b.paid_amount as booking_paid, b.payment_status as booking_payment_status,
+              b.status as booking_status,
+              v.title as vehicle_title, v.brand, v.model, v.plate_number,
+              v.city, v.barangay, v.pickup_address, v.price_per_day,
+              c.full_name as customer_name, c.email as customer_email, c.phone as customer_phone,
+              o.full_name as owner_name,
+              p.payment_method, p.reference_number, p.card_last_four, p.metadata as payment_metadata,
+              p.amount as payment_amount, p.created_at as payment_date
        FROM transactions t
        JOIN bookings b ON t.booking_id = b.id
        JOIN vehicles v ON b.vehicle_id = v.id
        JOIN users c ON b.customer_id = c.id
+       JOIN users o ON v.owner_id = o.id
        LEFT JOIN payments p ON t.payment_id = p.id
        WHERE t.invoice_number = $1`,
       [req.params.invoiceNumber]
@@ -191,7 +203,72 @@ const getInvoice = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Invoice not found' });
     }
 
-    res.json({ success: true, data: result.rows[0] });
+    const receipt = result.rows[0];
+    const canView =
+      req.user.role === 'admin' ||
+      receipt.customer_id === req.user.id ||
+      receipt.user_id === req.user.id;
+
+    if (!canView) {
+      const bookingCheck = await query(
+        `SELECT b.customer_id, v.owner_id FROM bookings b
+         JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+        [receipt.booking_id]
+      );
+      const b = bookingCheck.rows[0];
+      if (!b || (b.customer_id !== req.user.id && b.owner_id !== req.user.id)) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
+    res.json({ success: true, data: receipt });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getBookingReceipt = async (req, res, next) => {
+  try {
+    const bookingResult = await query(
+      `SELECT b.*, v.title as vehicle_title, v.brand, v.model, v.plate_number,
+              v.city, v.barangay, v.pickup_address, v.price_per_day, v.owner_id,
+              c.full_name as customer_name, c.email as customer_email,
+              o.full_name as owner_name
+       FROM bookings b
+       JOIN vehicles v ON b.vehicle_id = v.id
+       JOIN users c ON b.customer_id = c.id
+       JOIN users o ON v.owner_id = o.id
+       WHERE b.id = $1`,
+      [req.params.bookingId]
+    );
+
+    if (!bookingResult.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const booking = bookingResult.rows[0];
+    const canView =
+      req.user.role === 'admin' ||
+      booking.customer_id === req.user.id ||
+      booking.owner_id === req.user.id;
+
+    if (!canView) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const payments = await query(
+      `SELECT p.*, t.invoice_number, t.id as transaction_id
+       FROM payments p
+       LEFT JOIN transactions t ON t.payment_id = p.id
+       WHERE p.booking_id = $1
+       ORDER BY p.created_at DESC`,
+      [req.params.bookingId]
+    );
+
+    res.json({
+      success: true,
+      data: { booking, payments: payments.rows },
+    });
   } catch (error) {
     next(error);
   }
@@ -203,4 +280,6 @@ const paymentValidation = [
   body('paymentMethod').isIn(['gcash', 'card']),
 ];
 
-module.exports = { processPayment, getPaymentsByBooking, getInvoice, paymentValidation };
+module.exports = {
+  processPayment, getPaymentsByBooking, getInvoice, getBookingReceipt, paymentValidation,
+};

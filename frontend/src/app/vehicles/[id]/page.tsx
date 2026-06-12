@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Calendar, Fuel, Hash, MapPin, Phone, Settings2, User, Users } from 'lucide-react';
+import { Calendar, Clock, Fuel, Hash, MapPin, Phone, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -11,7 +11,7 @@ import BookingProgress from '@/components/booking/BookingProgress';
 import PaymentModal from '@/components/payment/PaymentModal';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 export default function VehicleDetailPage() {
   const { id } = useParams();
@@ -20,7 +20,7 @@ export default function VehicleDetailPage() {
   const [vehicle, setVehicle] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(2);
-  const [dates, setDates] = useState({ startDate: '', endDate: '' });
+  const [dates, setDates] = useState({ startDate: '', endDate: '', pickupTime: '09:00', dropoffTime: '17:00' });
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -160,19 +160,29 @@ export default function VehicleDetailPage() {
 
               {!booking ? (
                 <>
-                  <h3 className="font-semibold mb-4 flex items-center gap-2"><Calendar className="w-4 h-4" /> Select Dates</h3>
+                  <h3 className="font-semibold mb-4 flex items-center gap-2"><Calendar className="w-4 h-4" /> Select Dates & Times</h3>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="text-sm text-[var(--muted)]">Start Date</label>
+                      <label className="text-sm text-[var(--muted)]">Pickup Date</label>
                       <input type="date" className="input-field mt-1" value={dates.startDate}
                         min={new Date().toISOString().split('T')[0]}
                         onChange={(e) => setDates({ ...dates, startDate: e.target.value })} />
                     </div>
                     <div>
-                      <label className="text-sm text-[var(--muted)]">End Date</label>
+                      <label className="text-sm text-[var(--muted)]">Pickup Time</label>
+                      <input type="time" className="input-field mt-1" value={dates.pickupTime}
+                        onChange={(e) => setDates({ ...dates, pickupTime: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-sm text-[var(--muted)]">Return Date</label>
                       <input type="date" className="input-field mt-1" value={dates.endDate}
                         min={dates.startDate || new Date().toISOString().split('T')[0]}
                         onChange={(e) => setDates({ ...dates, endDate: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="text-sm text-[var(--muted)]">Return Time</label>
+                      <input type="time" className="input-field mt-1" value={dates.dropoffTime}
+                        onChange={(e) => setDates({ ...dates, dropoffTime: e.target.value })} />
                     </div>
                   </div>
 
@@ -197,8 +207,14 @@ export default function VehicleDetailPage() {
                 <div>
                   <h3 className="font-semibold mb-4 text-green-500">Booking Created</h3>
                   <div className="space-y-2 text-sm mb-6">
-                    <p>From: {formatDate(String(booking.start_date))}</p>
-                    <p>To: {formatDate(String(booking.end_date))}</p>
+                    <p className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[var(--primary)]" />
+                      Pickup: {formatDate(String(booking.start_date))} at {formatTime(String(booking.pickup_time || '09:00'))}
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[var(--primary)]" />
+                      Return: {formatDate(String(booking.end_date))} at {formatTime(String(booking.dropoff_time || '17:00'))}
+                    </p>
                     <p>Total: {formatCurrency(Number(booking.total_amount))}</p>
                     <p>Paid: {formatCurrency(Number(booking.paid_amount || 0))}</p>
                     <p>Status: <span className="capitalize">{String(booking.payment_status)}</span></p>
@@ -206,6 +222,23 @@ export default function VehicleDetailPage() {
                   {booking.payment_status !== 'fully_paid' && (
                     <button onClick={() => setShowPayment(true)} className="btn-primary w-full mb-3">
                       Make Payment
+                    </button>
+                  )}
+                  {Number(booking.paid_amount || 0) > 0 && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await api.get(`/payments/booking/${booking.id}/receipt`);
+                          const latest = res.data.data.payments?.find((p: { invoice_number?: string }) => p.invoice_number);
+                          if (latest?.invoice_number) router.push(`/dashboard/customer/receipt/${latest.invoice_number}`);
+                          else toast.error('No receipt found yet');
+                        } catch {
+                          toast.error('Could not load receipt');
+                        }
+                      }}
+                      className="btn-outline w-full mb-3"
+                    >
+                      View Receipt
                     </button>
                   )}
                   <button onClick={() => router.push('/dashboard/customer/bookings')} className="btn-outline w-full">

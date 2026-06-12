@@ -2,16 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import {
-  Check,
-  CreditCard,
-  Crown,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-} from 'lucide-react';
+import { Check, Crown, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import PaymentMethodForm from '@/components/payment/PaymentMethodForm';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
@@ -213,59 +207,20 @@ export default function OwnerSubscriptionPage() {
           </div>
 
           <div className="grid lg:grid-cols-[1fr_360px] gap-5">
-            <div className="rounded-2xl border border-[var(--card-border)] bg-white/70 p-5 dark:bg-white/5">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-                <h3 className="font-bold">Payment Method</h3>
-              </div>
-
+            <div className="rounded-2xl border border-[var(--card-border)] bg-slate-200/80 p-5 dark:bg-slate-800/60">
               {selectedPlan.price === 0 ? (
                 <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
                   Basic starts as a free trial. No payment details required.
                 </div>
               ) : (
-                <>
-                  <div className="grid sm:grid-cols-2 gap-3 mb-5">
-                    <button
-                      type="button"
-                      onClick={() => setMethod('gcash')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border p-4 font-semibold ${
-                        method === 'gcash' ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-500/10' : 'border-[var(--card-border)]'
-                      }`}
-                    >
-                      <Smartphone className="w-5 h-5" /> GCash
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMethod('card')}
-                      className={`flex items-center justify-center gap-2 rounded-xl border p-4 font-semibold ${
-                        method === 'card' ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-500/10' : 'border-[var(--card-border)]'
-                      }`}
-                    >
-                      <CreditCard className="w-5 h-5" /> Any Card
-                    </button>
-                  </div>
-
-                  {method === 'gcash' ? (
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <input className="input-field" placeholder="GCash Number (09XXXXXXXXX)"
-                        value={gcash.phoneNumber} onChange={(e) => setGcash({ ...gcash, phoneNumber: e.target.value })} />
-                      <input className="input-field" type="password" placeholder="GCash PIN"
-                        value={gcash.pin} onChange={(e) => setGcash({ ...gcash, pin: e.target.value })} />
-                    </div>
-                  ) : (
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <input className="input-field sm:col-span-2" placeholder="Card Number"
-                        value={card.cardNumber} onChange={(e) => setCard({ ...card, cardNumber: e.target.value })} />
-                      <input className="input-field" placeholder="MM/YY"
-                        value={card.expiry} onChange={(e) => setCard({ ...card, expiry: e.target.value })} />
-                      <input className="input-field" type="password" placeholder="CVV"
-                        value={card.cvv} onChange={(e) => setCard({ ...card, cvv: e.target.value })} />
-                      <input className="input-field sm:col-span-2" placeholder="Cardholder Name"
-                        value={card.cardholderName} onChange={(e) => setCard({ ...card, cardholderName: e.target.value })} />
-                    </div>
-                  )}
-                </>
+                <PaymentMethodForm
+                  method={method}
+                  onMethodChange={setMethod}
+                  gcash={gcash}
+                  onGcashChange={setGcash}
+                  card={card}
+                  onCardChange={setCard}
+                />
               )}
             </div>
 

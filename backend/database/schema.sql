@@ -87,6 +87,8 @@ CREATE TABLE bookings (
   vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
+  pickup_time TIME DEFAULT '09:00:00',
+  dropoff_time TIME DEFAULT '17:00:00',
   total_amount DECIMAL(12,2) NOT NULL,
   paid_amount DECIMAL(12,2) DEFAULT 0,
   payment_status payment_status DEFAULT 'pending',

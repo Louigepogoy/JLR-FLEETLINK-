@@ -1,4 +1,21 @@
+const { v4: uuidv4 } = require('uuid');
 const { generateReferenceNumber } = require('../utils/helpers');
+
+const maskPhone = (phone) => {
+  const cleaned = phone.replace(/\s/g, '');
+  return cleaned.length >= 4 ? `09XX XXX ${cleaned.slice(-4)}` : '09XX XXX XXXX';
+};
+
+const buildTransactionMeta = (method, amount, extra = {}) => ({
+  gateway: 'JLR Pay Gateway',
+  transactionId: uuidv4(),
+  processedAt: new Date().toISOString(),
+  currency: 'PHP',
+  amount,
+  method,
+  status: 'completed',
+  ...extra,
+});
 
 const validateGCashPayment = async ({ amount, phoneNumber, pin }) => {
   if (!phoneNumber || !/^09\d{9}$/.test(phoneNumber.replace(/\s/g, ''))) {
@@ -14,10 +31,16 @@ const validateGCashPayment = async ({ amount, phoneNumber, pin }) => {
   // Simulated GCash API - replace with real PayMongo/Xendit integration
   await new Promise((resolve) => setTimeout(resolve, 500));
 
+  const referenceNumber = generateReferenceNumber('gcash');
   return {
     success: true,
-    referenceNumber: generateReferenceNumber('gcash'),
+    referenceNumber,
     method: 'gcash',
+    metadata: buildTransactionMeta('gcash', amount, {
+      referenceNumber,
+      maskedAccount: maskPhone(phoneNumber),
+      channel: 'GCash Wallet',
+    }),
   };
 };
 
@@ -42,11 +65,19 @@ const validateCardPayment = async ({ amount, cardNumber, expiry, cvv, cardholder
   // Simulated card gateway - replace with Stripe/PayMongo
   await new Promise((resolve) => setTimeout(resolve, 800));
 
+  const referenceNumber = generateReferenceNumber('card');
+  const cardLastFour = cleaned.slice(-4);
   return {
     success: true,
-    referenceNumber: generateReferenceNumber('card'),
+    referenceNumber,
     method: 'card',
-    cardLastFour: cleaned.slice(-4),
+    cardLastFour,
+    metadata: buildTransactionMeta('card', amount, {
+      referenceNumber,
+      cardBrand: cleaned.startsWith('4') ? 'Visa' : cleaned.startsWith('5') ? 'Mastercard' : 'Card',
+      cardLastFour,
+      channel: 'Card Payment',
+    }),
   };
 };
 

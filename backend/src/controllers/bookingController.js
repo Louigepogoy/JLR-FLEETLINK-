@@ -10,7 +10,9 @@ const createBooking = async (req, res, next) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { vehicleId, startDate, endDate, notes } = req.body;
+    const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes } = req.body;
+    const pickup = pickupTime || '09:00';
+    const dropoff = dropoffTime || '17:00';
 
     const vehicleResult = await query(
       "SELECT * FROM vehicles WHERE id = $1 AND status = 'available'",
@@ -25,9 +27,9 @@ const createBooking = async (req, res, next) => {
     const totalAmount = days * parseFloat(vehicle.price_per_day);
 
     const result = await query(
-      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, total_amount, notes)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [req.user.id, vehicleId, startDate, endDate, totalAmount, notes || null]
+      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, pickup_time, dropoff_time, total_amount, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff, totalAmount, notes || null]
     );
 
     const booking = result.rows[0];
@@ -190,6 +192,8 @@ const bookingValidation = [
   body('vehicleId').isUUID(),
   body('startDate').isISO8601(),
   body('endDate').isISO8601(),
+  body('pickupTime').optional().matches(/^\d{2}:\d{2}(:\d{2})?$/),
+  body('dropoffTime').optional().matches(/^\d{2}:\d{2}(:\d{2})?$/),
 ];
 
 module.exports = {

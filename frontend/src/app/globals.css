@@ -100,3 +100,17 @@ body {
   background: var(--muted);
   border-radius: 3px;
 }
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  nav, aside, footer, .print\\:hidden {
+    display: none !important;
+  }
+  #receipt {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}

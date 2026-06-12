@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import ReportModal from '@/components/reports/ReportModal';
 import api from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { Clock } from 'lucide-react';
+import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 type OwnerBooking = {
   id: string;
@@ -15,6 +16,8 @@ type OwnerBooking = {
   customer_email: string;
   start_date: string;
   end_date: string;
+  pickup_time?: string;
+  dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
   status: string;
@@ -48,7 +51,10 @@ export default function OwnerBookingsPage() {
               <div>
                 <h3 className="font-semibold">{b.title}</h3>
                 <p className="text-sm text-[var(--muted)]">{b.customer_name} - {b.customer_email}</p>
-                <p className="text-sm mt-1">{formatDate(b.start_date)} to {formatDate(b.end_date)}</p>
+                <p className="text-sm mt-1 flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5 text-[var(--primary)]" />
+                  {formatDate(b.start_date)} {formatTime(b.pickup_time)} — {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
+                </p>
               </div>
               <div className="text-right">
                 <p className="font-bold text-lg">{formatCurrency(b.total_amount)}</p>

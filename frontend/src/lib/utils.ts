@@ -20,6 +20,23 @@ export function formatDate(date: string) {
   });
 }
 
+export function formatTime(time: string | null | undefined) {
+  if (!time) return '—';
+  const [hours, minutes] = time.split(':');
+  const date = new Date();
+  date.setHours(Number(hours), Number(minutes), 0);
+  return date.toLocaleTimeString('en-PH', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+export function formatDateTime(date: string, time?: string | null) {
+  if (!time) return formatDate(date);
+  return `${formatDate(date)} at ${formatTime(time)}`;
+}
+
 export function getDashboardPath(role: string) {
   switch (role) {
     case 'admin': return '/dashboard/admin';

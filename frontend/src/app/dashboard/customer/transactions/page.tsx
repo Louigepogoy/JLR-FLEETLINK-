@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { FileText } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import api from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 export default function CustomerTransactionsPage() {
+  const router = useRouter();
   const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
@@ -24,6 +27,7 @@ export default function CustomerTransactionsPage() {
               <th className="text-left p-4">Amount</th>
               <th className="text-left p-4">Status</th>
               <th className="text-left p-4">Date</th>
+              <th className="text-left p-4">Receipt</th>
             </tr>
           </thead>
           <tbody>
@@ -34,6 +38,14 @@ export default function CustomerTransactionsPage() {
                 <td className="p-4 font-semibold">{formatCurrency(t.total_amount)}</td>
                 <td className="p-4 capitalize">{t.status?.replace('_', ' ')}</td>
                 <td className="p-4 text-[var(--muted)]">{formatDate(t.created_at)}</td>
+                <td className="p-4">
+                  <button
+                    onClick={() => router.push(`/dashboard/customer/receipt/${t.invoice_number}`)}
+                    className="text-[var(--primary)] hover:underline flex items-center gap-1 text-sm"
+                  >
+                    <FileText className="h-4 w-4" /> View
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
