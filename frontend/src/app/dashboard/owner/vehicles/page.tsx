@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Crown, ImagePlus, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Crown, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import VehicleProofUpload, { emptyProofPhotos, type ProofPhotoState } from '@/components/vehicles/VehicleProofUpload';
 import api from '@/lib/api';
-import { cebuLocations, formatCurrency, getCebuLocation, vehicleTypes } from '@/lib/utils';
+import { cebuLocations, formatCurrency, getCebuLocation, vehicleProofSlots, vehicleTypes } from '@/lib/utils';
 
 type OwnerVehicle = {
   id: string;
@@ -29,6 +30,7 @@ type OwnerVehicle = {
   latitude?: number;
   longitude?: number;
   images?: string[];
+  proof_photos?: Record<string, string>;
 };
 
 type OwnerSubscription = {
@@ -46,7 +48,7 @@ const emptyForm = {
   model: '',
   plateNumber: '',
   year: new Date().getFullYear(),
-  vehicleType: 'Truck',
+  vehicleType: 'Sedan',
   transmission: 'Automatic',
   fuelType: 'Gasoline',
   seats: 4,
@@ -64,8 +66,7 @@ export default function OwnerVehiclesPage() {
   const [subscription, setSubscription] = useState<OwnerSubscription>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<OwnerVehicle | null>(null);
-  const [vehicleImage, setVehicleImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [proofPhotos, setProofPhotos] = useState<ProofPhotoState>(emptyProofPhotos());
   const [form, setForm] = useState(emptyForm);
 
   const selectedLocation = useMemo(() => getCebuLocation(form.city), [form.city]);
@@ -84,20 +85,13 @@ export default function OwnerVehiclesPage() {
   const resetForm = () => {
     setEditingVehicle(null);
     setForm(emptyForm);
-    setVehicleImage(null);
-    setImagePreview('');
+    setProofPhotos(emptyProofPhotos());
     setShowForm(false);
   };
 
   const handleCityChange = (city: string) => {
     const location = getCebuLocation(city);
     setForm({ ...form, city, latitude: location.lat, longitude: location.lng });
-  };
-
-  const handleImageChange = (file?: File) => {
-    if (!file) return;
-    setVehicleImage(file);
-    setImagePreview(URL.createObjectURL(file));
   };
 
   const handleAddClick = () => {
@@ -111,9 +105,23 @@ export default function OwnerVehiclesPage() {
     }
     setEditingVehicle(null);
     setForm(emptyForm);
-    setVehicleImage(null);
-    setImagePreview('');
+    setProofPhotos(emptyProofPhotos());
     setShowForm(true);
+  };
+
+  const loadProofPhotosFromVehicle = (vehicle: OwnerVehicle): ProofPhotoState => {
+    const proofs = emptyProofPhotos();
+    const saved = vehicle.proof_photos || {};
+    vehicleProofSlots.forEach(({ key }) => {
+      if (saved[key]) proofs[key] = { file: null, preview: saved[key] };
+    });
+    if (!Object.values(saved).some(Boolean) && vehicle.images?.length) {
+      const keys = vehicleProofSlots.map(({ key }) => key);
+      vehicle.images.forEach((url, index) => {
+        if (keys[index]) proofs[keys[index]] = { file: null, preview: url };
+      });
+    }
+    return proofs;
   };
 
   const handleEdit = (vehicle: OwnerVehicle) => {
@@ -125,7 +133,7 @@ export default function OwnerVehiclesPage() {
       model: vehicle.model || '',
       plateNumber: vehicle.plate_number || '',
       year: Number(vehicle.year || new Date().getFullYear()),
-      vehicleType: vehicle.vehicle_type || 'Truck',
+      vehicleType: vehicle.vehicle_type || 'Sedan',
       transmission: vehicle.transmission || 'Automatic',
       fuelType: vehicle.fuel_type || 'Gasoline',
       seats: Number(vehicle.seats || 4),
@@ -137,8 +145,7 @@ export default function OwnerVehiclesPage() {
       longitude: Number(vehicle.longitude || location.lng),
       description: vehicle.description || '',
     });
-    setImagePreview(vehicle.images?.[0] || '');
-    setVehicleImage(null);
+    setProofPhotos(loadProofPhotosFromVehicle(vehicle));
     setShowForm(true);
   };
 
@@ -148,8 +155,10 @@ export default function OwnerVehiclesPage() {
       toast.error(`Your ${planName} plan allows ${vehicleLimit} vehicles only. Select a higher plan to add more.`);
       return;
     }
-    if (!editingVehicle && !vehicleImage) {
-      toast.error('Please upload an actual vehicle photo/proof first');
+
+    const missingProofs = vehicleProofSlots.filter(({ key }) => !proofPhotos[key]?.preview);
+    if (!editingVehicle && missingProofs.length) {
+      toast.error(`Please upload all 6 proof photos. Missing: ${missingProofs.map((p) => p.label).join(', ')}`);
       return;
     }
 
@@ -163,7 +172,11 @@ export default function OwnerVehiclesPage() {
         longitude: String(Number(form.longitude)),
         ...(editingVehicle ? { status: editingVehicle.status } : {}),
       }).forEach(([key, value]) => data.append(key, String(value)));
-      if (vehicleImage) data.append('vehicleImage', vehicleImage);
+
+      vehicleProofSlots.forEach(({ key, field }) => {
+        const file = proofPhotos[key]?.file;
+        if (file) data.append(field, file);
+      });
 
       if (editingVehicle) {
         await api.put(`/vehicles/${editingVehicle.id}`, data, {
@@ -236,7 +249,7 @@ export default function OwnerVehiclesPage() {
           <div className="md:col-span-2 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-xl font-bold">{editingVehicle ? 'Edit Vehicle Details' : 'Add Cebu Vehicle'}</h3>
-              <p className="text-sm text-[var(--muted)]">You can edit brand, model, plate, price, pickup details, status, and photo.</p>
+              <p className="text-sm text-[var(--muted)]">Upload 6 proof photos and manage your Cebu vehicle listings.</p>
             </div>
             <button type="button" onClick={resetForm} className="btn-outline flex items-center gap-2 text-sm">
               <X className="h-4 w-4" /> Cancel
@@ -295,28 +308,11 @@ export default function OwnerVehiclesPage() {
             </select>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="text-sm font-medium">Vehicle Photo / Proof</label>
-            <label className="mt-1 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[var(--card-border)] bg-[var(--card)] p-4 text-center hover:border-[var(--primary)]">
-              {imagePreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={imagePreview} alt="Selected vehicle proof" className="h-56 w-full rounded-lg object-cover" />
-              ) : (
-                <>
-                  <ImagePlus className="mb-3 h-10 w-10 text-[var(--primary)]" />
-                  <span className="font-semibold">Upload actual vehicle picture</span>
-                  <span className="text-sm text-[var(--muted)]">Required for new listings. Optional when editing.</span>
-                </>
-              )}
-              <input
-                type="file"
-                required={!editingVehicle}
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                onChange={(e) => handleImageChange(e.target.files?.[0])}
-              />
-            </label>
-          </div>
+          <VehicleProofUpload
+            proofs={proofPhotos}
+            onChange={setProofPhotos}
+            required={!editingVehicle}
+          />
 
           <div>
             <label className="text-sm font-medium">Pickup Location</label>

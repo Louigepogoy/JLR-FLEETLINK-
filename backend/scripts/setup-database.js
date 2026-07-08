@@ -33,6 +33,7 @@ async function setup() {
     const ownerSubscriptionMigrationPath = path.join(__dirname, '../database/migration_owner_subscriptions.sql');
     const plateNumberMigrationPath = path.join(__dirname, '../database/migration_vehicle_plate_number.sql');
     const bookingTimesMigrationPath = path.join(__dirname, '../database/migrations/001_add_booking_times.sql');
+    const proofPhotosMigrationPath = path.join(__dirname, '../database/migrations/002_vehicle_proof_photos.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -55,6 +56,8 @@ async function setup() {
       console.log('Vehicle plate number migration applied.');
       await runSqlFile(bookingTimesMigrationPath);
       console.log('Booking pickup/dropoff times migration applied.');
+      await runSqlFile(proofPhotosMigrationPath);
+      console.log('Vehicle proof photos migration applied.');
     }
 
     await runSqlFile(seedPath);

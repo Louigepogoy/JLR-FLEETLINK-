@@ -39,7 +39,7 @@ const fallbackPlans: Plan[] = [
     billingCycle: 'trial',
     vehicleLimit: 5,
     photoLimit: 5,
-    features: ['Publish 5 Vehicle', 'Basic Listing', 'Up to 5 Photos'],
+    features: ['Publish 5 Vehicle', 'Basic Listing', 'Up to 6 proof photos'],
   },
   {
     id: 'pro',
@@ -48,7 +48,7 @@ const fallbackPlans: Plan[] = [
     billingCycle: 'month',
     vehicleLimit: 10,
     photoLimit: 5,
-    features: ['Publish 10 Vehicle', 'Priority Listing', 'Up to 5 Photos'],
+    features: ['Publish 10 Vehicle', 'Priority Listing', 'Up to 6 proof photos'],
   },
   {
     id: 'premium',
@@ -57,7 +57,7 @@ const fallbackPlans: Plan[] = [
     billingCycle: 'month',
     vehicleLimit: 20,
     photoLimit: 5,
-    features: ['Publish 20 Vehicle', 'Featured Placement', 'Up to 5 Photos'],
+    features: ['Publish 20 Vehicle', 'Featured Placement', 'Up to 6 proof photos'],
   },
 ];
 

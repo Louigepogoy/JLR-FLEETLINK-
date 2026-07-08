@@ -38,6 +38,12 @@ const uploadVehicleImages = multer({
   fileFilter: imageFilter,
 }).fields([
   { name: 'vehicleImage', maxCount: 1 },
+  { name: 'proofFront', maxCount: 1 },
+  { name: 'proofBack', maxCount: 1 },
+  { name: 'proofSide', maxCount: 1 },
+  { name: 'proofInterior', maxCount: 1 },
+  { name: 'proofOwner', maxCount: 1 },
+  { name: 'proofExtra', maxCount: 1 },
 ]);
 
 const uploadProfileAvatar = multer({

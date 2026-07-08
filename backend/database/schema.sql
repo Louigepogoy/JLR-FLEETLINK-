@@ -60,6 +60,7 @@ CREATE TABLE vehicles (
   longitude DECIMAL(10,7) NOT NULL,
   description TEXT,
   images TEXT[] DEFAULT '{}',
+  proof_photos JSONB DEFAULT '{}',
   features TEXT[] DEFAULT '{}',
   status vehicle_status DEFAULT 'available',
   created_at TIMESTAMPTZ DEFAULT NOW(),

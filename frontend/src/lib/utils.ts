@@ -45,7 +45,44 @@ export function getDashboardPath(role: string) {
   }
 }
 
-export const vehicleTypes = ['Truck', 'Van', 'Motorcycle'];
+export const vehicleTypes = [
+  'Sedan',
+  'SUV',
+  'Hatchback',
+  'Pickup',
+  'Van',
+  'Truck',
+  'Motorcycle',
+  'Coupe',
+  'Convertible',
+  'MPV',
+  'Electric',
+  'Other',
+];
+
+export type VehicleProofKey =
+  | 'front'
+  | 'back'
+  | 'side'
+  | 'interior'
+  | 'ownerWithVehicle'
+  | 'additionalProof';
+
+export const vehicleProofSlots: {
+  key: VehicleProofKey;
+  field: string;
+  label: string;
+  hint: string;
+}[] = [
+  { key: 'front', field: 'proofFront', label: 'Front View', hint: 'Full front of the vehicle' },
+  { key: 'back', field: 'proofBack', label: 'Rear View', hint: 'Full back of the vehicle' },
+  { key: 'side', field: 'proofSide', label: 'Side View', hint: 'Left or right side profile' },
+  { key: 'interior', field: 'proofInterior', label: 'Interior', hint: 'Dashboard, seats, or cabin' },
+  { key: 'ownerWithVehicle', field: 'proofOwner', label: 'You + Vehicle', hint: 'Your face visible with the car' },
+  { key: 'additionalProof', field: 'proofExtra', label: 'Extra Proof', hint: 'Plate, OR/CR, or ownership doc' },
+];
+
+export const requiredProofCount = vehicleProofSlots.length;
 export const paymentStatuses = ['pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled'];
 export const bookingStatuses = ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled'];
 

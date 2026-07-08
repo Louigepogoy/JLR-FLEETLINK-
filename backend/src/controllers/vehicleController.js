@@ -1,6 +1,22 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 
+const VEHICLE_TYPES = [
+  'Sedan', 'SUV', 'Hatchback', 'Pickup', 'Van', 'Truck',
+  'Motorcycle', 'Coupe', 'Convertible', 'MPV', 'Electric', 'Other',
+];
+
+const PROOF_FIELD_MAP = {
+  proofFront: 'front',
+  proofBack: 'back',
+  proofSide: 'side',
+  proofInterior: 'interior',
+  proofOwner: 'ownerWithVehicle',
+  proofExtra: 'additionalProof',
+};
+
+const PUBLIC_GALLERY_KEYS = ['front', 'back', 'side', 'interior'];
+
 const CEBU_LOCATIONS = [
   'Cebu City',
   'Mandaue City',
@@ -115,11 +131,42 @@ const enforceOwnerVehicleLimit = async (ownerId) => {
   }
 };
 
-const getVehicleImageUrls = (req, existingImages = []) => {
-  const uploaded = req.files?.vehicleImage || [];
-  const fileUrls = uploaded.map((file) => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`);
-  const bodyImages = Array.isArray(existingImages) ? existingImages : [];
-  return [...fileUrls, ...bodyImages].filter(Boolean);
+const getFileUrl = (req, file) => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+
+const getProofPhotosFromRequest = (req, existingProof = {}) => {
+  const proof = { ...(existingProof || {}) };
+
+  Object.entries(PROOF_FIELD_MAP).forEach(([fieldName, proofKey]) => {
+    const uploaded = req.files?.[fieldName]?.[0];
+    if (uploaded) {
+      proof[proofKey] = getFileUrl(req, uploaded);
+    }
+  });
+
+  return proof;
+};
+
+const buildGalleryImages = (proofPhotos = {}) =>
+  PUBLIC_GALLERY_KEYS.map((key) => proofPhotos[key]).filter(Boolean);
+
+const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
+  const missing = Object.values(PROOF_FIELD_MAP).filter((key) => !proofPhotos[key]);
+  if (isCreate && missing.length) {
+    const labels = {
+      front: 'Front view',
+      back: 'Rear view',
+      side: 'Side view',
+      interior: 'Interior',
+      ownerWithVehicle: 'You with vehicle',
+      additionalProof: 'Extra proof',
+    };
+    const error = new Error(
+      `All 6 vehicle proof photos are required. Missing: ${missing.map((k) => labels[k]).join(', ')}`
+    );
+    error.status = 400;
+    error.statusCode = 400;
+    throw error;
+  }
 };
 
 const getVehicles = async (req, res, next) => {
@@ -202,28 +249,24 @@ const createVehicle = async (req, res, next) => {
       seats, pricePerDay, plateNumber, description, images, features,
     } = req.body;
     const vehicleLocation = normalizeVehicleLocation(req.body);
-    const vehicleImages = getVehicleImageUrls(req, images);
     await enforceOwnerVehicleLimit(req.user.id);
 
-    if (!vehicleImages.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Vehicle photo/proof is required before publishing a listing.',
-      });
-    }
+    const proofPhotos = getProofPhotosFromRequest(req);
+    validateProofPhotos(proofPhotos, true);
+    const vehicleImages = buildGalleryImages(proofPhotos);
 
     const result = await query(
       `INSERT INTO vehicles (owner_id, title, brand, model, plate_number, year, vehicle_type, transmission,
         fuel_type, seats, price_per_day, location, city, barangay, pickup_address,
-        latitude, longitude, description, images, features)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        latitude, longitude, description, images, proof_photos, features)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        RETURNING *`,
       [
         req.user.id, title, brand, model, plateNumber || null, year, vehicleType, transmission,
         fuelType, seats || 4, pricePerDay, vehicleLocation.location, vehicleLocation.city,
         vehicleLocation.barangay, vehicleLocation.pickupAddress, vehicleLocation.latitude,
         vehicleLocation.longitude, description || null,
-        vehicleImages, features || [],
+        vehicleImages, JSON.stringify(proofPhotos), features || [],
       ]
     );
 
@@ -245,16 +288,22 @@ const updateVehicle = async (req, res, next) => {
 
     const fields = ['title', 'brand', 'model', 'plate_number', 'year', 'vehicle_type', 'transmission',
       'fuel_type', 'seats', 'price_per_day', 'location', 'city', 'barangay',
-      'pickup_address', 'latitude', 'longitude', 'description', 'images', 'features', 'status'];
+      'pickup_address', 'latitude', 'longitude', 'description', 'images', 'proof_photos', 'features', 'status'];
     const mapping = {
       vehicleType: 'vehicle_type', pricePerDay: 'price_per_day', fuelType: 'fuel_type',
-      pickupAddress: 'pickup_address', plateNumber: 'plate_number',
+      pickupAddress: 'pickup_address', plateNumber: 'plate_number', proofPhotos: 'proof_photos',
     };
     const bodyData = { ...req.body };
-    const uploadedImages = getVehicleImageUrls(req);
+    const existingProof = typeof vehicle.rows[0].proof_photos === 'object'
+      ? vehicle.rows[0].proof_photos
+      : (vehicle.rows[0].proof_photos ? JSON.parse(vehicle.rows[0].proof_photos) : {});
 
-    if (uploadedImages.length) {
-      bodyData.images = uploadedImages;
+    const mergedProof = getProofPhotosFromRequest(req, existingProof);
+    const hasNewProofUploads = Object.keys(PROOF_FIELD_MAP).some((field) => req.files?.[field]?.[0]);
+
+    if (hasNewProofUploads) {
+      bodyData.proof_photos = mergedProof;
+      bodyData.images = buildGalleryImages(mergedProof);
     }
 
     if (bodyData.location !== undefined || bodyData.city !== undefined) {
@@ -276,7 +325,7 @@ const updateVehicle = async (req, res, next) => {
       const col = mapping[key] || key;
       if (fields.includes(col) && val !== undefined) {
         updates.push(`${col} = $${i++}`);
-        values.push(val);
+        values.push(col === 'proof_photos' ? JSON.stringify(val) : val);
       }
     });
 
@@ -332,7 +381,7 @@ const vehicleValidation = [
   body('model').trim().notEmpty(),
   body('plateNumber').optional().trim(),
   body('year').isInt({ min: 1990, max: new Date().getFullYear() + 1 }),
-  body('vehicleType').trim().notEmpty(),
+  body('vehicleType').trim().notEmpty().isIn(VEHICLE_TYPES).withMessage('Invalid vehicle type'),
   body('transmission').trim().notEmpty(),
   body('fuelType').trim().notEmpty(),
   body('pricePerDay').isFloat({ min: 0 }),
