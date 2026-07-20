@@ -1,0 +1,24 @@
+{
+  "name": "jlr-fleetlink-",
+  "version": "1.0.0",
+  "description": "A professional web-based vehicle rental platform with modern SaaS-style UI, role-based dashboards, online payments (GCash & Card), and commission-based platform earnings.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Louigepogoy/JLR-FLEETLINK-.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Louigepogoy/JLR-FLEETLINK-/issues"
+  },
+  "homepage": "https://github.com/Louigepogoy/JLR-FLEETLINK-#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
