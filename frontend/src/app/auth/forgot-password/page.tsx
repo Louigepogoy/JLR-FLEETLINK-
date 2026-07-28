@@ -7,53 +7,49 @@ import { motion } from 'framer-motion';
 import { Car, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
-import { getDashboardPath } from '@/lib/utils';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const router = useRouter();
-  const { setAuth } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<'credentials' | 'otp'>('credentials');
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [step, setStep] = useState<'email' | 'reset'>('email');
+  const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   const handleApiError = (err: unknown, fallback: string) => {
-    const error = err as { response?: { data?: { message?: string; code?: string }; status?: number } };
+    const error = err as { response?: { data?: { message?: string }; status?: number } };
     let msg = error.response?.data?.message || fallback;
     if (!error.response) {
       msg = 'Cannot reach server. Start backend (npm run dev) and check DATABASE_URL / Neon setup.';
     } else if (error.response.status === 503) {
       msg = error.response.data?.message || 'Database not ready. Run: cd backend && npm run db:setup';
     }
-    toast.error(msg, { duration: error.response?.data?.code === 'PENDING_APPROVAL' ? 6000 : 5000 });
+    toast.error(msg);
   };
 
-  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', form);
-      toast.success(res.data.message || 'Verification code sent to your email');
-      setStep('otp');
+      const res = await api.post('/auth/forgot-password', { email });
+      toast.success(res.data.message || 'If an account exists, a reset code has been sent');
+      setStep('reset');
     } catch (err: unknown) {
-      handleApiError(err, 'Login failed');
+      handleApiError(err, 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/verify-otp', { email: form.email, code });
-      const { user, token } = res.data.data;
-      setAuth(user, token);
-      toast.success(`Welcome back, ${user.full_name}!`);
-      router.push(getDashboardPath(user.role));
+      const res = await api.post('/auth/reset-password', { email, code, newPassword });
+      toast.success(res.data.message || 'Password reset successful');
+      router.push('/auth/login');
     } catch (err: unknown) {
       handleApiError(err, 'Invalid code');
     } finally {
@@ -81,56 +77,34 @@ export default function LoginPage() {
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
-          <h1 className="text-2xl font-bold">Welcome Back</h1>
+          <h1 className="text-2xl font-bold">Reset Password</h1>
           <p className="text-sm text-[var(--muted)]">
-            {step === 'credentials' ? 'Sign in to your account' : `Enter the code sent to ${form.email}`}
+            {step === 'email'
+              ? 'Enter the email you used to register'
+              : `Enter the code sent to ${email} and choose a new password`}
           </p>
         </div>
 
-        {step === 'credentials' ? (
-          <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+        {step === 'email' ? (
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Email</label>
               <input
                 type="email"
                 required
                 className="input-field"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                autoFocus
               />
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium">Password</label>
-                <Link href="/auth/forgot-password" className="text-xs text-[var(--primary)] hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  className="input-field pr-12"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
             <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? 'Sending code...' : 'Continue'}
+              {loading ? 'Sending code...' : 'Send Reset Code'}
             </button>
           </form>
         ) : (
-          <form onSubmit={handleOtpSubmit} className="space-y-4">
+          <form onSubmit={handleResetSubmit} className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Verification Code</label>
               <input
@@ -145,23 +119,48 @@ export default function LoginPage() {
                 autoFocus
               />
             </div>
-            <button type="submit" disabled={loading || code.length !== 6} className="btn-primary w-full">
-              {loading ? 'Verifying...' : 'Verify & Sign In'}
+            <div>
+              <label className="text-sm font-medium mb-1 block">New Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  className="input-field pr-12"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6 || newPassword.length < 8}
+              className="btn-primary w-full"
+            >
+              {loading ? 'Resetting...' : 'Reset Password'}
             </button>
             <button
               type="button"
-              onClick={() => { setStep('credentials'); setCode(''); }}
+              onClick={() => { setStep('email'); setCode(''); setNewPassword(''); }}
               className="text-sm text-[var(--muted)] hover:underline w-full text-center"
             >
-              Back to login
+              Use a different email
             </button>
           </form>
         )}
 
         <p className="text-center text-sm text-[var(--muted)] mt-6">
-          Don&apos;t have an account?{' '}
-          <Link href="/auth/register" className="text-[var(--primary)] font-medium hover:underline">
-            Create Account
+          Remembered your password?{' '}
+          <Link href="/auth/login" className="text-[var(--primary)] font-medium hover:underline">
+            Sign In
           </Link>
         </p>
       </motion.div>

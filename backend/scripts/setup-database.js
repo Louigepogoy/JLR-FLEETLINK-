@@ -34,6 +34,9 @@ async function setup() {
     const plateNumberMigrationPath = path.join(__dirname, '../database/migration_vehicle_plate_number.sql');
     const bookingTimesMigrationPath = path.join(__dirname, '../database/migrations/001_add_booking_times.sql');
     const proofPhotosMigrationPath = path.join(__dirname, '../database/migrations/002_vehicle_proof_photos.sql');
+    const loginLogsMigrationPath = path.join(__dirname, '../database/migrations/003_login_logs.sql');
+    const loginOtpsMigrationPath = path.join(__dirname, '../database/migrations/004_login_otps.sql');
+    const passwordResetCodesMigrationPath = path.join(__dirname, '../database/migrations/005_password_reset_codes.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -58,6 +61,12 @@ async function setup() {
       console.log('Booking pickup/dropoff times migration applied.');
       await runSqlFile(proofPhotosMigrationPath);
       console.log('Vehicle proof photos migration applied.');
+      await runSqlFile(loginLogsMigrationPath);
+      console.log('Login logs migration applied.');
+      await runSqlFile(loginOtpsMigrationPath);
+      console.log('Login OTP migration applied.');
+      await runSqlFile(passwordResetCodesMigrationPath);
+      console.log('Password reset codes migration applied.');
     }
 
     await runSqlFile(seedPath);
