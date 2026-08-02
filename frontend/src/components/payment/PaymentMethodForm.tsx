@@ -1,6 +1,7 @@
 'use client';
 
-import { CreditCard, Smartphone, Sparkles } from 'lucide-react';
+import Image from 'next/image';
+import { CreditCard, ExternalLink, Smartphone, Sparkles } from 'lucide-react';
 
 type GcashState = { phoneNumber: string; pin: string };
 type CardState = { cardNumber: string; expiry: string; cvv: string; cardholderName: string };
@@ -14,6 +15,9 @@ interface PaymentMethodFormProps {
   onCardChange: (value: CardState) => void;
   showHeader?: boolean;
   cardLabel?: string;
+  /** 'qr' shows a scannable GCash QR code instead of phone/PIN inputs. */
+  gcashMode?: 'credentials' | 'qr';
+  qrCodeSrc?: string;
 }
 
 export default function PaymentMethodForm({
@@ -25,6 +29,8 @@ export default function PaymentMethodForm({
   onCardChange,
   showHeader = true,
   cardLabel = 'Any Card',
+  gcashMode = 'credentials',
+  qrCodeSrc = '/gcash-qr.png',
 }: PaymentMethodFormProps) {
   return (
     <div>
@@ -61,7 +67,25 @@ export default function PaymentMethodForm({
       </div>
 
       <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
-        {method === 'gcash' ? (
+        {method === 'gcash' && gcashMode === 'qr' ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative h-56 w-56 overflow-hidden rounded-2xl border border-[var(--card-border)]">
+              <Image src={qrCodeSrc} alt="GCash QR code" fill className="object-contain" />
+            </div>
+            <p className="text-center text-sm text-[var(--muted)]">
+              Scan this QR code using your GCash app to pay.
+            </p>
+            <a
+              href="gcash://"
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 sm:hidden"
+            >
+              <ExternalLink className="h-4 w-4" /> Open GCash App
+            </a>
+            <p className="text-center text-xs text-[var(--muted)] sm:hidden">
+              On this phone? Take a screenshot of the QR, then in GCash tap Scan QR → Gallery to pay.
+            </p>
+          </div>
+        ) : method === 'gcash' ? (
           <div className="grid grid-cols-2 gap-3">
             <input
               className="input-field"

@@ -10,6 +10,14 @@ const createBooking = async (req, res, next) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
+    if (req.user.approval_status !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        code: 'VERIFICATION_REQUIRED',
+        message: 'Please verify your driver\'s license before booking a vehicle.',
+      });
+    }
+
     const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes } = req.body;
     const pickup = pickupTime || '09:00';
     const dropoff = dropoffTime || '17:00';
@@ -39,7 +47,7 @@ const createBooking = async (req, res, next) => {
       'New Booking Request',
       `A customer requested to book your ${vehicle.title}`,
       'booking',
-      `/dashboard/owner/bookings`
+      `/dashboard/booking-requests`
     );
 
     res.status(201).json({ success: true, data: booking });
@@ -127,7 +135,7 @@ const updateBookingStatus = async (req, res, next) => {
     }
 
     const b = booking.rows[0];
-    if (req.user.role === 'owner' && b.owner_id !== req.user.id) {
+    if (req.user.role !== 'admin' && b.owner_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 

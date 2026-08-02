@@ -8,16 +8,31 @@ import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 export default function AdminDashboard() {
+  const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState({
     revenue: { total_revenue: 0, monthly_revenue: 0, total_transactions: 0 },
     usersByRole: [], bookingsByStatus: [],
   });
 
   useEffect(() => {
-    api.get('/transactions/analytics').then((res) => setAnalytics(res.data.data)).catch(() => {});
+    api.get('/transactions/analytics').then((res) => setAnalytics(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const totalUsers = analytics.usersByRole.reduce((sum: number, u: { count: string }) => sum + parseInt(u.count), 0);
+
+  if (loading) {
+    return (
+      <DashboardLayout role="admin">
+        <div className="skeleton h-8 w-48 mb-6" />
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-24 rounded-2xl" />)}
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-24 rounded-2xl" />)}
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin">

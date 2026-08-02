@@ -3,7 +3,7 @@ import Footer from '@/components/layout/Footer';
 import Hero from '@/components/home/Hero';
 import Stats from '@/components/home/Stats';
 import Features from '@/components/home/Features';
-import Testimonials from '@/components/home/Testimonials';
+import HowItWorks from '@/components/home/HowItWorks';
 import VehicleShowcase from '@/components/home/VehicleShowcase';
 
 export default function HomePage() {
@@ -15,7 +15,7 @@ export default function HomePage() {
         <Stats />
         <VehicleShowcase />
         <Features />
-        <Testimonials />
+        <HowItWorks />
       </main>
       <Footer />
     </>

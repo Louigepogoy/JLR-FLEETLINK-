@@ -8,8 +8,8 @@ const {
   subscriptionValidation,
 } = require('../controllers/subscriptionController');
 
-router.get('/plans', authenticate, authorize('owner', 'admin'), getPlans);
-router.get('/me', authenticate, authorize('owner', 'admin'), getMySubscription);
-router.post('/subscribe', authenticate, authorize('owner', 'admin'), subscriptionValidation, subscribe);
+router.get('/plans', authenticate, authorize('user', 'admin'), getPlans);
+router.get('/me', authenticate, authorize('user', 'admin'), getMySubscription);
+router.post('/subscribe', authenticate, authorize('user', 'admin'), subscriptionValidation, subscribe);
 
 module.exports = router;

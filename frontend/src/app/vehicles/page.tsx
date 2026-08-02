@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Filter, MapPin } from 'lucide-react';
+import { Search, Filter, MapPin, SearchX } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import VehicleCard from '@/components/vehicles/VehicleCard';
+import EmptyState from '@/components/ui/EmptyState';
 import { VehicleCardSkeleton } from '@/components/ui/Skeleton';
 import api from '@/lib/api';
 import { cebuLocations, vehicleTypes } from '@/lib/utils';
@@ -117,8 +118,12 @@ function VehiclesContent() {
               : vehicles.length > 0
               ? vehicles.map((v: never, i: number) => <VehicleCard key={(v as {id: string}).id} vehicle={v as never} index={i} />)
               : (
-                <div className="col-span-3 text-center py-16 glass-card">
-                  <p className="text-[var(--muted)]">No Cebu vehicles found. Try adjusting your filters.</p>
+                <div className="col-span-3">
+                  <EmptyState
+                    icon={SearchX}
+                    title="No Cebu vehicles found"
+                    description="Try adjusting your filters or search a different area."
+                  />
                 </div>
               )}
           </div>

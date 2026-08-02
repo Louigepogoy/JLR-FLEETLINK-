@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, Fuel, Hash, MapPin, Phone, Settings2, User, Users } from 'lucide-react';
+import { Calendar, Car, Clock, Fuel, Hash, ImageOff, MapPin, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import BookingProgress from '@/components/booking/BookingProgress';
 import PaymentModal from '@/components/payment/PaymentModal';
+import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
@@ -16,7 +18,7 @@ import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 export default function VehicleDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const [vehicle, setVehicle] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(2);
@@ -51,7 +53,11 @@ export default function VehicleDetailPage() {
       setStep(4);
       toast.success('Booking created! Proceed to payment.');
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
+      const error = err as { response?: { data?: { message?: string; code?: string } } };
+      if (error.response?.data?.code === 'VERIFICATION_REQUIRED') {
+        router.push(`/verify-identity?returnTo=${encodeURIComponent(`/vehicles/${id}`)}`);
+        return;
+      }
       toast.error(error.response?.data?.message || 'Booking failed');
     } finally {
       setBookingLoading(false);
@@ -65,7 +71,23 @@ export default function VehicleDetailPage() {
     </>
   );
 
-  if (!vehicle) return null;
+  if (!vehicle) return (
+    <>
+      <Navbar />
+      <main className="pt-24 pb-16 min-h-screen">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+          <EmptyState
+            icon={Car}
+            title="Vehicle not found"
+            description="This listing may have been removed or is no longer available."
+            actionLabel="Browse Vehicles"
+            actionHref="/vehicles"
+          />
+        </div>
+      </main>
+      <Footer />
+    </>
+  );
 
   const city = String(vehicle.city || vehicle.location || 'Cebu City');
   const barangay = vehicle.barangay ? String(vehicle.barangay) : '';
@@ -92,7 +114,10 @@ export default function VehicleDetailPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={images[0]} alt={String(vehicle.title)} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-4xl font-bold text-[var(--primary)]">No photo</div>
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--primary)]">
+                    <ImageOff className="w-10 h-10" />
+                    <span className="text-sm font-medium text-[var(--muted)]">No photo available</span>
+                  </div>
                 )}
               </div>
               <div className="p-6">
@@ -199,6 +224,16 @@ export default function VehicleDetailPage() {
                     </div>
                   )}
 
+                  {isAuthenticated && user?.approval_status !== 'approved' && (
+                    <Link
+                      href={`/verify-identity?returnTo=${encodeURIComponent(`/vehicles/${id}`)}`}
+                      className="flex items-center gap-2 text-xs p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-3"
+                    >
+                      <ShieldAlert className="w-4 h-4 shrink-0" />
+                      Verify your driver&apos;s license to complete a booking.
+                    </Link>
+                  )}
+
                   <button onClick={handleBook} disabled={bookingLoading || days === 0} className="btn-primary w-full">
                     {bookingLoading ? 'Booking...' : 'Confirm Cebu Booking'}
                   </button>
@@ -230,7 +265,7 @@ export default function VehicleDetailPage() {
                         try {
                           const res = await api.get(`/payments/booking/${booking.id}/receipt`);
                           const latest = res.data.data.payments?.find((p: { invoice_number?: string }) => p.invoice_number);
-                          if (latest?.invoice_number) router.push(`/dashboard/customer/receipt/${latest.invoice_number}`);
+                          if (latest?.invoice_number) router.push(`/dashboard/receipt/${latest.invoice_number}`);
                           else toast.error('No receipt found yet');
                         } catch {
                           toast.error('Could not load receipt');
@@ -241,7 +276,7 @@ export default function VehicleDetailPage() {
                       View Receipt
                     </button>
                   )}
-                  <button onClick={() => router.push('/dashboard/customer/bookings')} className="btn-outline w-full">
+                  <button onClick={() => router.push('/dashboard/bookings')} className="btn-outline w-full">
                     View My Bookings
                   </button>
                 </div>

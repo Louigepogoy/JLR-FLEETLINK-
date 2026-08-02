@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, FileText, MapPin } from 'lucide-react';
+import { Calendar, Clock, FileText, MapPin } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import EmptyState from '@/components/ui/EmptyState';
 import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { bookingStatusColors, formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 type CustomerBooking = {
   id: string;
@@ -31,15 +32,16 @@ type CustomerBooking = {
   pickup_address?: string;
 };
 
-export default function CustomerBookingsPage() {
+export default function MyBookingsPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
   const [showPayment, setShowPayment] = useState(false);
 
   const fetchBookings = () => {
-    api.get('/bookings/my').then((res) => setBookings(res.data.data)).catch(() => {});
+    api.get('/bookings/my').then((res) => setBookings(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchBookings(); }, []);
@@ -49,7 +51,7 @@ export default function CustomerBookingsPage() {
       const res = await api.get(`/payments/booking/${bookingId}/receipt`);
       const latest = res.data.data.payments?.find((p: { invoice_number?: string }) => p.invoice_number);
       if (latest?.invoice_number) {
-        router.push(`/dashboard/customer/receipt/${latest.invoice_number}`);
+        router.push(`/dashboard/receipt/${latest.invoice_number}`);
       } else {
         toast.error('No payment receipt found for this booking');
       }
@@ -58,17 +60,19 @@ export default function CustomerBookingsPage() {
     }
   };
 
-  const statusColor: Record<string, string> = {
-    pending: 'bg-yellow-500/20 text-yellow-500',
-    approved: 'bg-green-500/20 text-green-500',
-    rejected: 'bg-red-500/20 text-red-500',
-    active: 'bg-blue-500/20 text-blue-500',
-    completed: 'bg-gray-500/20 text-gray-500',
-    cancelled: 'bg-red-500/20 text-red-500',
-  };
+  if (loading) {
+    return (
+      <DashboardLayout role="user">
+        <div className="skeleton h-8 w-40 mb-6" />
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-40 rounded-2xl" />)}
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
-    <DashboardLayout role="customer">
+    <DashboardLayout role="user">
       <h2 className="text-2xl font-bold mb-6">My Bookings</h2>
       <div className="space-y-4">
         {bookings.map((b) => (
@@ -100,7 +104,7 @@ export default function CustomerBookingsPage() {
                 <p className="text-xl font-bold">{formatCurrency(b.total_amount)}</p>
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
                 <div className="flex gap-2 mt-2 justify-end">
-                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${statusColor[b.status]}`}>{b.status}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${bookingStatusColors[b.status]}`}>{b.status}</span>
                   <span className="text-xs px-2 py-1 rounded-full bg-[var(--primary)]/20 capitalize">{b.payment_status?.replace('_', ' ')}</span>
                 </div>
               </div>
@@ -132,7 +136,13 @@ export default function CustomerBookingsPage() {
           </div>
         ))}
         {bookings.length === 0 && (
-          <div className="glass-card p-12 text-center text-[var(--muted)]">No bookings found</div>
+          <EmptyState
+            icon={Calendar}
+            title="No bookings yet"
+            description="Browse available vehicles in Cebu and book your first ride."
+            actionLabel="Browse Vehicles"
+            actionHref="/vehicles"
+          />
         )}
       </div>
 

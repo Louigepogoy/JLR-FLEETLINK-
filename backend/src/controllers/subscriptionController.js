@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { validateGCashPayment, validateCardPayment } = require('../services/paymentService');
+const { validateGcashQrPayment, validateCardPayment } = require('../services/paymentService');
 const { generateReferenceNumber } = require('../utils/helpers');
 
 const PLANS = {
@@ -71,11 +71,7 @@ const subscribe = async (req, res, next) => {
 
     if (plan.price > 0) {
       const paymentResult = paymentMethod === 'gcash'
-        ? await validateGCashPayment({
-          amount: plan.price,
-          phoneNumber: paymentDetails.phoneNumber,
-          pin: paymentDetails.pin,
-        })
+        ? await validateGcashQrPayment({ amount: plan.price })
         : await validateCardPayment({
           amount: plan.price,
           cardNumber: paymentDetails.cardNumber,

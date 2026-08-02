@@ -23,7 +23,7 @@ export default function ReceiptPage() {
   }, [invoiceNumber]);
 
   return (
-    <DashboardLayout role="customer">
+    <DashboardLayout role="user">
       <button
         onClick={() => router.back()}
         className="flex items-center gap-2 text-sm text-[var(--muted)] hover:text-[var(--primary)] mb-6 print:hidden"

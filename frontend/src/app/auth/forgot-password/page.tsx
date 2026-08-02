@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Car, Eye, EyeOff } from 'lucide-react';
+import { Handshake, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -73,7 +73,7 @@ export default function ForgotPasswordPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="p-2 rounded-xl gradient-bg">
-              <Car className="w-5 h-5 text-white" />
+              <Handshake className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>

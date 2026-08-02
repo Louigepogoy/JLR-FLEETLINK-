@@ -38,11 +38,7 @@ export function formatDateTime(date: string, time?: string | null) {
 }
 
 export function getDashboardPath(role: string) {
-  switch (role) {
-    case 'admin': return '/dashboard/admin';
-    case 'owner': return '/dashboard/owner';
-    default: return '/dashboard/customer';
-  }
+  return role === 'admin' ? '/dashboard/admin' : '/dashboard';
 }
 
 export const vehicleTypes = [
@@ -85,6 +81,15 @@ export const vehicleProofSlots: {
 export const requiredProofCount = vehicleProofSlots.length;
 export const paymentStatuses = ['pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled'];
 export const bookingStatuses = ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled'];
+
+export const bookingStatusColors: Record<string, string> = {
+  pending: 'bg-yellow-500/20 text-yellow-500',
+  approved: 'bg-green-500/20 text-green-500',
+  rejected: 'bg-red-500/20 text-red-500',
+  active: 'bg-blue-500/20 text-blue-500',
+  completed: 'bg-gray-500/20 text-gray-500',
+  cancelled: 'bg-red-500/20 text-red-500',
+};
 
 export const cebuLocations = [
   { label: 'Cebu City', value: 'Cebu City', group: 'Cebu City', lat: 10.3157, lng: 123.8854 },

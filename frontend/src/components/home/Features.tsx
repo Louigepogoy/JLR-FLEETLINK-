@@ -24,7 +24,7 @@ export default function Features() {
         >
           <h2 className="text-4xl font-bold mb-4">Why Choose <span className="gradient-text">JLR Fleetlink</span></h2>
           <p className="text-[var(--muted)] max-w-2xl mx-auto">
-            A complete vehicle rental platform built for customers, owners, and administrators.
+            A complete peer-to-peer vehicle rental marketplace for Cebu — rent a ride, or list your own and start earning.
           </p>
         </motion.div>
 

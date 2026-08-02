@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Car, Eye, EyeOff } from 'lucide-react';
+import { Handshake, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -21,14 +21,14 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
 
   const handleApiError = (err: unknown, fallback: string) => {
-    const error = err as { response?: { data?: { message?: string; code?: string }; status?: number } };
+    const error = err as { response?: { data?: { message?: string }; status?: number } };
     let msg = error.response?.data?.message || fallback;
     if (!error.response) {
       msg = 'Cannot reach server. Start backend (npm run dev) and check DATABASE_URL / Neon setup.';
     } else if (error.response.status === 503) {
       msg = error.response.data?.message || 'Database not ready. Run: cd backend && npm run db:setup';
     }
-    toast.error(msg, { duration: error.response?.data?.code === 'PENDING_APPROVAL' ? 6000 : 5000 });
+    toast.error(msg);
   };
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
@@ -77,7 +77,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
             <div className="p-2 rounded-xl gradient-bg">
-              <Car className="w-5 h-5 text-white" />
+              <Handshake className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>

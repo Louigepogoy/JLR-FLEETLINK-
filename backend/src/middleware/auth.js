@@ -22,14 +22,6 @@ const authenticate = async (req, res, next) => {
     }
 
     const user = result.rows[0];
-    if (
-      user.role !== 'admin' &&
-      user.approval_status &&
-      user.approval_status !== 'approved'
-    ) {
-      return res.status(403).json({ success: false, message: 'Account not approved' });
-    }
-
     if (!user.is_active) {
       return res.status(401).json({ success: false, message: 'Account inactive' });
     }

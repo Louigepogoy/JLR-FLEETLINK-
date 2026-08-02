@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Camera, Lock, Phone, User } from 'lucide-react';
+import { Camera, CheckCircle2, Clock, IdCard, Lock, Phone, ShieldCheck, User, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+
+type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -25,10 +28,20 @@ export default function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState(user?.avatar_url || '');
   const [loading, setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('unverified');
+  const [verificationChecking, setVerificationChecking] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) router.push('/auth/login');
   }, [isAuthenticated, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.get('/verification')
+      .then((res) => setVerificationStatus(res.data.data?.approval_status || 'unverified'))
+      .catch(() => {})
+      .finally(() => setVerificationChecking(false));
+  }, [isAuthenticated]);
 
   if (!isAuthenticated) return null;
 
@@ -119,7 +132,22 @@ export default function ProfilePage() {
                 <div>
                   <p className="font-semibold">{user?.full_name}</p>
                   <p className="text-sm text-[var(--muted)]">{user?.email}</p>
-                  <span className="inline-block mt-2 text-xs px-3 py-1 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] capitalize">{user?.role}</span>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className="inline-block text-xs px-3 py-1 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] capitalize">{user?.role}</span>
+                    {!verificationChecking && (
+                      <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full ${
+                        verificationStatus === 'approved' ? 'bg-green-500/15 text-green-500' :
+                        verificationStatus === 'pending' ? 'bg-amber-500/15 text-amber-500' :
+                        verificationStatus === 'rejected' ? 'bg-red-500/15 text-red-500' :
+                        'bg-[var(--muted)]/15 text-[var(--muted)]'
+                      }`}>
+                        {verificationStatus === 'approved' && <><CheckCircle2 className="h-3 w-3" /> Verified</>}
+                        {verificationStatus === 'pending' && <><Clock className="h-3 w-3" /> Verification Pending</>}
+                        {verificationStatus === 'rejected' && <><XCircle className="h-3 w-3" /> Not Verified</>}
+                        {verificationStatus === 'unverified' && <><ShieldCheck className="h-3 w-3" /> Not Verified</>}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -171,6 +199,36 @@ export default function ProfilePage() {
                 {passwordLoading ? 'Changing...' : 'Change Password'}
               </button>
             </form>
+
+            <div className="glass-card p-8 space-y-4 h-fit lg:col-span-2">
+              <div className="flex items-center gap-4">
+                <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
+                  verificationStatus === 'approved' ? 'bg-green-500/15 text-green-500' :
+                  verificationStatus === 'pending' ? 'bg-amber-500/15 text-amber-500' :
+                  verificationStatus === 'rejected' ? 'bg-red-500/15 text-red-500' :
+                  'bg-[var(--primary)]/10 text-[var(--primary)]'
+                }`}>
+                  {verificationStatus === 'approved' && <CheckCircle2 className="h-6 w-6" />}
+                  {verificationStatus === 'pending' && <Clock className="h-6 w-6" />}
+                  {verificationStatus === 'rejected' && <XCircle className="h-6 w-6" />}
+                  {verificationStatus === 'unverified' && <IdCard className="h-6 w-6" />}
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold">Identity Verification</h2>
+                  <p className="text-sm text-[var(--muted)]">
+                    {verificationStatus === 'approved' && "Your driver's license has been verified. This is visible on your profile."}
+                    {verificationStatus === 'pending' && "We're reviewing your driver's license and selfie."}
+                    {verificationStatus === 'rejected' && 'Your last submission was not approved. You can try again.'}
+                    {verificationStatus === 'unverified' && "Verify your driver's license to book or list vehicles."}
+                  </p>
+                </div>
+                {verificationStatus !== 'approved' && (
+                  <Link href="/verify-identity?returnTo=/profile" className="btn-primary shrink-0">
+                    {verificationStatus === 'pending' ? 'View Status' : verificationStatus === 'rejected' ? 'Try Again' : 'Verify Now'}
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </main>

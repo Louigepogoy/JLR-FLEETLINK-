@@ -18,6 +18,7 @@ const commissionRoutes = require('./routes/commission.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const subscriptionRoutes = require('./routes/subscription.routes');
 const reportRoutes = require('./routes/report.routes');
+const verificationRoutes = require('./routes/verification.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -65,6 +66,7 @@ app.use('/api/commission', commissionRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/verification', verificationRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {

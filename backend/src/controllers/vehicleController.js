@@ -169,6 +169,26 @@ const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
   }
 };
 
+const getPublicStats = async (req, res, next) => {
+  try {
+    const [vehicles, users] = await Promise.all([
+      query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available'"),
+      query("SELECT COUNT(*)::int AS count FROM users WHERE approval_status = 'approved' AND is_active = true"),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        availableVehicles: vehicles.rows[0].count,
+        activeUsers: users.rows[0].count,
+        citiesCovered: CEBU_LOCATIONS.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getVehicles = async (req, res, next) => {
   try {
     const { search, type, minPrice, maxPrice, location, area, status = 'available' } = req.query;
@@ -242,6 +262,14 @@ const createVehicle = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    if (req.user.approval_status !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        code: 'VERIFICATION_REQUIRED',
+        message: 'Please verify your driver\'s license before listing a vehicle.',
+      });
     }
 
     const {
@@ -398,5 +426,5 @@ const vehicleValidation = [
 
 module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
-  deleteVehicle, getOwnerVehicles, vehicleValidation,
+  deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
 };

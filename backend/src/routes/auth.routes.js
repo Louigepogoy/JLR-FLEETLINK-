@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
-const { uploadRegistrationDocs } = require('../middleware/upload');
 const {
   register, login, verifyOtp, forgotPassword, resetPassword, getMe, getLoginLogs,
   registerValidation, loginValidation, otpValidation, forgotPasswordValidation, resetPasswordValidation,
 } = require('../controllers/authController');
 
-router.post('/register', uploadRegistrationDocs, registerValidation, register);
+router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.post('/verify-otp', otpValidation, verifyOtp);
 router.post('/forgot-password', forgotPasswordValidation, forgotPassword);

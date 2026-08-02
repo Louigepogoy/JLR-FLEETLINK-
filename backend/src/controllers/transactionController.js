@@ -5,24 +5,17 @@ const getMyTransactions = async (req, res, next) => {
     let sql;
     let params;
 
-    if (req.user.role === 'customer') {
-      sql = `
-        SELECT t.*, v.title as vehicle_title, b.start_date, b.end_date
-        FROM transactions t
-        JOIN bookings b ON t.booking_id = b.id
-        JOIN vehicles v ON b.vehicle_id = v.id
-        WHERE b.customer_id = $1
-        ORDER BY t.created_at DESC`;
-      params = [req.user.id];
-    } else if (req.user.role === 'owner') {
+    if (req.user.role !== 'admin') {
       sql = `
         SELECT t.*, v.title as vehicle_title, b.start_date, b.end_date,
-               c.full_name as customer_name
+               c.full_name as customer_name, o.full_name as owner_name,
+               CASE WHEN b.customer_id = $1 THEN 'renter' ELSE 'provider' END as perspective
         FROM transactions t
         JOIN bookings b ON t.booking_id = b.id
         JOIN vehicles v ON b.vehicle_id = v.id
         JOIN users c ON b.customer_id = c.id
-        WHERE t.user_id = $1
+        LEFT JOIN users o ON t.user_id = o.id
+        WHERE b.customer_id = $1 OR t.user_id = $1
         ORDER BY t.created_at DESC`;
       params = [req.user.id];
     } else {

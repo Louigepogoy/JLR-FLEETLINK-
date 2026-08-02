@@ -44,6 +44,23 @@ const validateGCashPayment = async ({ amount, phoneNumber, pin }) => {
   };
 };
 
+const validateGcashQrPayment = async ({ amount }) => {
+  if (amount <= 0) {
+    throw new Error('Invalid payment amount');
+  }
+
+  const referenceNumber = generateReferenceNumber('gcash');
+  return {
+    success: true,
+    referenceNumber,
+    method: 'gcash',
+    metadata: buildTransactionMeta('gcash', amount, {
+      referenceNumber,
+      channel: 'GCash QR (manual)',
+    }),
+  };
+};
+
 const validateCardPayment = async ({ amount, cardNumber, expiry, cvv, cardholderName }) => {
   const cleaned = cardNumber?.replace(/\s/g, '') || '';
   if (!/^\d{16}$/.test(cleaned)) {
@@ -81,4 +98,4 @@ const validateCardPayment = async ({ amount, cardNumber, expiry, cvv, cardholder
   };
 };
 
-module.exports = { validateGCashPayment, validateCardPayment };
+module.exports = { validateGCashPayment, validateGcashQrPayment, validateCardPayment };

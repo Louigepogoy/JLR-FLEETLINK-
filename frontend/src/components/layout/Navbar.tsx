@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Car, Menu, X, Bell, LogOut, User, LayoutDashboard, ChevronDown,
+  Handshake, Menu, X, Bell, BellOff, LogOut, User, LayoutDashboard, ChevronDown,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -80,7 +80,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
             <div className="p-2 rounded-xl gradient-bg">
-              <Car className="w-5 h-5 text-white" />
+              <Handshake className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
@@ -112,7 +112,7 @@ export default function Navbar() {
             ) : (
               <>
                 <Link
-                  href={getDashboardPath(user?.role || 'customer')}
+                  href={getDashboardPath(user?.role || 'user')}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--primary)]/10 transition-colors"
                 >
                   <LayoutDashboard className="w-4 h-4" />
@@ -149,7 +149,10 @@ export default function Navbar() {
                           )}
                         </div>
                         {notifications.length === 0 ? (
-                          <p className="text-sm text-[var(--muted)] text-center py-4">No notifications</p>
+                          <div className="flex flex-col items-center gap-2 py-6 text-center">
+                            <BellOff className="w-5 h-5 text-[var(--muted)]" />
+                            <p className="text-sm text-[var(--muted)]">No notifications</p>
+                          </div>
                         ) : (
                           notifications.slice(0, 5).map((n) => (
                             <div key={n.id} className={`p-3 rounded-lg mb-2 ${!n.is_read ? 'bg-[var(--primary)]/10' : ''}`}>
@@ -237,7 +240,7 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <Link href={getDashboardPath(user?.role || 'customer')} className="block py-2" onClick={() => setMobileOpen(false)}>Dashboard</Link>
+                  <Link href={getDashboardPath(user?.role || 'user')} className="block py-2" onClick={() => setMobileOpen(false)}>Dashboard</Link>
                   <button onClick={handleLogout} className="block w-full text-left py-2 text-red-500">Logout</button>
                 </>
               )}

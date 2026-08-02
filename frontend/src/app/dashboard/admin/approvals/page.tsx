@@ -69,8 +69,8 @@ export default function AdminApprovalsPage() {
     <DashboardLayout role="admin">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Registration Approvals</h2>
-          <p className="text-sm text-[var(--muted)]">Review license and selfie for identity verification</p>
+          <h2 className="text-2xl font-bold">Identity Verifications</h2>
+          <p className="text-sm text-[var(--muted)]">Review license and selfie submissions for identity verification</p>
         </div>
         <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-500 text-sm font-medium">
           {pending.length} pending
@@ -78,7 +78,12 @@ export default function AdminApprovalsPage() {
       </div>
 
       {loading ? (
-        <div className="glass-card p-12 text-center text-[var(--muted)]">Loading...</div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}
+          </div>
+          <div className="skeleton h-96 rounded-2xl" />
+        </div>
       ) : pending.length === 0 ? (
         <div className="glass-card p-12 text-center text-[var(--muted)]">No pending registrations</div>
       ) : (

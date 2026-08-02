@@ -1,20 +1,37 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Calendar } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { bookingStatusColors, formatCurrency, formatDate } from '@/lib/utils';
 
 export default function AdminBookingsPage() {
+  const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
 
   useEffect(() => {
-    api.get('/bookings/all').then((res) => setBookings(res.data.data)).catch(() => {});
+    api.get('/bookings/all').then((res) => setBookings(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <DashboardLayout role="admin">
+        <div className="skeleton h-8 w-48 mb-6" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-20 rounded-2xl" />)}
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin">
       <h2 className="text-2xl font-bold mb-6">All Bookings</h2>
+      {bookings.length === 0 ? (
+        <EmptyState icon={Calendar} title="No bookings found" />
+      ) : (
       <div className="space-y-3">
         {bookings.map((b: {
           id: string; title: string; customer_name: string; owner_name: string;
@@ -31,13 +48,14 @@ export default function AdminBookingsPage() {
               <p className="font-bold">{formatCurrency(b.total_amount)}</p>
               <p className="text-xs text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
               <div className="flex gap-2 mt-1 justify-end">
-                <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-[var(--primary)]/20">{b.status}</span>
+                <span className={`text-xs capitalize px-2 py-0.5 rounded-full ${bookingStatusColors[b.status]}`}>{b.status}</span>
                 <span className="text-xs capitalize px-2 py-0.5 rounded-full bg-green-500/20">{b.payment_status?.replace('_', ' ')}</span>
               </div>
             </div>
           </div>
         ))}
       </div>
+      )}
     </DashboardLayout>
   );
 }

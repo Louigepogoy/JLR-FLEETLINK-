@@ -16,22 +16,19 @@ import { cn, getDashboardPath } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 const navByRole: Record<string, Array<{ href: string; label: string; icon: typeof LayoutDashboard }>> = {
-  customer: [
-    { href: '/dashboard/customer', label: 'Overview', icon: LayoutDashboard },
-    { href: '/dashboard/customer/bookings', label: 'My Bookings', icon: Calendar },
+  user: [
+    { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+    { href: '/dashboard/bookings', label: 'My Bookings', icon: Calendar },
     { href: '/vehicles', label: 'Browse Vehicles', icon: Car },
-    { href: '/dashboard/customer/transactions', label: 'Transactions', icon: CreditCard },
-  ],
-  owner: [
-    { href: '/dashboard/owner', label: 'Overview', icon: LayoutDashboard },
-    { href: '/dashboard/owner/vehicles', label: 'My Vehicles', icon: Car },
-    { href: '/dashboard/owner/bookings', label: 'Bookings', icon: Calendar },
-    { href: '/dashboard/owner/earnings', label: 'Earnings', icon: BarChart3 },
-    { href: '/dashboard/owner/subscription', label: 'Subscription', icon: Crown },
+    { href: '/dashboard/vehicles', label: 'My Vehicles', icon: Car },
+    { href: '/dashboard/booking-requests', label: 'Booking Requests', icon: ClipboardCheck },
+    { href: '/dashboard/earnings', label: 'Earnings', icon: BarChart3 },
+    { href: '/dashboard/transactions', label: 'Transactions', icon: CreditCard },
+    { href: '/dashboard/subscription', label: 'Become a Provider', icon: Crown },
   ],
   admin: [
     { href: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard },
-    { href: '/dashboard/admin/approvals', label: 'Approvals', icon: ClipboardCheck },
+    { href: '/dashboard/admin/approvals', label: 'Verifications', icon: ClipboardCheck },
     { href: '/dashboard/admin/users', label: 'Users', icon: Users },
     { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: History },
     { href: '/dashboard/admin/bookings', label: 'Bookings', icon: Calendar },
@@ -47,7 +44,7 @@ export default function DashboardLayout({
   role,
 }: {
   children: React.ReactNode;
-  role: 'customer' | 'owner' | 'admin';
+  role: 'user' | 'admin';
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -80,7 +77,7 @@ export default function DashboardLayout({
       )}>
         <div className="p-6 border-b border-[var(--card-border)]">
           <Link href="/" className="text-xl font-bold gradient-text">JLR Fleetlink</Link>
-          <p className="text-xs text-[var(--muted)] mt-1 capitalize">{role} Dashboard</p>
+          <p className="text-xs text-[var(--muted)] mt-1">{role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}</p>
         </div>
         <nav className="p-4 space-y-1">
           {navItems.map((item) => (

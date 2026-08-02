@@ -6,13 +6,16 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import api from '@/lib/api';
 
 export default function AdminSettingsPage() {
+  const [pageLoading, setPageLoading] = useState(true);
   const [commission, setCommission] = useState(10);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.get('/commission').then((res) => setCommission(parseFloat(res.data.data.commission_percentage)));
-    api.get('/commission/history').then((res) => setHistory(res.data.data)).catch(() => {});
+    Promise.all([
+      api.get('/commission').then((res) => setCommission(parseFloat(res.data.data.commission_percentage))),
+      api.get('/commission/history').then((res) => setHistory(res.data.data)).catch(() => {}),
+    ]).finally(() => setPageLoading(false));
   }, []);
 
   const handleSave = async () => {
@@ -28,6 +31,16 @@ export default function AdminSettingsPage() {
       setLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <DashboardLayout role="admin">
+        <div className="skeleton h-8 w-48 mb-6" />
+        <div className="skeleton h-48 rounded-2xl max-w-lg mb-8" />
+        <div className="skeleton h-32 rounded-2xl" />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin">

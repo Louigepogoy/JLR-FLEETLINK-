@@ -61,10 +61,12 @@ const fallbackPlans: Plan[] = [
   },
 ];
 
-export default function OwnerSubscriptionPage() {
+export default function SubscriptionPage() {
+  const [pageLoading, setPageLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan>(fallbackPlans[1]);
+  const [planChosen, setPlanChosen] = useState(false);
   const [method, setMethod] = useState<'gcash' | 'card'>('gcash');
   const [loading, setLoading] = useState(false);
   const [gcash, setGcash] = useState({ phoneNumber: '', pin: '' });
@@ -78,7 +80,7 @@ export default function OwnerSubscriptionPage() {
       setPlans(plansRes.data.data);
       setSelectedPlan(plansRes.data.data.find((plan: Plan) => plan.id === 'pro') || plansRes.data.data[0]);
       setSubscription(subscriptionRes.data.data);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setPageLoading(false));
   }, []);
 
   const handleSubscribe = async () => {
@@ -87,7 +89,7 @@ export default function OwnerSubscriptionPage() {
       const payload = {
         planId: selectedPlan.id,
         paymentMethod: selectedPlan.price > 0 ? method : 'trial',
-        paymentDetails: method === 'gcash' ? gcash : card,
+        paymentDetails: method === 'gcash' ? {} : card,
       };
       const res = await api.post('/subscriptions/subscribe', payload);
       setSubscription(res.data.data);
@@ -100,17 +102,28 @@ export default function OwnerSubscriptionPage() {
     }
   };
 
+  if (pageLoading) {
+    return (
+      <DashboardLayout role="user">
+        <div className="grid xl:grid-cols-[320px_1fr] gap-6">
+          <div className="skeleton h-64 rounded-2xl" />
+          <div className="skeleton h-96 rounded-2xl" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
-    <DashboardLayout role="owner">
+    <DashboardLayout role="user">
       <div className="grid xl:grid-cols-[320px_1fr] gap-6">
         <aside className="glass-card overflow-hidden">
           <div className="p-6 border-b border-[var(--card-border)]">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white mb-5">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl gradient-bg text-white mb-5">
               <Crown className="w-6 h-6" />
             </div>
-            <h2 className="text-4xl font-black leading-tight">
+            <h2 className="text-4xl font-bold leading-tight">
               Subscribe to
-              <span className="block text-blue-600">publish your</span>
+              <span className="block gradient-text">publish your</span>
               vehicle.
             </h2>
             <p className="mt-4 text-sm text-[var(--muted)]">
@@ -120,14 +133,14 @@ export default function OwnerSubscriptionPage() {
 
           <div className="p-6 space-y-3">
             {subscription ? (
-              <div className="rounded-2xl bg-blue-50 p-4 text-blue-900 dark:bg-blue-500/10 dark:text-blue-100">
-                <p className="text-xs font-semibold uppercase tracking-wide">Current Plan</p>
-                <p className="text-2xl font-black">{subscription.plan_name}</p>
+              <div className="rounded-2xl bg-[var(--primary)]/10 p-4 text-[var(--foreground)]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">Current Plan</p>
+                <p className="text-2xl font-bold">{subscription.plan_name}</p>
                 <p className="text-sm">{subscription.vehicle_limit} vehicles allowed</p>
                 <p className="text-xs mt-2 capitalize">Paid via {subscription.payment_method}</p>
               </div>
             ) : (
-              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-[var(--muted)] dark:bg-white/5">
+              <div className="rounded-2xl bg-[var(--card)] border border-[var(--card-border)] p-4 text-sm text-[var(--muted)]">
                 No active subscription yet.
               </div>
             )}
@@ -140,8 +153,8 @@ export default function OwnerSubscriptionPage() {
 
         <section className="glass-card p-6 lg:p-8">
           <div className="mb-8">
-            <p className="text-sm font-semibold text-blue-600 mb-2">Owner Subscription</p>
-            <h1 className="text-3xl lg:text-5xl font-black">Choose a Subscription Plan</h1>
+            <p className="text-sm font-semibold text-[var(--primary)] mb-2">Become a Provider</p>
+            <h1 className="text-3xl lg:text-5xl font-bold">Choose a Subscription Plan</h1>
             <p className="text-lg text-[var(--muted)] mt-3">
               Select the best plan to publish your vehicle and grow your rental business.
             </p>
@@ -159,15 +172,15 @@ export default function OwnerSubscriptionPage() {
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.06 }}
-                  onClick={() => setSelectedPlan(plan)}
+                  onClick={() => { setSelectedPlan(plan); setPlanChosen(true); }}
                   className={`relative text-left rounded-2xl border p-6 transition-all ${
                     active
-                      ? 'border-blue-600 bg-blue-50/70 shadow-xl shadow-blue-900/10 dark:bg-blue-500/10'
-                      : 'border-[var(--card-border)] bg-white/70 hover:border-blue-300 dark:bg-white/5'
+                      ? 'border-[var(--primary)] bg-[var(--primary)]/10 shadow-xl shadow-sky-900/10'
+                      : 'border-[var(--card-border)] bg-[var(--card)] hover:border-[var(--primary)]/50'
                   }`}
                 >
                   {plan.id === 'pro' && (
-                    <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
+                    <span className="absolute right-4 top-4 rounded-full gradient-bg px-3 py-1 text-xs font-bold text-white">
                       Popular
                     </span>
                   )}
@@ -176,27 +189,27 @@ export default function OwnerSubscriptionPage() {
                       Active
                     </span>
                   )}
-                  <h3 className="text-2xl font-black">{plan.name}</h3>
+                  <h3 className="text-2xl font-bold">{plan.name}</h3>
                   <p className="mt-3 text-sm text-[var(--muted)]">Perfect for getting started.</p>
                   <div className="mt-8 mb-6">
                     {plan.price === 0 ? (
-                      <p className="text-4xl font-black">Free Trial</p>
+                      <p className="text-4xl font-bold">Free Trial</p>
                     ) : (
-                      <p className="text-4xl font-black">
+                      <p className="text-4xl font-bold">
                         {formatCurrency(plan.price)}
                         <span className="text-base font-semibold text-[var(--muted)]"> / month</span>
                       </p>
                     )}
                   </div>
                   <span className={`inline-flex min-h-11 items-center justify-center rounded-xl px-6 text-sm font-bold ${
-                    active ? 'bg-blue-600 text-white' : 'border border-blue-600 text-blue-600'
+                    active ? 'gradient-bg text-white' : 'border border-[var(--primary)] text-[var(--primary)]'
                   }`}>
                     {plan.price === 0 ? 'Get' : 'Select Plan'}
                   </span>
                   <ul className="mt-8 space-y-4">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-center gap-3 text-sm">
-                        <Check className="w-4 h-4 text-blue-600" />
+                        <Check className="w-4 h-4 text-[var(--primary)]" />
                         {feature}
                       </li>
                     ))}
@@ -207,8 +220,12 @@ export default function OwnerSubscriptionPage() {
           </div>
 
           <div className="grid lg:grid-cols-[1fr_360px] gap-5">
-            <div className="rounded-2xl border border-[var(--card-border)] bg-slate-200/80 p-5 dark:bg-slate-800/60">
-              {selectedPlan.price === 0 ? (
+            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-5">
+              {!planChosen ? (
+                <div className="rounded-xl bg-[var(--card)] border border-dashed border-[var(--card-border)] p-4 text-sm text-[var(--muted)]">
+                  Select a plan above to continue.
+                </div>
+              ) : selectedPlan.price === 0 ? (
                 <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
                   Basic starts as a free trial. No payment details required.
                 </div>
@@ -220,29 +237,33 @@ export default function OwnerSubscriptionPage() {
                   onGcashChange={setGcash}
                   card={card}
                   onCardChange={setCard}
+                  gcashMode="qr"
+                  qrCodeSrc="/gcash-qr.png"
                 />
               )}
             </div>
 
-            <div className="rounded-2xl bg-slate-950 p-5 text-white">
-              <p className="text-sm text-slate-300">Selected Plan</p>
-              <h3 className="mt-1 text-3xl font-black">{selectedPlan.name}</h3>
-              <p className="mt-4 text-4xl font-black">
+            <div className="rounded-2xl gradient-bg p-5 text-white">
+              <p className="text-sm text-white/80">Selected Plan</p>
+              <h3 className="mt-1 text-3xl font-bold">{selectedPlan.name}</h3>
+              <p className="mt-4 text-4xl font-bold">
                 {selectedPlan.price === 0 ? 'Free' : formatCurrency(selectedPlan.price)}
               </p>
-              <p className="text-sm text-slate-300">
+              <p className="text-sm text-white/80">
                 {selectedPlan.price === 0 ? '30-day trial' : 'Billed monthly'}
               </p>
               <button
                 type="button"
                 onClick={handleSubscribe}
-                disabled={loading}
-                className="mt-6 min-h-12 w-full rounded-xl bg-blue-600 px-5 font-bold text-white transition hover:bg-blue-500 disabled:opacity-60"
+                disabled={loading || !planChosen}
+                className="mt-6 min-h-12 w-full rounded-xl bg-white px-5 font-bold text-[var(--primary-dark)] transition hover:opacity-90 disabled:opacity-60"
               >
                 {loading ? 'Processing...' : selectedPlan.price === 0 ? 'Activate Trial' : `Pay ${formatCurrency(selectedPlan.price)}`}
               </button>
-              <p className="mt-4 text-xs text-slate-400">
-                Payments are simulated for development and ready to connect to a live provider.
+              <p className="mt-4 text-xs text-white/70">
+                {selectedPlan.price > 0 && method === 'gcash'
+                  ? 'Scan the QR code with your GCash app to pay.'
+                  : 'Card payments are simulated for development.'}
               </p>
             </div>
           </div>

@@ -8,7 +8,7 @@ const {
   reportValidation,
 } = require('../controllers/reportController');
 
-router.post('/', authenticate, authorize('customer', 'owner'), reportValidation, createReport);
+router.post('/', authenticate, authorize('user', 'admin'), reportValidation, createReport);
 router.get('/', authenticate, authorize('admin'), getAllReports);
 router.patch('/:id/status', authenticate, authorize('admin'), updateReportStatus);
 

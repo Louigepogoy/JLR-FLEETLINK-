@@ -6,8 +6,9 @@ export interface User {
   email: string;
   full_name: string;
   phone?: string;
-  role: 'customer' | 'owner' | 'admin';
+  role: 'user' | 'admin';
   avatar_url?: string;
+  approval_status?: 'unverified' | 'pending' | 'approved' | 'rejected';
 }
 
 interface AuthState {

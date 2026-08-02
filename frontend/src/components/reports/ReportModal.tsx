@@ -85,7 +85,7 @@ export default function ReportModal({
         <select
           value={reason}
           onChange={(event) => setReason(event.target.value)}
-          className="mb-4 w-full rounded-lg border border-[var(--card-border)] bg-transparent px-3 py-2 text-sm"
+          className="input-field mb-4 text-sm"
         >
           {reasons.map((item) => (
             <option key={item} value={item}>{item}</option>
@@ -97,7 +97,7 @@ export default function ReportModal({
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           rows={5}
-          className="w-full resize-none rounded-lg border border-[var(--card-border)] bg-transparent px-3 py-2 text-sm"
+          className="input-field resize-none text-sm"
           placeholder="Describe what happened..."
         />
 

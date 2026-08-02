@@ -139,7 +139,7 @@ const processPayment = async (req, res, next) => {
         remainingBalance: parseFloat(booking.total_amount) - newPaidAmount,
         paymentStatus,
         commission: { percentage: commissionPct, platformAmount, ownerAmount },
-        receiptUrl: `/dashboard/customer/receipt/${invoiceNumber}`,
+        receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
       },
     });
   } catch (error) {

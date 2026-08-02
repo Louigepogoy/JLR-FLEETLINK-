@@ -37,6 +37,9 @@ async function setup() {
     const loginLogsMigrationPath = path.join(__dirname, '../database/migrations/003_login_logs.sql');
     const loginOtpsMigrationPath = path.join(__dirname, '../database/migrations/004_login_otps.sql');
     const passwordResetCodesMigrationPath = path.join(__dirname, '../database/migrations/005_password_reset_codes.sql');
+    const unifyRolesMigrationPath = path.join(__dirname, '../database/migrations/006_unify_user_roles.sql');
+    const decoupleVerificationMigrationPath = path.join(__dirname, '../database/migrations/007_decouple_verification.sql');
+    const backfillUnverifiedMigrationPath = path.join(__dirname, '../database/migrations/008_backfill_unverified_status.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -67,6 +70,12 @@ async function setup() {
       console.log('Login OTP migration applied.');
       await runSqlFile(passwordResetCodesMigrationPath);
       console.log('Password reset codes migration applied.');
+      await runSqlFile(unifyRolesMigrationPath);
+      console.log('Unify user roles migration applied.');
+      await runSqlFile(decoupleVerificationMigrationPath);
+      console.log('Decouple verification migration applied.');
+      await runSqlFile(backfillUnverifiedMigrationPath);
+      console.log('Backfill unverified status migration applied.');
     }
 
     await runSqlFile(seedPath);

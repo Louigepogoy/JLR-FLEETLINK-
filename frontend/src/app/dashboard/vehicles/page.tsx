@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Crown, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { AlertTriangle, Car, Crown, ImageOff, MapPin, Pencil, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import EmptyState from '@/components/ui/EmptyState';
 import VehicleProofUpload, { emptyProofPhotos, type ProofPhotoState } from '@/components/vehicles/VehicleProofUpload';
 import api from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 import { cebuLocations, formatCurrency, getCebuLocation, vehicleProofSlots, vehicleTypes } from '@/lib/utils';
 
 type OwnerVehicle = {
@@ -61,7 +64,10 @@ const emptyForm = {
   description: '',
 };
 
-export default function OwnerVehiclesPage() {
+export default function MyVehiclesPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<OwnerVehicle[]>([]);
   const [subscription, setSubscription] = useState<OwnerSubscription>(null);
   const [showForm, setShowForm] = useState(false);
@@ -80,7 +86,9 @@ export default function OwnerVehiclesPage() {
 
   const fetchVehicles = () => api.get('/vehicles/owner/my-vehicles').then((res) => setVehicles(res.data.data)).catch(() => {});
   const fetchSubscription = () => api.get('/subscriptions/me').then((res) => setSubscription(res.data.data)).catch(() => setSubscription(null));
-  useEffect(() => { fetchVehicles(); fetchSubscription(); }, []);
+  useEffect(() => {
+    Promise.all([fetchVehicles(), fetchSubscription()]).finally(() => setLoading(false));
+  }, []);
 
   const resetForm = () => {
     setEditingVehicle(null);
@@ -192,7 +200,11 @@ export default function OwnerVehiclesPage() {
       resetForm();
       fetchVehicles();
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string; errors?: { msg: string }[]; upgradeRequired?: boolean } } };
+      const error = err as { response?: { data?: { message?: string; errors?: { msg: string }[]; upgradeRequired?: boolean; code?: string } } };
+      if (error.response?.data?.code === 'VERIFICATION_REQUIRED') {
+        router.push('/verify-identity?returnTo=/dashboard/vehicles');
+        return;
+      }
       if (error.response?.data?.upgradeRequired) {
         toast.error(error.response.data.message || 'Select a higher subscription plan to add more vehicles.');
         setShowForm(false);
@@ -209,8 +221,20 @@ export default function OwnerVehiclesPage() {
     fetchVehicles();
   };
 
+  if (loading) {
+    return (
+      <DashboardLayout role="user">
+        <div className="skeleton h-8 w-56 mb-6" />
+        <div className="skeleton h-20 rounded-2xl mb-6" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-72 rounded-2xl" />)}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
-    <DashboardLayout role="owner">
+    <DashboardLayout role="user">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold">My Cebu Vehicles</h2>
@@ -220,6 +244,16 @@ export default function OwnerVehiclesPage() {
           <Plus className="w-4 h-4" /> Add Vehicle
         </button>
       </div>
+
+      {user?.approval_status !== 'approved' && (
+        <Link
+          href="/verify-identity?returnTo=/dashboard/vehicles"
+          className="flex items-center gap-2 text-sm p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-6"
+        >
+          <ShieldAlert className="w-4 h-4 shrink-0" />
+          Verify your driver&apos;s license to list a vehicle.
+        </Link>
+      )}
 
       <div className={`mb-6 rounded-2xl border p-4 ${
         isAtVehicleLimit
@@ -238,7 +272,7 @@ export default function OwnerVehiclesPage() {
               </p>
             </div>
           </div>
-          <Link href="/dashboard/owner/subscription" className={isAtVehicleLimit ? 'btn-primary text-sm' : 'btn-outline text-sm'}>
+          <Link href="/dashboard/subscription" className={isAtVehicleLimit ? 'btn-primary text-sm' : 'btn-outline text-sm'}>
             Select Plan
           </Link>
         </div>
@@ -371,7 +405,10 @@ export default function OwnerVehiclesPage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={v.images[0]} alt={v.title} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full items-center justify-center text-2xl font-bold text-[var(--primary)]">No photo</div>
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--primary)]">
+                  <ImageOff className="w-8 h-8" />
+                  <span className="text-xs font-medium text-[var(--muted)]">No photo</span>
+                </div>
               )}
             </div>
             <div className="flex justify-between gap-3">
@@ -399,6 +436,13 @@ export default function OwnerVehiclesPage() {
           </div>
         ))}
       </div>
+      {vehicles.length === 0 && (
+        <EmptyState
+          icon={Car}
+          title="No vehicles listed yet"
+          description="Add your first vehicle above to start earning as a provider."
+        />
+      )}
     </DashboardLayout>
   );
 }

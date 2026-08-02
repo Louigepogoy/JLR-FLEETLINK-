@@ -6,11 +6,12 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
-export default function OwnerEarningsPage() {
+export default function EarningsPage() {
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState({ summary: { total_earnings: 0, monthly_earnings: 0 }, monthlyBreakdown: [] });
 
   useEffect(() => {
-    api.get('/transactions/earnings').then((res) => setData(res.data.data)).catch(() => {});
+    api.get('/transactions/earnings').then((res) => setData(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const chartData = data.monthlyBreakdown.map((m: { month: string; earnings: string }) => ({
@@ -18,8 +19,21 @@ export default function OwnerEarningsPage() {
     earnings: parseFloat(m.earnings),
   }));
 
+  if (loading) {
+    return (
+      <DashboardLayout role="user">
+        <div className="skeleton h-8 w-52 mb-6" />
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+        </div>
+        <div className="skeleton h-80 rounded-2xl" />
+      </DashboardLayout>
+    );
+  }
+
   return (
-    <DashboardLayout role="owner">
+    <DashboardLayout role="user">
       <h2 className="text-2xl font-bold mb-6">Earnings Dashboard</h2>
       <div className="grid md:grid-cols-2 gap-6 mb-8">
         <div className="glass-card p-6">

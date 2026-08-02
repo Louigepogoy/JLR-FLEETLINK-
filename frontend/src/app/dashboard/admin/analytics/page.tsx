@@ -9,13 +9,14 @@ import { formatCurrency } from '@/lib/utils';
 const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
 
 export default function AdminAnalyticsPage() {
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     revenue: { total_revenue: 0, monthly_revenue: 0 },
     usersByRole: [], bookingsByStatus: [], monthlyRevenue: [],
   });
 
   useEffect(() => {
-    api.get('/transactions/analytics').then((res) => setData(res.data.data)).catch(() => {});
+    api.get('/transactions/analytics').then((res) => setData(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const revenueChart = data.monthlyRevenue.map((m: { month: string; revenue: string }) => ({
@@ -26,6 +27,22 @@ export default function AdminAnalyticsPage() {
   const userChart = data.usersByRole.map((u: { role: string; count: string }) => ({
     name: u.role, value: parseInt(u.count),
   }));
+
+  if (loading) {
+    return (
+      <DashboardLayout role="admin">
+        <div className="skeleton h-8 w-56 mb-6" />
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          <div className="skeleton h-24 rounded-2xl" />
+          <div className="skeleton h-24 rounded-2xl" />
+        </div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="skeleton h-72 rounded-2xl" />
+          <div className="skeleton h-72 rounded-2xl" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin">

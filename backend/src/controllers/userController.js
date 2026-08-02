@@ -62,9 +62,9 @@ const approveRegistration = async (req, res, next) => {
     await createNotification(
       user.id,
       'Account Approved',
-      `Welcome to JLR Fleetlink! Your ${user.role} account has been verified and approved.`,
+      'Welcome to JLR Fleetlink! Your account has been verified and approved.',
       'system',
-      user.role === 'owner' ? '/dashboard/owner' : '/dashboard/customer'
+      '/dashboard'
     );
 
     res.json({
@@ -196,7 +196,7 @@ const toggleUserStatus = async (req, res, next) => {
 const updateUserRole = async (req, res, next) => {
   try {
     const { role } = req.body;
-    if (!['customer', 'owner', 'admin'].includes(role)) {
+    if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
     const result = await query(

@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Users } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 
 export default function AdminUsersPage() {
+  const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
 
-  const fetchUsers = () => api.get('/users').then((res) => setUsers(res.data.data)).catch(() => {});
+  const fetchUsers = () => api.get('/users').then((res) => setUsers(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   useEffect(() => { fetchUsers(); }, []);
 
   const toggleStatus = async (id: string, isActive: boolean) => {
@@ -17,15 +20,27 @@ export default function AdminUsersPage() {
     fetchUsers();
   };
 
-  const changeRole = async (id: string, role: string) => {
-    await api.patch(`/users/${id}/role`, { role });
-    toast.success('Role updated');
+  const toggleAdmin = async (id: string, isAdmin: boolean) => {
+    await api.patch(`/users/${id}/role`, { role: isAdmin ? 'user' : 'admin' });
+    toast.success(isAdmin ? 'Admin access removed' : 'Promoted to admin');
     fetchUsers();
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout role="admin">
+        <div className="skeleton h-8 w-56 mb-6" />
+        <div className="skeleton h-64 rounded-2xl" />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout role="admin">
       <h2 className="text-2xl font-bold mb-6">User Management</h2>
+      {users.length === 0 ? (
+        <EmptyState icon={Users} title="No users found" />
+      ) : (
       <div className="glass-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -44,12 +59,11 @@ export default function AdminUsersPage() {
                 <td className="p-4 font-medium">{u.full_name}</td>
                 <td className="p-4 text-[var(--muted)]">{u.email}</td>
                 <td className="p-4">
-                  <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}
-                    className="text-xs rounded-lg border border-[var(--card-border)] bg-transparent px-2 py-1 capitalize">
-                    <option value="customer">customer</option>
-                    <option value="owner">owner</option>
-                    <option value="admin">admin</option>
-                  </select>
+                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${
+                    u.role === 'admin' ? 'bg-violet-500/20 text-violet-500' : 'bg-[var(--primary)]/20'
+                  }`}>
+                    {u.role}
+                  </span>
                 </td>
                 <td className="p-4">
                   <span className={`text-xs px-2 py-1 rounded-full capitalize ${
@@ -65,9 +79,12 @@ export default function AdminUsersPage() {
                     {u.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="p-4">
+                <td className="p-4 space-x-2">
                   <button onClick={() => toggleStatus(u.id, u.is_active)} className="text-xs btn-outline py-1 px-3">
                     {u.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button onClick={() => toggleAdmin(u.id, u.role === 'admin')} className="text-xs btn-outline py-1 px-3">
+                    {u.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
                   </button>
                 </td>
               </tr>
@@ -75,6 +92,7 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+      )}
     </DashboardLayout>
   );
 }

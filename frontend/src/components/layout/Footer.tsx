@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Car, Mail, Phone, MapPin } from 'lucide-react';
+import { Handshake, Mail, Phone, MapPin } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -9,7 +9,7 @@ export default function Footer() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="p-2 rounded-xl gradient-bg">
-                <Car className="w-5 h-5 text-white" />
+                <Handshake className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
             </div>

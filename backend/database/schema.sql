@@ -2,14 +2,14 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TYPE user_role AS ENUM ('customer', 'owner', 'admin');
+CREATE TYPE user_role AS ENUM ('user', 'admin');
 CREATE TYPE vehicle_status AS ENUM ('available', 'rented', 'maintenance', 'inactive');
 CREATE TYPE booking_status AS ENUM ('pending', 'approved', 'rejected', 'active', 'completed', 'cancelled');
 CREATE TYPE payment_status AS ENUM ('pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled');
 CREATE TYPE payment_method AS ENUM ('gcash', 'card', 'cash');
 CREATE TYPE transaction_type AS ENUM ('payment', 'refund', 'commission', 'payout');
 CREATE TYPE notification_type AS ENUM ('booking', 'payment', 'system', 'alert');
-CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+CREATE TYPE approval_status AS ENUM ('unverified', 'pending', 'approved', 'rejected');
 CREATE TYPE report_status AS ENUM ('pending', 'reviewed', 'resolved', 'dismissed');
 
 CREATE TABLE users (
@@ -18,12 +18,12 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   full_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50),
-  role user_role NOT NULL DEFAULT 'customer',
+  role user_role NOT NULL DEFAULT 'user',
   avatar_url TEXT,
   license_number VARCHAR(50),
   license_image_url TEXT,
   selfie_image_url TEXT,
-  approval_status approval_status DEFAULT 'pending',
+  approval_status approval_status DEFAULT 'unverified',
   rejection_reason TEXT,
   approved_by UUID REFERENCES users(id),
   approved_at TIMESTAMPTZ,

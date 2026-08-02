@@ -22,7 +22,7 @@ INSERT INTO users (
   '$2b$12$EtnvKsCofkqnidwoJD9jkuHaRp8fWsB7alLmSsKlb5pAETjKBqBjK',
   'Juan Dela Cruz',
   '+639181000002',
-  'owner',
+  'user',
   'N01-12-345678',
   'approved',
   TRUE
@@ -33,7 +33,7 @@ INSERT INTO users (
   '$2b$12$0qRrsW1yRmsZMaD6xymRMOqZ3cZD1Ed5y0Xf8x8G/059m8bENpPje',
   'Maria Santos',
   '+639191000003',
-  'customer',
+  'user',
   'N02-98-765432',
   'approved',
   TRUE
