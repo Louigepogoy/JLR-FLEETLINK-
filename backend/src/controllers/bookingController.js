@@ -31,6 +31,19 @@ const createBooking = async (req, res, next) => {
     }
 
     const vehicle = vehicleResult.rows[0];
+
+    const maintenanceConflict = await query(
+      `SELECT id FROM vehicle_maintenance_dates
+       WHERE vehicle_id = $1 AND start_date <= $3 AND end_date >= $2`,
+      [vehicleId, startDate, endDate]
+    );
+    if (maintenanceConflict.rows.length) {
+      return res.status(409).json({
+        success: false,
+        message: 'This vehicle is unavailable during the selected dates (owner maintenance).',
+      });
+    }
+
     const days = calculateDays(startDate, endDate);
     const totalAmount = days * parseFloat(vehicle.price_per_day);
 

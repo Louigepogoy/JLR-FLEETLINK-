@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Handshake, Menu, X, Bell, BellOff, LogOut, User, LayoutDashboard, ChevronDown,
+  Menu, X, Bell, BellOff, LogOut, User, LayoutDashboard, ChevronDown,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -79,8 +80,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="p-2 rounded-xl gradient-bg">
-              <Handshake className="w-5 h-5 text-white" />
+            <div className="relative h-11 w-11 overflow-hidden rounded-xl gradient-bg p-1.5">
+              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>

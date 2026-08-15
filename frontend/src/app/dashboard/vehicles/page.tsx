@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Car, Crown, ImageOff, MapPin, Pencil, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Car, Crown, MapPin, Pencil, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import EmptyState from '@/components/ui/EmptyState';
+import ImageGallery from '@/components/vehicles/ImageGallery';
+import MaintenanceDates from '@/components/vehicles/MaintenanceDates';
 import VehicleProofUpload, { emptyProofPhotos, type ProofPhotoState } from '@/components/vehicles/VehicleProofUpload';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -400,17 +402,7 @@ export default function MyVehiclesPage() {
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {vehicles.map((v) => (
           <div key={v.id} className="glass-card p-5">
-            <div className="h-40 overflow-hidden rounded-xl bg-gradient-to-br from-sky-500/20 via-emerald-500/10 to-amber-400/20 mb-4">
-              {v.images?.[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={v.images[0]} alt={v.title} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--primary)]">
-                  <ImageOff className="w-8 h-8" />
-                  <span className="text-xs font-medium text-[var(--muted)]">No photo</span>
-                </div>
-              )}
-            </div>
+            <ImageGallery images={v.images ?? []} alt={v.title} className="h-40 rounded-xl mb-4" />
             <div className="flex justify-between gap-3">
               <div>
                 <h3 className="font-semibold">{v.title}</h3>
@@ -422,6 +414,7 @@ export default function MyVehiclesPage() {
             <p className="text-sm text-[var(--muted)] mt-3">{[v.city || v.location, v.barangay].filter(Boolean).join(', ')}</p>
             {v.pickup_address && <p className="text-xs text-[var(--muted)]">Pickup: {v.pickup_address}</p>}
             <p className="text-[var(--primary)] font-bold mt-2">{formatCurrency(v.price_per_day)}/day</p>
+            <MaintenanceDates vehicleId={v.id} />
             <div className="flex justify-between items-center mt-3">
               <span className="text-xs capitalize px-2 py-1 rounded-full bg-[var(--primary)]/20">{v.status}</span>
               <div className="flex items-center gap-1">

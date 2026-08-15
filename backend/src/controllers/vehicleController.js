@@ -193,7 +193,11 @@ const getVehicles = async (req, res, next) => {
   try {
     const { search, type, minPrice, maxPrice, location, area, status = 'available' } = req.query;
     let sql = `
-      SELECT v.*, u.full_name as owner_name
+      SELECT v.*, u.full_name as owner_name,
+        EXISTS (
+          SELECT 1 FROM vehicle_maintenance_dates vmd
+          WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
+        ) AS on_maintenance
       FROM vehicles v
       JOIN users u ON v.owner_id = u.id
       WHERE 1=1
@@ -243,7 +247,11 @@ const getVehicles = async (req, res, next) => {
 const getVehicleById = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT v.*, u.full_name as owner_name, u.phone as owner_phone
+      `SELECT v.*, u.full_name as owner_name, u.phone as owner_phone,
+        EXISTS (
+          SELECT 1 FROM vehicle_maintenance_dates vmd
+          WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
+        ) AS on_maintenance
        FROM vehicles v JOIN users u ON v.owner_id = u.id
        WHERE v.id = $1`,
       [req.params.id]
@@ -403,6 +411,81 @@ const getOwnerVehicles = async (req, res, next) => {
   }
 };
 
+const getMaintenanceDates = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT * FROM vehicle_maintenance_dates WHERE vehicle_id = $1 ORDER BY start_date ASC`,
+      [req.params.id]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addMaintenanceDate = async (req, res, next) => {
+  try {
+    const vehicle = await query('SELECT owner_id FROM vehicles WHERE id = $1', [req.params.id]);
+    if (!vehicle.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+    if (vehicle.rows[0].owner_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    const { startDate, endDate, reason } = req.body;
+    if (!startDate || !endDate) {
+      return res.status(400).json({ success: false, message: 'Start and end date are required' });
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      return res.status(400).json({ success: false, message: 'End date must be on or after start date' });
+    }
+
+    const conflictingBooking = await query(
+      `SELECT id FROM bookings
+       WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
+         AND start_date <= $3 AND end_date >= $2`,
+      [req.params.id, startDate, endDate]
+    );
+    if (conflictingBooking.rows.length) {
+      return res.status(409).json({
+        success: false,
+        message: 'This vehicle already has a booking during part of that date range',
+      });
+    }
+
+    const result = await query(
+      `INSERT INTO vehicle_maintenance_dates (vehicle_id, start_date, end_date, reason)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [req.params.id, startDate, endDate, reason?.trim() || 'Maintenance']
+    );
+    res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteMaintenanceDate = async (req, res, next) => {
+  try {
+    const block = await query(
+      `SELECT vmd.id, v.owner_id FROM vehicle_maintenance_dates vmd
+       JOIN vehicles v ON vmd.vehicle_id = v.id
+       WHERE vmd.id = $1 AND vmd.vehicle_id = $2`,
+      [req.params.blockId, req.params.id]
+    );
+    if (!block.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Maintenance date not found' });
+    }
+    if (block.rows[0].owner_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    await query('DELETE FROM vehicle_maintenance_dates WHERE id = $1', [req.params.blockId]);
+    res.json({ success: true, message: 'Maintenance date removed' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const vehicleValidation = [
   body('title').trim().notEmpty(),
   body('brand').trim().notEmpty(),
@@ -427,4 +510,5 @@ const vehicleValidation = [
 module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
+  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate,
 };

@@ -22,6 +22,7 @@ interface Vehicle {
   transmission: string;
   images?: string[];
   status: string;
+  on_maintenance?: boolean;
 }
 
 export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; index?: number }) {
@@ -47,9 +48,15 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
         <span className="absolute top-3 right-3 px-2 py-1 text-xs rounded-full glass-card capitalize">
           {vehicle.vehicle_type}
         </span>
-        <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-emerald-500/90 text-white">
-          Cebu Verified
-        </span>
+        {vehicle.on_maintenance ? (
+          <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-amber-500/90 text-white font-semibold">
+            Under Maintenance
+          </span>
+        ) : (
+          <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-emerald-500/90 text-white">
+            Cebu Verified
+          </span>
+        )}
       </div>
 
       <div className="p-5">

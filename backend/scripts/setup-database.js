@@ -40,6 +40,7 @@ async function setup() {
     const unifyRolesMigrationPath = path.join(__dirname, '../database/migrations/006_unify_user_roles.sql');
     const decoupleVerificationMigrationPath = path.join(__dirname, '../database/migrations/007_decouple_verification.sql');
     const backfillUnverifiedMigrationPath = path.join(__dirname, '../database/migrations/008_backfill_unverified_status.sql');
+    const maintenanceDatesMigrationPath = path.join(__dirname, '../database/migrations/009_vehicle_maintenance_dates.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -76,6 +77,8 @@ async function setup() {
       console.log('Decouple verification migration applied.');
       await runSqlFile(backfillUnverifiedMigrationPath);
       console.log('Backfill unverified status migration applied.');
+      await runSqlFile(maintenanceDatesMigrationPath);
+      console.log('Vehicle maintenance dates migration applied.');
     }
 
     await runSqlFile(seedPath);

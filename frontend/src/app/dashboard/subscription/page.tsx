@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Crown, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -67,6 +67,7 @@ export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan>(fallbackPlans[1]);
   const [planChosen, setPlanChosen] = useState(false);
+  const paymentSectionRef = useRef<HTMLDivElement>(null);
   const [method, setMethod] = useState<'gcash' | 'card'>('gcash');
   const [loading, setLoading] = useState(false);
   const [gcash, setGcash] = useState({ phoneNumber: '', pin: '' });
@@ -151,7 +152,7 @@ export default function SubscriptionPage() {
           </div>
         </aside>
 
-        <section className="glass-card p-6 lg:p-8">
+        <section className="glass-card p-4 sm:p-6 lg:p-8">
           <div className="mb-8">
             <p className="text-sm font-semibold text-[var(--primary)] mb-2">Become a Provider</p>
             <h1 className="text-3xl lg:text-5xl font-bold">Choose a Subscription Plan</h1>
@@ -172,7 +173,11 @@ export default function SubscriptionPage() {
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.06 }}
-                  onClick={() => { setSelectedPlan(plan); setPlanChosen(true); }}
+                  onClick={() => {
+                    setSelectedPlan(plan);
+                    setPlanChosen(true);
+                    paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
                   className={`relative text-left rounded-2xl border p-6 transition-all ${
                     active
                       ? 'border-[var(--primary)] bg-[var(--primary)]/10 shadow-xl shadow-sky-900/10'
@@ -219,8 +224,8 @@ export default function SubscriptionPage() {
             })}
           </div>
 
-          <div className="grid lg:grid-cols-[1fr_360px] gap-5">
-            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-5">
+          <div ref={paymentSectionRef} className="grid lg:grid-cols-[1fr_360px] gap-5 scroll-mt-24">
+            <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4 sm:p-5">
               {!planChosen ? (
                 <div className="rounded-xl bg-[var(--card)] border border-dashed border-[var(--card-border)] p-4 text-sm text-[var(--muted)]">
                   Select a plan above to continue.
@@ -239,6 +244,7 @@ export default function SubscriptionPage() {
                   onCardChange={setCard}
                   gcashMode="qr"
                   qrCodeSrc="/gcash-qr.png"
+                  amount={selectedPlan.price}
                 />
               )}
             </div>

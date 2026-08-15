@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Calendar, Car, Clock, Fuel, Hash, ImageOff, MapPin, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
+import { Calendar, Car, Clock, Fuel, Hash, MapPin, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import BookingProgress from '@/components/booking/BookingProgress';
 import PaymentModal from '@/components/payment/PaymentModal';
 import EmptyState from '@/components/ui/EmptyState';
+import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
@@ -26,9 +27,11 @@ export default function VehicleDetailPage() {
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
 
   useEffect(() => {
     api.get(`/vehicles/${id}`).then((res) => setVehicle(res.data.data)).catch(() => toast.error('Vehicle not found')).finally(() => setLoading(false));
+    api.get(`/vehicles/${id}/maintenance-dates`).then((res) => setMaintenanceDates(res.data.data)).catch(() => {});
   }, [id]);
 
   const days = dates.startDate && dates.endDate
@@ -109,17 +112,7 @@ export default function VehicleDetailPage() {
 
           <div className="grid lg:grid-cols-2 gap-8">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-card overflow-hidden">
-              <div className="h-72 bg-gradient-to-br from-sky-500/20 via-emerald-500/10 to-amber-400/20 overflow-hidden">
-                {images[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={images[0]} alt={String(vehicle.title)} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--primary)]">
-                    <ImageOff className="w-10 h-10" />
-                    <span className="text-sm font-medium text-[var(--muted)]">No photo available</span>
-                  </div>
-                )}
-              </div>
+              <ImageGallery images={images} alt={String(vehicle.title)} className="h-72" />
               <div className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-semibold">Available in {city}</span>
@@ -180,12 +173,28 @@ export default function VehicleDetailPage() {
                   <span className="text-3xl font-bold text-[var(--primary)]">{formatCurrency(Number(vehicle.price_per_day))}</span>
                   <span className="text-[var(--muted)]">/day</span>
                 </div>
-                <span className="px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-500 capitalize">{String(vehicle.status)}</span>
+                {vehicle.on_maintenance ? (
+                  <span className="px-3 py-1 rounded-full text-sm bg-amber-500/20 text-amber-600 dark:text-amber-400 font-semibold">Under Maintenance</span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-500 capitalize">{String(vehicle.status)}</span>
+                )}
               </div>
 
               {!booking ? (
                 <>
                   <h3 className="font-semibold mb-4 flex items-center gap-2"><Calendar className="w-4 h-4" /> Select Dates & Times</h3>
+
+                  {maintenanceDates.filter((m) => m.end_date >= new Date().toISOString().split('T')[0]).length > 0 && (
+                    <div className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                      <p className="font-semibold mb-1">Unavailable for maintenance:</p>
+                      {maintenanceDates
+                        .filter((m) => m.end_date >= new Date().toISOString().split('T')[0])
+                        .map((m) => (
+                          <p key={m.id}>{formatDate(m.start_date)} - {formatDate(m.end_date)}</p>
+                        ))}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="text-sm text-[var(--muted)]">Pickup Date</label>

@@ -1,7 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { CreditCard, ExternalLink, Smartphone, Sparkles } from 'lucide-react';
+import { AlertTriangle, CreditCard, ExternalLink, Smartphone, Sparkles } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 type GcashState = { phoneNumber: string; pin: string };
 type CardState = { cardNumber: string; expiry: string; cvv: string; cardholderName: string };
@@ -18,6 +19,8 @@ interface PaymentMethodFormProps {
   /** 'qr' shows a scannable GCash QR code instead of phone/PIN inputs. */
   gcashMode?: 'credentials' | 'qr';
   qrCodeSrc?: string;
+  /** Exact amount the payer must type into GCash — this QR has no amount baked in. */
+  amount?: number;
 }
 
 export default function PaymentMethodForm({
@@ -31,6 +34,7 @@ export default function PaymentMethodForm({
   cardLabel = 'Any Card',
   gcashMode = 'credentials',
   qrCodeSrc = '/gcash-qr.png',
+  amount,
 }: PaymentMethodFormProps) {
   return (
     <div>
@@ -69,11 +73,19 @@ export default function PaymentMethodForm({
       <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
         {method === 'gcash' && gcashMode === 'qr' ? (
           <div className="flex flex-col items-center gap-4">
-            <div className="relative h-56 w-56 overflow-hidden rounded-2xl border border-[var(--card-border)]">
+            {typeof amount === 'number' && (
+              <div className="text-center">
+                <p className="text-xs text-[var(--muted)]">Amount to send in GCash</p>
+                <p className="text-2xl font-bold text-[var(--primary)]">{formatCurrency(amount)}</p>
+              </div>
+            )}
+            <div className="relative h-44 w-44 sm:h-56 sm:w-56 overflow-hidden rounded-2xl border border-[var(--card-border)]">
               <Image src={qrCodeSrc} alt="GCash QR code" fill className="object-contain" />
             </div>
             <p className="text-center text-sm text-[var(--muted)]">
-              Scan this QR code using your GCash app to pay.
+              {typeof amount === 'number'
+                ? `Scan this QR code in your GCash app, then type in exactly ${formatCurrency(amount)} before sending — this QR does not fill in the amount automatically.`
+                : 'Scan this QR code using your GCash app to pay.'}
             </p>
             <a
               href="gcash://"
@@ -84,6 +96,15 @@ export default function PaymentMethodForm({
             <p className="text-center text-xs text-[var(--muted)] sm:hidden">
               On this phone? Take a screenshot of the QR, then in GCash tap Scan QR → Gallery to pay.
             </p>
+            {typeof amount === 'number' && (
+              <div className="flex items-start gap-2 rounded-xl bg-red-500/10 p-3 text-left text-xs text-red-600 dark:text-red-400">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Only tap &quot;Pay {formatCurrency(amount)}&quot; below after you&apos;ve actually sent that amount in GCash.
+                  Tapping it without paying will still activate your subscription, but if no matching payment is found on our end, it will be cancelled.
+                </span>
+              </div>
+            )}
           </div>
         ) : method === 'gcash' ? (
           <div className="grid grid-cols-2 gap-3">

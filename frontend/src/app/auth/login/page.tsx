@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Handshake, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -76,8 +77,8 @@ export default function LoginPage() {
       >
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="p-2 rounded-xl gradient-bg">
-              <Handshake className="w-5 h-5 text-white" />
+            <div className="relative h-11 w-11 overflow-hidden rounded-xl gradient-bg p-1.5">
+              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
