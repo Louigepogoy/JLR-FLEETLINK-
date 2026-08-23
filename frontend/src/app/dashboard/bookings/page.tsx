@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, Clock, FileText, MapPin } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import EmptyState from '@/components/ui/EmptyState';
@@ -32,8 +32,9 @@ type CustomerBooking = {
   pickup_address?: string;
 };
 
-export default function MyBookingsPage() {
+function MyBookingsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
@@ -45,6 +46,40 @@ export default function MyBookingsPage() {
   };
 
   useEffect(() => { fetchBookings(); }, []);
+
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (!payment) return;
+    router.replace('/dashboard/bookings');
+
+    if (payment === 'failed') {
+      toast.error('Payment was not completed');
+      return;
+    }
+
+    toast.success('Payment received! Confirming with our system...');
+    // The webhook that finalizes the payment may land a moment after Xendit redirects back — poll briefly.
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      fetchBookings();
+      if (attempts >= 6) clearInterval(interval);
+    }, 2000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const cancelBooking = async (bookingId: string) => {
+    if (!confirm('Cancel this booking? This cannot be undone.')) return;
+    try {
+      await api.patch(`/bookings/${bookingId}/cancel`);
+      toast.success('Booking cancelled');
+      fetchBookings();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to cancel booking');
+    }
+  };
 
   const viewReceipt = async (bookingId: string) => {
     try {
@@ -126,6 +161,14 @@ export default function MyBookingsPage() {
                   <FileText className="h-4 w-4" /> View Receipt
                 </button>
               )}
+              {b.payment_status === 'pending' && ['pending', 'approved'].includes(b.status) && (
+                <button
+                  className="btn-outline text-sm text-red-500"
+                  onClick={() => cancelBooking(b.id)}
+                >
+                  Cancel Booking
+                </button>
+              )}
             </div>
             <button
               className="btn-outline mt-4 text-sm text-red-500 sm:ml-3"
@@ -151,7 +194,6 @@ export default function MyBookingsPage() {
           booking={{ id: String(selected.id), total_amount: Number(selected.total_amount), paid_amount: Number(selected.paid_amount || 0), title: String(selected.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
-          onSuccess={fetchBookings}
         />
       )}
       {reportBooking && (
@@ -164,5 +206,13 @@ export default function MyBookingsPage() {
         />
       )}
     </DashboardLayout>
+  );
+}
+
+export default function MyBookingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <MyBookingsContent />
+    </Suspense>
   );
 }

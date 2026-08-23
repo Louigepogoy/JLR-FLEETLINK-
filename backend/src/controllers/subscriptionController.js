@@ -1,6 +1,5 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { validateGcashQrPayment, validateCardPayment } = require('../services/paymentService');
 const { generateReferenceNumber } = require('../utils/helpers');
 
 const PLANS = {
@@ -52,6 +51,31 @@ const getMySubscription = async (req, res, next) => {
   }
 };
 
+const activateSubscription = async ({ userId, plan, paymentMethod, paymentReference, cardLastFour = null }) => {
+  await query(
+    `UPDATE owner_subscriptions
+     SET status = 'cancelled', updated_at = NOW()
+     WHERE owner_id = $1 AND status = 'active'`,
+    [userId]
+  );
+
+  const result = await query(
+    `INSERT INTO owner_subscriptions (
+      owner_id, plan_id, plan_name, price, billing_cycle, vehicle_limit,
+      photo_limit, payment_method, payment_reference, card_last_four,
+      starts_at, ends_at, status
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW() + INTERVAL '30 days','active')
+    RETURNING *`,
+    [
+      userId, plan.id, plan.name, plan.price, plan.billingCycle, plan.vehicleLimit,
+      plan.photoLimit, paymentMethod, paymentReference, cardLastFour,
+    ]
+  );
+
+  return result.rows[0];
+};
+
 const subscribe = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -59,63 +83,28 @@ const subscribe = async (req, res, next) => {
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { planId, paymentMethod, paymentDetails = {} } = req.body;
+    const { planId } = req.body;
     const plan = PLANS[planId];
 
     if (!plan) {
       return res.status(400).json({ success: false, message: 'Invalid subscription plan' });
     }
 
-    let paymentReference = null;
-    let cardLastFour = null;
-
     if (plan.price > 0) {
-      const paymentResult = paymentMethod === 'gcash'
-        ? await validateGcashQrPayment({ amount: plan.price })
-        : await validateCardPayment({
-          amount: plan.price,
-          cardNumber: paymentDetails.cardNumber,
-          expiry: paymentDetails.expiry,
-          cvv: paymentDetails.cvv,
-          cardholderName: paymentDetails.cardholderName,
-        });
-
-      paymentReference = paymentResult.referenceNumber;
-      cardLastFour = paymentResult.cardLastFour || null;
-    } else {
-      paymentReference = generateReferenceNumber('trial');
+      return res.status(400).json({
+        success: false,
+        message: 'This plan requires payment. Please checkout via the payment page.',
+      });
     }
 
-    await query(
-      `UPDATE owner_subscriptions
-       SET status = 'cancelled', updated_at = NOW()
-       WHERE owner_id = $1 AND status = 'active'`,
-      [req.user.id]
-    );
+    const subscription = await activateSubscription({
+      userId: req.user.id,
+      plan,
+      paymentMethod: 'trial',
+      paymentReference: generateReferenceNumber('trial'),
+    });
 
-    const result = await query(
-      `INSERT INTO owner_subscriptions (
-        owner_id, plan_id, plan_name, price, billing_cycle, vehicle_limit,
-        photo_limit, payment_method, payment_reference, card_last_four,
-        starts_at, ends_at, status
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW(),NOW() + INTERVAL '30 days','active')
-      RETURNING *`,
-      [
-        req.user.id,
-        plan.id,
-        plan.name,
-        plan.price,
-        plan.billingCycle,
-        plan.vehicleLimit,
-        plan.photoLimit,
-        plan.price > 0 ? paymentMethod : 'trial',
-        paymentReference,
-        cardLastFour,
-      ]
-    );
-
-    res.status(201).json({ success: true, data: result.rows[0] });
+    res.status(201).json({ success: true, data: subscription });
   } catch (error) {
     next(error);
   }
@@ -123,18 +112,13 @@ const subscribe = async (req, res, next) => {
 
 const subscriptionValidation = [
   body('planId').isIn(Object.keys(PLANS)),
-  body('paymentMethod').custom((value, { req }) => {
-    if (req.body.planId === 'basic') return true;
-    if (!['gcash', 'card'].includes(value)) {
-      throw new Error('Payment method must be GCash or card');
-    }
-    return true;
-  }),
 ];
 
 module.exports = {
+  PLANS,
   getPlans,
   getMySubscription,
   subscribe,
+  activateSubscription,
   subscriptionValidation,
 };

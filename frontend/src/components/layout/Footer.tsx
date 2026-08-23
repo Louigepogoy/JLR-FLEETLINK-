@@ -1,8 +1,14 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Mail, Phone, MapPin } from 'lucide-react';
+import { useAuthStore } from '@/store/authStore';
+import { getDashboardPath } from '@/lib/utils';
 
 export default function Footer() {
+  const { user, isAuthenticated } = useAuthStore();
+
   return (
     <footer className="border-t border-[var(--card-border)] mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -22,8 +28,14 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">Quick Links</h4>
             <ul className="space-y-2 text-sm text-[var(--muted)]">
               <li><Link href="/vehicles" className="hover:text-[var(--primary)]">Browse Vehicles</Link></li>
-              <li><Link href="/auth/register" className="hover:text-[var(--primary)]">Become an Owner</Link></li>
-              <li><Link href="/auth/login" className="hover:text-[var(--primary)]">Sign In</Link></li>
+              {isAuthenticated ? (
+                <li><Link href={getDashboardPath(user?.role || 'user')} className="hover:text-[var(--primary)]">Dashboard</Link></li>
+              ) : (
+                <>
+                  <li><Link href="/auth/register" className="hover:text-[var(--primary)]">Become an Owner</Link></li>
+                  <li><Link href="/auth/login" className="hover:text-[var(--primary)]">Sign In</Link></li>
+                </>
+              )}
             </ul>
           </div>
           <div>

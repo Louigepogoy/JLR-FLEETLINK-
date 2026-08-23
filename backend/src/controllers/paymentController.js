@@ -1,19 +1,14 @@
-const { body, validationResult } = require('express-validator');
-const { query } = require('../config/db');
+const { query, pool } = require('../config/db');
 const { generateInvoiceNumber, calculateCommission } = require('../utils/helpers');
-const { validateGCashPayment, validateCardPayment } = require('../services/paymentService');
 const { createNotification } = require('../utils/notifications');
 
-const processPayment = async (req, res, next) => {
-  const client = await require('../config/db').pool.connect();
+/**
+ * Records a confirmed payment against a booking. Called by the Xendit webhook
+ * once a payment has actually been received — never trust a client to call this directly.
+ */
+const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, referenceNumber, metadata = {} }) => {
+  const client = await pool.connect();
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { bookingId, amount, paymentMethod, paymentDetails } = req.body;
-
     await client.query('BEGIN');
 
     const bookingResult = await client.query(
@@ -25,54 +20,10 @@ const processPayment = async (req, res, next) => {
 
     if (!bookingResult.rows[0]) {
       await client.query('ROLLBACK');
-      return res.status(404).json({ success: false, message: 'Booking not found' });
+      throw new Error(`Booking ${bookingId} not found while finalizing payment`);
     }
 
     const booking = bookingResult.rows[0];
-
-    if (booking.customer_id !== req.user.id) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({ success: false, message: 'Unauthorized payment' });
-    }
-
-    if (!['pending', 'approved', 'active'].includes(booking.status)) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'Booking not eligible for payment' });
-    }
-
-    const remaining = parseFloat(booking.total_amount) - parseFloat(booking.paid_amount);
-    if (amount > remaining) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        success: false,
-        message: `Payment exceeds remaining balance of ₱${remaining.toFixed(2)}`,
-      });
-    }
-
-    if (amount <= 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'Invalid payment amount' });
-    }
-
-    let paymentResult;
-    if (paymentMethod === 'gcash') {
-      paymentResult = await validateGCashPayment({
-        amount,
-        phoneNumber: paymentDetails.phoneNumber,
-        pin: paymentDetails.pin,
-      });
-    } else if (paymentMethod === 'card') {
-      paymentResult = await validateCardPayment({
-        amount,
-        cardNumber: paymentDetails.cardNumber,
-        expiry: paymentDetails.expiry,
-        cvv: paymentDetails.cvv,
-        cardholderName: paymentDetails.cardholderName,
-      });
-    } else {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, message: 'Invalid payment method' });
-    }
 
     const settingsResult = await client.query(
       'SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1'
@@ -85,13 +36,9 @@ const processPayment = async (req, res, next) => {
       newPaidAmount >= parseFloat(booking.total_amount) ? 'fully_paid' : 'partially_paid';
 
     const paymentInsert = await client.query(
-      `INSERT INTO payments (booking_id, amount, payment_method, status, reference_number, card_last_four, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [
-        bookingId, amount, paymentMethod, paymentStatus,
-        paymentResult.referenceNumber, paymentResult.cardLastFour || null,
-        JSON.stringify(paymentResult.metadata || {}),
-      ]
+      `INSERT INTO payments (booking_id, amount, payment_method, status, reference_number, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [bookingId, amount, paymentMethod, paymentStatus, referenceNumber, JSON.stringify(metadata)]
     );
 
     const invoiceNumber = generateInvoiceNumber();
@@ -122,29 +69,24 @@ const processPayment = async (req, res, next) => {
       'payment'
     );
     await createNotification(
-      req.user.id,
+      booking.customer_id,
       'Payment Successful',
       `₱${amount.toFixed(2)} paid. ${paymentStatus === 'fully_paid' ? 'Booking fully paid!' : `Remaining: ₱${(parseFloat(booking.total_amount) - newPaidAmount).toFixed(2)}`}`,
       'payment'
     );
 
-    res.json({
-      success: true,
-      data: {
-        payment: paymentInsert.rows[0],
-        invoiceNumber,
-        transactionId: paymentResult.metadata?.transactionId,
-        referenceNumber: paymentResult.referenceNumber,
-        paidAmount: newPaidAmount,
-        remainingBalance: parseFloat(booking.total_amount) - newPaidAmount,
-        paymentStatus,
-        commission: { percentage: commissionPct, platformAmount, ownerAmount },
-        receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
-      },
-    });
+    return {
+      payment: paymentInsert.rows[0],
+      invoiceNumber,
+      referenceNumber,
+      paidAmount: newPaidAmount,
+      remainingBalance: parseFloat(booking.total_amount) - newPaidAmount,
+      paymentStatus,
+      receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
+    };
   } catch (error) {
     await client.query('ROLLBACK');
-    next(error);
+    throw error;
   } finally {
     client.release();
   }
@@ -274,12 +216,6 @@ const getBookingReceipt = async (req, res, next) => {
   }
 };
 
-const paymentValidation = [
-  body('bookingId').isUUID(),
-  body('amount').isFloat({ min: 1 }),
-  body('paymentMethod').isIn(['gcash', 'card']),
-];
-
 module.exports = {
-  processPayment, getPaymentsByBooking, getInvoice, getBookingReceipt, paymentValidation,
+  finalizeBookingPayment, getPaymentsByBooking, getInvoice, getBookingReceipt,
 };

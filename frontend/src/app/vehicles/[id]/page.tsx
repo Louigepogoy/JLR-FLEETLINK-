@@ -313,7 +313,6 @@ export default function VehicleDetailPage() {
           booking={{ id: String(booking.id), total_amount: Number(booking.total_amount), paid_amount: Number(booking.paid_amount || 0), title: String(vehicle.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
-          onSuccess={() => api.get(`/bookings/${booking.id}`).then((res) => setBooking(res.data.data))}
         />
       )}
     </>

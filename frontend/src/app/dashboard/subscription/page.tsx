@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Check, Crown, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import PaymentMethodForm from '@/components/payment/PaymentMethodForm';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
@@ -61,40 +61,61 @@ const fallbackPlans: Plan[] = [
   },
 ];
 
-export default function SubscriptionPage() {
+function SubscriptionContent() {
+  const searchParams = useSearchParams();
   const [pageLoading, setPageLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>(fallbackPlans);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan>(fallbackPlans[1]);
   const [planChosen, setPlanChosen] = useState(false);
   const paymentSectionRef = useRef<HTMLDivElement>(null);
-  const [method, setMethod] = useState<'gcash' | 'card'>('gcash');
   const [loading, setLoading] = useState(false);
-  const [gcash, setGcash] = useState({ phoneNumber: '', pin: '' });
-  const [card, setCard] = useState({ cardNumber: '', expiry: '', cvv: '', cardholderName: '' });
 
-  useEffect(() => {
+  const fetchData = () =>
     Promise.all([
       api.get('/subscriptions/plans'),
       api.get('/subscriptions/me'),
     ]).then(([plansRes, subscriptionRes]) => {
       setPlans(plansRes.data.data);
-      setSelectedPlan(plansRes.data.data.find((plan: Plan) => plan.id === 'pro') || plansRes.data.data[0]);
       setSubscription(subscriptionRes.data.data);
-    }).catch(() => {}).finally(() => setPageLoading(false));
+    }).catch(() => {});
+
+  useEffect(() => {
+    fetchData().finally(() => setPageLoading(false));
   }, []);
+
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (!payment) return;
+    window.history.replaceState(null, '', '/dashboard/subscription');
+
+    if (payment === 'failed') {
+      toast.error('Payment was not completed');
+      return;
+    }
+
+    toast.success('Payment received! Confirming with our system...');
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      fetchData();
+      if (attempts >= 6) clearInterval(interval);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [searchParams]);
 
   const handleSubscribe = async () => {
     setLoading(true);
     try {
-      const payload = {
-        planId: selectedPlan.id,
-        paymentMethod: selectedPlan.price > 0 ? method : 'trial',
-        paymentDetails: method === 'gcash' ? {} : card,
-      };
-      const res = await api.post('/subscriptions/subscribe', payload);
-      setSubscription(res.data.data);
-      toast.success(`${selectedPlan.name} subscription activated`);
+      if (selectedPlan.price === 0) {
+        const res = await api.post('/subscriptions/subscribe', { planId: selectedPlan.id });
+        setSubscription(res.data.data);
+        toast.success(`${selectedPlan.name} subscription activated`);
+      } else {
+        const res = await api.post('/xendit/subscriptions/invoice', { planId: selectedPlan.id });
+        window.location.href = res.data.data.invoiceUrl;
+        return;
+      }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; errors?: { msg: string }[] } } };
       toast.error(error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || 'Subscription failed');
@@ -147,7 +168,7 @@ export default function SubscriptionPage() {
             )}
             <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
-              GCash and card payments are validated before activation.
+              Payments are processed securely via Xendit.
             </div>
           </div>
         </aside>
@@ -235,17 +256,15 @@ export default function SubscriptionPage() {
                   Basic starts as a free trial. No payment details required.
                 </div>
               ) : (
-                <PaymentMethodForm
-                  method={method}
-                  onMethodChange={setMethod}
-                  gcash={gcash}
-                  onGcashChange={setGcash}
-                  card={card}
-                  onCardChange={setCard}
-                  gcashMode="qr"
-                  qrCodeSrc="/gcash-qr.png"
-                  amount={selectedPlan.price}
-                />
+                <div className="flex flex-col items-center gap-3 text-center py-6">
+                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
+                    <ShieldCheck className="h-7 w-7" />
+                  </div>
+                  <p className="font-semibold">Secure checkout via Xendit</p>
+                  <p className="text-sm text-[var(--muted)] max-w-xs">
+                    You&apos;ll be taken to a secure Xendit page to pay {formatCurrency(selectedPlan.price)} via GCash, card, or other supported methods.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -264,17 +283,24 @@ export default function SubscriptionPage() {
                 disabled={loading || !planChosen}
                 className="mt-6 min-h-12 w-full rounded-xl bg-white px-5 font-bold text-[var(--primary-dark)] transition hover:opacity-90 disabled:opacity-60"
               >
-                {loading ? 'Processing...' : selectedPlan.price === 0 ? 'Activate Trial' : `Pay ${formatCurrency(selectedPlan.price)}`}
+                {loading
+                  ? 'Processing...'
+                  : selectedPlan.price === 0
+                    ? 'Activate Trial'
+                    : `Continue to Payment - ${formatCurrency(selectedPlan.price)}`}
               </button>
-              <p className="mt-4 text-xs text-white/70">
-                {selectedPlan.price > 0 && method === 'gcash'
-                  ? 'Scan the QR code with your GCash app to pay.'
-                  : 'Card payments are simulated for development.'}
-              </p>
             </div>
           </div>
         </section>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function SubscriptionPage() {
+  return (
+    <Suspense fallback={null}>
+      <SubscriptionContent />
+    </Suspense>
   );
 }

@@ -181,6 +181,55 @@ const updateBookingStatus = async (req, res, next) => {
   }
 };
 
+const cancelMyBooking = async (req, res, next) => {
+  try {
+    const booking = await query(
+      `SELECT b.*, v.owner_id, v.title FROM bookings b
+       JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+      [req.params.id]
+    );
+
+    if (!booking.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const b = booking.rows[0];
+    if (b.customer_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    if (['cancelled', 'completed', 'rejected'].includes(b.status)) {
+      return res.status(400).json({ success: false, message: `This booking is already ${b.status}` });
+    }
+    if (b.payment_status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'This booking already has a payment on file, so it can no longer be self-cancelled. Please contact the owner or support.',
+      });
+    }
+
+    const result = await query(
+      `UPDATE bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+
+    await query(
+      "UPDATE vehicles SET status = 'available' WHERE id = $1 AND status = 'rented'",
+      [b.vehicle_id]
+    );
+
+    await createNotification(
+      b.owner_id,
+      'Booking Cancelled',
+      `The customer cancelled their booking for ${b.title}`,
+      'booking'
+    );
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getBookingById = async (req, res, next) => {
   try {
     const result = await query(
@@ -223,5 +272,5 @@ const bookingValidation = [
 
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
-  updateBookingStatus, getBookingById, bookingValidation,
+  updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
 };

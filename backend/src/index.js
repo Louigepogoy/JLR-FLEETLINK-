@@ -21,6 +21,7 @@ const reportRoutes = require('./routes/report.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const aiVerificationRoutes = require('./routes/aiVerification.routes');
 const supportRoutes = require('./routes/support.routes');
+const xenditRoutes = require('./routes/xendit.routes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -73,6 +74,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin/ai-verification', aiVerificationRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/xendit', xenditRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {

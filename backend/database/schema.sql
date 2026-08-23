@@ -153,6 +153,22 @@ CREATE TABLE support_tickets (
 CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
 CREATE INDEX idx_support_tickets_status ON support_tickets(status, created_at DESC);
 
+CREATE TABLE payment_intents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  external_id VARCHAR(120) UNIQUE NOT NULL,
+  xendit_invoice_id VARCHAR(100),
+  purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription')),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount DECIMAL(12,2) NOT NULL,
+  payload JSONB NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'failed')),
+  invoice_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_payment_intents_external_id ON payment_intents(external_id);
+CREATE INDEX idx_payment_intents_user ON payment_intents(user_id);
+
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
