@@ -15,7 +15,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <>
       {children}
       <Toaster
-        position="top-right"
+        position="top-center"
         toastOptions={{
           className: 'glass-card !bg-[var(--card)] !text-[var(--foreground)]',
           duration: 4000,

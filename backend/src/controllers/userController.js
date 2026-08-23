@@ -19,17 +19,30 @@ const getAllUsers = async (req, res, next) => {
 const getPendingRegistrations = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, email, full_name, phone, role, license_number,
-              license_image_url, selfie_image_url, approval_status, created_at
-       FROM users
-       WHERE approval_status = 'pending'
-       ORDER BY created_at ASC`
+      `SELECT u.id, u.email, u.full_name, u.phone, u.role, u.license_number,
+              u.license_image_url, u.selfie_image_url, u.approval_status, u.created_at,
+              (SELECT row_to_json(r) FROM (
+                 SELECT risk_score, verdict, reasons, summary, model, created_at
+                 FROM ai_verification_results
+                 WHERE subject_type = 'license' AND subject_id = u.id
+                 ORDER BY created_at DESC LIMIT 1
+               ) r) AS ai_result
+       FROM users u
+       WHERE u.approval_status = 'pending'
+       ORDER BY u.created_at ASC`
     );
     res.json({ success: true, data: result.rows });
   } catch (error) {
     next(error);
   }
 };
+
+const recordVerificationAction = (subjectId, adminId, action, notes) =>
+  query(
+    `INSERT INTO verification_actions (subject_type, subject_id, admin_id, action, notes)
+     VALUES ('license', $1, $2, $3, $4)`,
+    [subjectId, adminId, action, notes || null]
+  );
 
 const approveRegistration = async (req, res, next) => {
   try {
@@ -58,6 +71,8 @@ const approveRegistration = async (req, res, next) => {
        RETURNING id, email, full_name, role, approval_status`,
       [req.user.id, id]
     );
+
+    await recordVerificationAction(id, req.user.id, 'approved', null);
 
     await createNotification(
       user.id,
@@ -110,6 +125,8 @@ const rejectRegistration = async (req, res, next) => {
       [reason.trim(), req.user.id, id]
     );
 
+    await recordVerificationAction(id, req.user.id, 'rejected', reason.trim());
+
     await createNotification(
       user.id,
       'Registration Rejected',
@@ -120,6 +137,56 @@ const rejectRegistration = async (req, res, next) => {
     res.json({
       success: true,
       message: 'Registration rejected',
+      data: result.rows[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const requestMoreInfo = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body;
+
+    if (!notes?.trim()) {
+      return res.status(400).json({ success: false, message: 'Please describe what additional info is needed' });
+    }
+
+    const userResult = await query(
+      'SELECT * FROM users WHERE id = $1 AND approval_status = $2',
+      [id, 'pending']
+    );
+
+    if (!userResult.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Pending registration not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    const result = await query(
+      `UPDATE users SET
+         approval_status = 'unverified',
+         rejection_reason = $1,
+         updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, full_name, approval_status, rejection_reason`,
+      [notes.trim(), id]
+    );
+
+    await recordVerificationAction(id, req.user.id, 'needs_more_info', notes.trim());
+
+    await createNotification(
+      user.id,
+      'Additional Verification Needed',
+      `We need more information to verify your account: ${notes.trim()}`,
+      'alert',
+      '/verify-identity'
+    );
+
+    res.json({
+      success: true,
+      message: 'Requested additional information from the applicant',
       data: result.rows[0],
     });
   } catch (error) {
@@ -214,6 +281,7 @@ module.exports = {
   getPendingRegistrations,
   approveRegistration,
   rejectRegistration,
+  requestMoreInfo,
   updateProfile,
   changePassword,
   toggleUserStatus,

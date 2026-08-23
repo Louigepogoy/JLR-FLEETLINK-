@@ -1,4 +1,5 @@
-import { HelpCircle, Mail, Phone } from 'lucide-react';
+import Link from 'next/link';
+import { HelpCircle, LifeBuoy, Mail, Phone } from 'lucide-react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 
@@ -93,6 +94,9 @@ export default function HelpCenterPage() {
           <div className="glass-card p-6 lg:p-8 mt-6 text-center">
             <h2 className="text-xl font-bold mb-2">Still need help?</h2>
             <p className="text-sm text-[var(--muted)] mb-4">Reach out and our team will get back to you.</p>
+            <Link href="/dashboard/support" className="btn-primary inline-flex items-center gap-2 mb-5">
+              <LifeBuoy className="w-4 h-4" /> Submit a Support Ticket
+            </Link>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm">
               <a href="mailto:support@jlrfleetlink.com" className="flex items-center gap-2 hover:text-[var(--primary)]">
                 <Mail className="w-4 h-4" /> support@jlrfleetlink.com

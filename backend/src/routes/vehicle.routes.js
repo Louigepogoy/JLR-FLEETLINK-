@@ -6,11 +6,14 @@ const {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
   getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate,
+  getPendingVehicleVerifications, recordVehicleVerification,
 } = require('../controllers/vehicleController');
 
 router.get('/', getVehicles);
 router.get('/stats/summary', getPublicStats);
 router.get('/owner/my-vehicles', authenticate, authorize('user', 'admin'), getOwnerVehicles);
+router.get('/admin/pending-verifications', authenticate, authorize('admin'), getPendingVehicleVerifications);
+router.patch('/:id/verification', authenticate, authorize('admin'), recordVehicleVerification);
 router.get('/:id', getVehicleById);
 router.post('/', authenticate, authorize('user', 'admin'), uploadVehicleImages, vehicleValidation, createVehicle);
 router.put('/:id', authenticate, authorize('user', 'admin'), uploadVehicleImages, updateVehicle);

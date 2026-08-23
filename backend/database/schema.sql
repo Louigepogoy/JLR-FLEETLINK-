@@ -63,6 +63,8 @@ CREATE TABLE vehicles (
   proof_photos JSONB DEFAULT '{}',
   features TEXT[] DEFAULT '{}',
   status vehicle_status DEFAULT 'available',
+  verification_status VARCHAR(20) NOT NULL DEFAULT 'unreviewed',
+  verification_notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT vehicles_cebu_city_check CHECK (
@@ -111,6 +113,45 @@ CREATE TABLE vehicle_maintenance_dates (
 );
 
 CREATE INDEX idx_vehicle_maintenance_dates_vehicle_id ON vehicle_maintenance_dates(vehicle_id);
+
+CREATE TABLE ai_verification_results (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  subject_type VARCHAR(20) NOT NULL CHECK (subject_type IN ('license', 'vehicle')),
+  subject_id UUID NOT NULL,
+  risk_score INTEGER NOT NULL CHECK (risk_score BETWEEN 0 AND 100),
+  verdict VARCHAR(20) NOT NULL,
+  reasons JSONB DEFAULT '[]',
+  summary TEXT,
+  model VARCHAR(100),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_ai_verification_results_subject ON ai_verification_results(subject_type, subject_id, created_at DESC);
+
+CREATE TABLE verification_actions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  subject_type VARCHAR(20) NOT NULL CHECK (subject_type IN ('license', 'vehicle')),
+  subject_id UUID NOT NULL,
+  admin_id UUID NOT NULL REFERENCES users(id),
+  action VARCHAR(30) NOT NULL CHECK (action IN ('approved', 'rejected', 'needs_more_info')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_verification_actions_subject ON verification_actions(subject_type, subject_id, created_at DESC);
+
+CREATE TABLE support_tickets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  admin_response TEXT,
+  responded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_support_tickets_user ON support_tickets(user_id);
+CREATE INDEX idx_support_tickets_status ON support_tickets(status, created_at DESC);
 
 CREATE TABLE payments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

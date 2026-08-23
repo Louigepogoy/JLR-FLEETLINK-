@@ -45,6 +45,10 @@ export default function VehicleDetailPage() {
       router.push('/auth/login');
       return;
     }
+    if (vehicle && user?.id === vehicle.owner_id) {
+      toast.error('You cannot book your own vehicle');
+      return;
+    }
     if (!dates.startDate || !dates.endDate) {
       toast.error('Please select dates');
       return;
@@ -102,6 +106,7 @@ export default function VehicleDetailPage() {
   );
   const mapSrc = `https://maps.google.com/maps?q=${pickupQuery || `${latitude},${longitude}`}&z=17&output=embed`;
   const images = Array.isArray(vehicle.images) ? vehicle.images as string[] : [];
+  const isOwner = isAuthenticated && user?.id === vehicle.owner_id;
 
   return (
     <>
@@ -180,7 +185,14 @@ export default function VehicleDetailPage() {
                 )}
               </div>
 
-              {!booking ? (
+              {isOwner ? (
+                <div className="rounded-xl bg-[var(--primary)]/5 p-5 text-center">
+                  <Car className="w-8 h-8 mx-auto mb-3 text-[var(--primary)]" />
+                  <p className="font-semibold mb-1">This is your own listing</p>
+                  <p className="text-sm text-[var(--muted)] mb-4">You can view it here, but you can&apos;t book your own vehicle.</p>
+                  <Link href="/dashboard/vehicles" className="btn-outline inline-block text-sm">Manage in My Vehicles</Link>
+                </div>
+              ) : !booking ? (
                 <>
                   <h3 className="font-semibold mb-4 flex items-center gap-2"><Calendar className="w-4 h-4" /> Select Dates & Times</h3>
 

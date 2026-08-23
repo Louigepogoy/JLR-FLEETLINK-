@@ -1,5 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
+const { createNotification } = require('../utils/notifications');
 
 const VEHICLE_TYPES = [
   'Sedan', 'SUV', 'Hatchback', 'Pickup', 'Van', 'Truck',
@@ -411,6 +412,72 @@ const getOwnerVehicles = async (req, res, next) => {
   }
 };
 
+const getPendingVehicleVerifications = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT v.*, u.full_name as owner_name,
+        (SELECT row_to_json(r) FROM (
+           SELECT risk_score, verdict, reasons, summary, model, created_at
+           FROM ai_verification_results
+           WHERE subject_type = 'vehicle' AND subject_id = v.id
+           ORDER BY created_at DESC LIMIT 1
+         ) r) AS ai_result
+       FROM vehicles v
+       JOIN users u ON v.owner_id = u.id
+       WHERE v.verification_status IN ('unreviewed', 'needs_more_info')
+       ORDER BY v.created_at ASC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const recordVehicleVerification = async (req, res, next) => {
+  try {
+    const { action, notes } = req.body;
+    if (!['approved', 'rejected', 'needs_more_info'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid action' });
+    }
+    if (action !== 'approved' && !notes?.trim()) {
+      return res.status(400).json({ success: false, message: 'Please provide notes explaining this decision' });
+    }
+
+    const vehicle = await query('SELECT id, owner_id, title FROM vehicles WHERE id = $1', [req.params.id]);
+    if (!vehicle.rows[0]) {
+      return res.status(404).json({ success: false, message: 'Vehicle not found' });
+    }
+
+    await query(
+      'UPDATE vehicles SET verification_status = $1, verification_notes = $2, updated_at = NOW() WHERE id = $3',
+      [action, notes?.trim() || null, req.params.id]
+    );
+
+    await query(
+      `INSERT INTO verification_actions (subject_type, subject_id, admin_id, action, notes)
+       VALUES ('vehicle', $1, $2, $3, $4)`,
+      [req.params.id, req.user.id, action, notes?.trim() || null]
+    );
+
+    const titles = {
+      approved: 'Vehicle Verified',
+      rejected: 'Vehicle Verification Rejected',
+      needs_more_info: 'Additional Info Needed for Your Vehicle',
+    };
+    await createNotification(
+      vehicle.rows[0].owner_id,
+      titles[action],
+      notes?.trim() || `Your listing "${vehicle.rows[0].title}" verification status is now: ${action.replace(/_/g, ' ')}.`,
+      'system',
+      '/dashboard/vehicles'
+    );
+
+    res.json({ success: true, message: 'Verification action recorded' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMaintenanceDates = async (req, res, next) => {
   try {
     const result = await query(
@@ -511,4 +578,5 @@ module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
   getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate,
+  getPendingVehicleVerifications, recordVehicleVerification,
 };

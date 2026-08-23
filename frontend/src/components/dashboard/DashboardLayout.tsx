@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Car, Calendar, CreditCard, Users, Settings,
   BarChart3, Bell, LogOut, Menu, X, ClipboardCheck,
-  Crown, Flag, History,
+  Crown, Flag, History, LifeBuoy,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
@@ -25,6 +25,7 @@ const navByRole: Record<string, Array<{ href: string; label: string; icon: typeo
     { href: '/dashboard/earnings', label: 'Earnings', icon: BarChart3 },
     { href: '/dashboard/transactions', label: 'Transactions', icon: CreditCard },
     { href: '/dashboard/subscription', label: 'Become a Provider', icon: Crown },
+    { href: '/dashboard/support', label: 'Support', icon: LifeBuoy },
   ],
   admin: [
     { href: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard },
@@ -33,6 +34,7 @@ const navByRole: Record<string, Array<{ href: string; label: string; icon: typeo
     { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: History },
     { href: '/dashboard/admin/bookings', label: 'Bookings', icon: Calendar },
     { href: '/dashboard/admin/reports', label: 'Reports', icon: Flag },
+    { href: '/dashboard/admin/support', label: 'Support Tickets', icon: LifeBuoy },
     { href: '/dashboard/admin/payments', label: 'Payments', icon: CreditCard },
     { href: '/dashboard/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/dashboard/admin/settings', label: 'Settings', icon: Settings },

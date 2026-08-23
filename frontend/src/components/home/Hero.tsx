@@ -27,9 +27,6 @@ export default function Hero() {
   return (
     <section className="relative min-h-screen flex items-center pt-24 pb-14 overflow-hidden bg-white dark:bg-[#07111f]">
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute left-0 top-0 h-32 w-32 bg-[radial-gradient(circle,#1769ff_1.5px,transparent_1.5px)] bg-[length:16px_16px] opacity-70" />
-        <div className="absolute right-6 bottom-8 h-28 w-28 bg-[radial-gradient(circle,#1769ff_1.5px,transparent_1.5px)] bg-[length:16px_16px] opacity-60" />
-        <div className="absolute left-1/2 top-4 h-[620px] w-[620px] -translate-x-1/2 rounded-full border border-blue-200/70" />
         <div className="absolute right-0 top-16 h-[520px] w-[520px] rounded-full bg-blue-600/10 blur-2xl" />
       </div>
 
@@ -135,9 +132,9 @@ export default function Hero() {
             >
               <Image
                 src="/hero.jpg"
-                alt="Van, motorcycle, and car available to rent on JLR Fleetlink — get a ride that's reliable, fast, and trusted"
-                width={982}
-                height={595}
+                alt="Van, motorcycle, and car available to rent on JLR Fleetlink"
+                width={1644}
+                height={957}
                 priority
                 className="w-full h-auto"
               />

@@ -32,6 +32,10 @@ const createBooking = async (req, res, next) => {
 
     const vehicle = vehicleResult.rows[0];
 
+    if (vehicle.owner_id === req.user.id) {
+      return res.status(403).json({ success: false, message: 'You cannot book your own vehicle' });
+    }
+
     const maintenanceConflict = await query(
       `SELECT id FROM vehicle_maintenance_dates
        WHERE vehicle_id = $1 AND start_date <= $3 AND end_date >= $2`,

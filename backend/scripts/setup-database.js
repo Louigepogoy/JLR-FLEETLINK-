@@ -41,6 +41,8 @@ async function setup() {
     const decoupleVerificationMigrationPath = path.join(__dirname, '../database/migrations/007_decouple_verification.sql');
     const backfillUnverifiedMigrationPath = path.join(__dirname, '../database/migrations/008_backfill_unverified_status.sql');
     const maintenanceDatesMigrationPath = path.join(__dirname, '../database/migrations/009_vehicle_maintenance_dates.sql');
+    const aiVerificationMigrationPath = path.join(__dirname, '../database/migrations/010_ai_verification.sql');
+    const supportTicketsMigrationPath = path.join(__dirname, '../database/migrations/011_support_tickets.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -79,6 +81,10 @@ async function setup() {
       console.log('Backfill unverified status migration applied.');
       await runSqlFile(maintenanceDatesMigrationPath);
       console.log('Vehicle maintenance dates migration applied.');
+      await runSqlFile(aiVerificationMigrationPath);
+      console.log('AI verification migration applied.');
+      await runSqlFile(supportTicketsMigrationPath);
+      console.log('Support tickets migration applied.');
     }
 
     await runSqlFile(seedPath);
