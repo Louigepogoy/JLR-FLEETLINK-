@@ -76,12 +76,23 @@ function SubscriptionContent() {
       api.get('/subscriptions/plans'),
       api.get('/subscriptions/me'),
     ]).then(([plansRes, subscriptionRes]) => {
-      setPlans(plansRes.data.data);
-      setSubscription(subscriptionRes.data.data);
-    }).catch(() => {});
+      const fetchedPlans: Plan[] = plansRes.data.data;
+      const fetchedSubscription: Subscription | null = subscriptionRes.data.data;
+      setPlans(fetchedPlans);
+      setSubscription(fetchedSubscription);
+      return { fetchedPlans, fetchedSubscription };
+    }).catch(() => null);
 
   useEffect(() => {
-    fetchData().finally(() => setPageLoading(false));
+    fetchData().then((result) => {
+      if (result?.fetchedSubscription?.status === 'active') {
+        const activePlan = result.fetchedPlans.find((p) => p.id === result.fetchedSubscription!.plan_id);
+        if (activePlan) {
+          setSelectedPlan(activePlan);
+          setPlanChosen(true);
+        }
+      }
+    }).finally(() => setPageLoading(false));
   }, []);
 
   useEffect(() => {
@@ -95,6 +106,7 @@ function SubscriptionContent() {
     }
 
     toast.success('Payment received! Confirming with our system...');
+    api.post('/paymongo/reconcile').catch(() => {}).finally(() => fetchData());
     let attempts = 0;
     const interval = setInterval(() => {
       attempts += 1;
@@ -104,7 +116,10 @@ function SubscriptionContent() {
     return () => clearInterval(interval);
   }, [searchParams]);
 
+  const isCurrentPlan = subscription?.plan_id === selectedPlan.id && subscription?.status === 'active';
+
   const handleSubscribe = async () => {
+    if (isCurrentPlan) return;
     setLoading(true);
     try {
       if (selectedPlan.price === 0) {
@@ -112,8 +127,8 @@ function SubscriptionContent() {
         setSubscription(res.data.data);
         toast.success(`${selectedPlan.name} subscription activated`);
       } else {
-        const res = await api.post('/xendit/subscriptions/invoice', { planId: selectedPlan.id });
-        window.location.href = res.data.data.invoiceUrl;
+        const res = await api.post('/paymongo/subscriptions/checkout', { planId: selectedPlan.id });
+        window.location.href = res.data.data.checkoutUrl;
         return;
       }
     } catch (err: unknown) {
@@ -168,7 +183,7 @@ function SubscriptionContent() {
             )}
             <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
-              Payments are processed securely via Xendit.
+              Payments are processed securely via PayMongo.
             </div>
           </div>
         </aside>
@@ -199,7 +214,7 @@ function SubscriptionContent() {
                     setPlanChosen(true);
                     paymentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }}
-                  className={`relative text-left rounded-2xl border p-6 transition-all ${
+                  className={`relative min-w-0 overflow-hidden text-left rounded-2xl border p-6 transition-all ${
                     active
                       ? 'border-[var(--primary)] bg-[var(--primary)]/10 shadow-xl shadow-sky-900/10'
                       : 'border-[var(--card-border)] bg-[var(--card)] hover:border-[var(--primary)]/50'
@@ -219,11 +234,11 @@ function SubscriptionContent() {
                   <p className="mt-3 text-sm text-[var(--muted)]">Perfect for getting started.</p>
                   <div className="mt-8 mb-6">
                     {plan.price === 0 ? (
-                      <p className="text-4xl font-bold">Free Trial</p>
+                      <p className="text-3xl font-bold break-words">Free Trial</p>
                     ) : (
-                      <p className="text-4xl font-bold">
-                        {formatCurrency(plan.price)}
-                        <span className="text-base font-semibold text-[var(--muted)]"> / month</span>
+                      <p className="flex flex-wrap items-baseline gap-x-1 text-3xl font-bold break-words">
+                        <span>{formatCurrency(plan.price)}</span>
+                        <span className="text-base font-semibold text-[var(--muted)]">/ month</span>
                       </p>
                     )}
                   </div>
@@ -251,6 +266,16 @@ function SubscriptionContent() {
                 <div className="rounded-xl bg-[var(--card)] border border-dashed border-[var(--card-border)] p-4 text-sm text-[var(--muted)]">
                   Select a plan above to continue.
                 </div>
+              ) : isCurrentPlan ? (
+                <div className="flex flex-col items-center gap-3 text-center py-6">
+                  <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-500">
+                    <Check className="h-7 w-7" />
+                  </div>
+                  <p className="font-semibold">This is your current plan</p>
+                  <p className="text-sm text-[var(--muted)] max-w-xs">
+                    Your {selectedPlan.name} subscription is already active. No need to pay again.
+                  </p>
+                </div>
               ) : selectedPlan.price === 0 ? (
                 <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
                   Basic starts as a free trial. No payment details required.
@@ -260,9 +285,9 @@ function SubscriptionContent() {
                   <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]">
                     <ShieldCheck className="h-7 w-7" />
                   </div>
-                  <p className="font-semibold">Secure checkout via Xendit</p>
+                  <p className="font-semibold">Secure checkout via PayMongo</p>
                   <p className="text-sm text-[var(--muted)] max-w-xs">
-                    You&apos;ll be taken to a secure Xendit page to pay {formatCurrency(selectedPlan.price)} via GCash, card, or other supported methods.
+                    You&apos;ll be taken to a secure PayMongo page to pay {formatCurrency(selectedPlan.price)} via GCash, card, or Maya.
                   </p>
                 </div>
               )}
@@ -280,14 +305,16 @@ function SubscriptionContent() {
               <button
                 type="button"
                 onClick={handleSubscribe}
-                disabled={loading || !planChosen}
+                disabled={loading || !planChosen || isCurrentPlan}
                 className="mt-6 min-h-12 w-full rounded-xl bg-white px-5 font-bold text-[var(--primary-dark)] transition hover:opacity-90 disabled:opacity-60"
               >
-                {loading
-                  ? 'Processing...'
-                  : selectedPlan.price === 0
-                    ? 'Activate Trial'
-                    : `Continue to Payment - ${formatCurrency(selectedPlan.price)}`}
+                {isCurrentPlan
+                  ? 'Already Active'
+                  : loading
+                    ? 'Processing...'
+                    : selectedPlan.price === 0
+                      ? 'Activate Trial'
+                      : `Continue to Payment - ${formatCurrency(selectedPlan.price)}`}
               </button>
             </div>
           </div>

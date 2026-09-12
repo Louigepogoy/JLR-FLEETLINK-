@@ -172,8 +172,13 @@ export default function Navbar() {
                     onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl glass-card hover:bg-[var(--primary)]/10"
                   >
-                    <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                      {user?.full_name?.charAt(0) || 'U'}
+                    <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold overflow-hidden shrink-0">
+                      {user?.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={user.avatar_url} alt={user.full_name} className="h-full w-full object-cover" />
+                      ) : (
+                        user?.full_name?.charAt(0) || 'U'
+                      )}
                     </div>
                     <span className="text-sm font-medium hidden lg:block">{user?.full_name}</span>
                     <ChevronDown className="w-4 h-4" />

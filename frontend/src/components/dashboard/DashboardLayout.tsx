@@ -123,8 +123,13 @@ export default function DashboardLayout({
             <button className="p-2 rounded-xl hover:bg-[var(--primary)]/10">
               <Bell className="w-5 h-5" />
             </button>
-            <div className="w-9 h-9 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-              {user?.full_name?.charAt(0)}
+            <div className="w-9 h-9 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold overflow-hidden shrink-0">
+              {user?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.avatar_url} alt={user.full_name} className="h-full w-full object-cover" />
+              ) : (
+                user?.full_name?.charAt(0)
+              )}
             </div>
           </div>
         </header>

@@ -156,13 +156,13 @@ CREATE INDEX idx_support_tickets_status ON support_tickets(status, created_at DE
 CREATE TABLE payment_intents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_id VARCHAR(120) UNIQUE NOT NULL,
-  xendit_invoice_id VARCHAR(100),
+  gateway_session_id VARCHAR(100),
   purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription')),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL,
   payload JSONB NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'failed')),
-  invoice_url TEXT,
+  checkout_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

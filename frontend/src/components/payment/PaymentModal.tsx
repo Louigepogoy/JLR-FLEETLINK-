@@ -34,8 +34,8 @@ export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalP
     }
     setLoading(true);
     try {
-      const res = await api.post('/xendit/bookings/invoice', { bookingId: booking.id, amount });
-      window.location.href = res.data.data.invoiceUrl;
+      const res = await api.post('/paymongo/bookings/checkout', { bookingId: booking.id, amount });
+      window.location.href = res.data.data.checkoutUrl;
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Could not start payment');
@@ -106,7 +106,7 @@ export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalP
 
             <p className="flex items-center gap-2 text-xs text-[var(--muted)] mb-4 p-3 rounded-lg bg-[var(--primary)]/5">
               <ShieldCheck className="w-4 h-4 shrink-0 text-[var(--primary)]" />
-              You&apos;ll be taken to a secure Xendit checkout page to pay via GCash, card, or other methods.
+              You&apos;ll be taken to a secure PayMongo checkout page to pay via GCash, card, or Maya.
             </p>
 
             <button onClick={handleCheckout} disabled={loading} className="btn-primary w-full">

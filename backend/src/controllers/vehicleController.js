@@ -248,7 +248,7 @@ const getVehicles = async (req, res, next) => {
 const getVehicleById = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT v.*, u.full_name as owner_name, u.phone as owner_phone,
+      `SELECT v.*, u.full_name as owner_name, u.phone as owner_phone, u.avatar_url as owner_avatar_url,
         EXISTS (
           SELECT 1 FROM vehicle_maintenance_dates vmd
           WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date

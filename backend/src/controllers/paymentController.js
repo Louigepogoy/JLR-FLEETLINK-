@@ -3,7 +3,7 @@ const { generateInvoiceNumber, calculateCommission } = require('../utils/helpers
 const { createNotification } = require('../utils/notifications');
 
 /**
- * Records a confirmed payment against a booking. Called by the Xendit webhook
+ * Records a confirmed payment against a booking. Called by the PayMongo webhook
  * once a payment has actually been received — never trust a client to call this directly.
  */
 const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, referenceNumber, metadata = {} }) => {

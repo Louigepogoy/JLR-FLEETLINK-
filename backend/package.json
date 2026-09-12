@@ -29,8 +29,7 @@
     "multer": "^2.1.1",
     "nodemailer": "^9.0.3",
     "pg": "^8.16.0",
-    "uuid": "^11.1.0",
-    "xendit-node": "^7.0.0"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

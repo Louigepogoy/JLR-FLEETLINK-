@@ -21,7 +21,8 @@ const reportRoutes = require('./routes/report.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const aiVerificationRoutes = require('./routes/aiVerification.routes');
 const supportRoutes = require('./routes/support.routes');
-const xenditRoutes = require('./routes/xendit.routes');
+const paymongoRoutes = require('./routes/paymongo.routes');
+const { handleWebhook: handlePaymongoWebhook } = require('./controllers/paymongoController');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,6 +48,10 @@ app.use(cors({
   },
   credentials: true,
 }));
+// Registered before the global JSON parser — PayMongo's webhook signature is verified
+// against the exact raw request body, which express.json() would otherwise consume.
+app.post('/api/paymongo/webhook', express.raw({ type: 'application/json' }), handlePaymongoWebhook);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -74,7 +79,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin/ai-verification', aiVerificationRoutes);
 app.use('/api/support', supportRoutes);
-app.use('/api/xendit', xenditRoutes);
+app.use('/api/paymongo', paymongoRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {

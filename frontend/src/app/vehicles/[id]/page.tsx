@@ -140,15 +140,32 @@ export default function VehicleDetailPage() {
                 </div>
                 <div className="mt-5 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4">
                   <p className="font-semibold mb-3">Owner Contact</p>
-                  <div className="grid sm:grid-cols-2 gap-3 text-sm text-[var(--muted)]">
-                    <p className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-[var(--primary)]" />
-                      {String(vehicle.owner_name || 'Vehicle owner')}
-                    </p>
-                    <p className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-[var(--primary)]" />
-                      {String(vehicle.owner_phone || 'No phone provided')}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
+                      {vehicle.owner_avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={String(vehicle.owner_avatar_url)}
+                          alt={String(vehicle.owner_name || 'Vehicle owner')}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : vehicle.owner_name ? (
+                        <span className="text-lg font-bold text-[var(--primary)]">
+                          {String(vehicle.owner_name).charAt(0).toUpperCase()}
+                        </span>
+                      ) : (
+                        <User className="h-5 w-5 text-[var(--primary)]" />
+                      )}
+                    </div>
+                    <div className="grid gap-1 text-sm text-[var(--muted)]">
+                      <p className="font-medium text-[var(--foreground)]">
+                        {String(vehicle.owner_name || 'Vehicle owner')}
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-[var(--primary)]" />
+                        {String(vehicle.owner_phone || 'No phone provided')}
+                      </p>
+                    </div>
                   </div>
                 </div>
                 <div className="mt-5 overflow-hidden rounded-xl border border-[var(--card-border)]">

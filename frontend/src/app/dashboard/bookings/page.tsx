@@ -58,7 +58,9 @@ function MyBookingsContent() {
     }
 
     toast.success('Payment received! Confirming with our system...');
-    // The webhook that finalizes the payment may land a moment after Xendit redirects back — poll briefly.
+    // The webhook that finalizes the payment may land a moment after PayMongo redirects back — poll briefly,
+    // and also proactively reconcile against PayMongo directly in case the webhook never arrives.
+    api.post('/paymongo/reconcile').catch(() => {}).finally(() => fetchBookings());
     let attempts = 0;
     const interval = setInterval(() => {
       attempts += 1;
