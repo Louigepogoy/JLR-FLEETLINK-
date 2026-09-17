@@ -284,6 +284,7 @@ const createVehicle = async (req, res, next) => {
     const {
       title, brand, model, year, vehicleType, transmission, fuelType,
       seats, pricePerDay, plateNumber, description, images, features,
+      driverAvailable, driverFeePerDay,
     } = req.body;
     const vehicleLocation = normalizeVehicleLocation(req.body);
     await enforceOwnerVehicleLimit(req.user.id);
@@ -291,12 +292,14 @@ const createVehicle = async (req, res, next) => {
     const proofPhotos = getProofPhotosFromRequest(req);
     validateProofPhotos(proofPhotos, true);
     const vehicleImages = buildGalleryImages(proofPhotos);
+    const isDriverAvailable = driverAvailable === true || driverAvailable === 'true';
 
     const result = await query(
       `INSERT INTO vehicles (owner_id, title, brand, model, plate_number, year, vehicle_type, transmission,
         fuel_type, seats, price_per_day, location, city, barangay, pickup_address,
-        latitude, longitude, description, images, proof_photos, features)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        latitude, longitude, description, images, proof_photos, features,
+        driver_available, driver_fee_per_day)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING *`,
       [
         req.user.id, title, brand, model, plateNumber || null, year, vehicleType, transmission,
@@ -304,6 +307,7 @@ const createVehicle = async (req, res, next) => {
         vehicleLocation.barangay, vehicleLocation.pickupAddress, vehicleLocation.latitude,
         vehicleLocation.longitude, description || null,
         vehicleImages, JSON.stringify(proofPhotos), features || [],
+        isDriverAvailable, isDriverAvailable ? (driverFeePerDay || 0) : 0,
       ]
     );
 
@@ -325,12 +329,17 @@ const updateVehicle = async (req, res, next) => {
 
     const fields = ['title', 'brand', 'model', 'plate_number', 'year', 'vehicle_type', 'transmission',
       'fuel_type', 'seats', 'price_per_day', 'location', 'city', 'barangay',
-      'pickup_address', 'latitude', 'longitude', 'description', 'images', 'proof_photos', 'features', 'status'];
+      'pickup_address', 'latitude', 'longitude', 'description', 'images', 'proof_photos', 'features', 'status',
+      'driver_available', 'driver_fee_per_day'];
     const mapping = {
       vehicleType: 'vehicle_type', pricePerDay: 'price_per_day', fuelType: 'fuel_type',
       pickupAddress: 'pickup_address', plateNumber: 'plate_number', proofPhotos: 'proof_photos',
+      driverAvailable: 'driver_available', driverFeePerDay: 'driver_fee_per_day',
     };
     const bodyData = { ...req.body };
+    if (bodyData.driverAvailable !== undefined) {
+      bodyData.driverAvailable = bodyData.driverAvailable === true || bodyData.driverAvailable === 'true';
+    }
     const existingProof = typeof vehicle.rows[0].proof_photos === 'object'
       ? vehicle.rows[0].proof_photos
       : (vehicle.rows[0].proof_photos ? JSON.parse(vehicle.rows[0].proof_photos) : {});
@@ -490,6 +499,24 @@ const getMaintenanceDates = async (req, res, next) => {
   }
 };
 
+/**
+ * Public date ranges already claimed by another customer's booking, so the booking UI can block
+ * them the same way it blocks owner maintenance dates. Excludes cancelled/rejected bookings.
+ */
+const getBookedDates = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT id, start_date, end_date FROM bookings
+       WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
+       ORDER BY start_date ASC`,
+      [req.params.id]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const addMaintenanceDate = async (req, res, next) => {
   try {
     const vehicle = await query('SELECT owner_id FROM vehicles WHERE id = $1', [req.params.id]);
@@ -577,6 +604,6 @@ const vehicleValidation = [
 module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
-  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate,
+  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate, getBookedDates,
   getPendingVehicleVerifications, recordVehicleVerification,
 };

@@ -14,7 +14,7 @@ type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, updateUser } = useAuthStore();
+  const { user, isAuthenticated, hasHydrated, updateUser } = useAuthStore();
   const [form, setForm] = useState({
     fullName: user?.full_name || '',
     phone: user?.phone || '',
@@ -32,8 +32,9 @@ export default function ProfilePage() {
   const [verificationChecking, setVerificationChecking] = useState(true);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!isAuthenticated) router.push('/auth/login');
-  }, [isAuthenticated, router]);
+  }, [hasHydrated, isAuthenticated, router]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -43,7 +44,7 @@ export default function ProfilePage() {
       .finally(() => setVerificationChecking(false));
   }, [isAuthenticated]);
 
-  if (!isAuthenticated) return null;
+  if (!hasHydrated || !isAuthenticated) return null;
 
   const handleAvatarChange = (file?: File) => {
     if (!file) return;

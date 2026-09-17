@@ -22,6 +22,8 @@ type CustomerBooking = {
   dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
+  with_driver?: boolean;
+  driver_fee?: number;
   status: string;
   payment_status: string;
   owner_id: string;
@@ -135,6 +137,11 @@ function MyBookingsContent() {
                     <MapPin className="h-4 w-4 text-[var(--primary)]" />
                     {[b.pickup_address, b.barangay, b.city].filter(Boolean).join(', ')}
                   </p>
+                  {b.with_driver && (
+                    <span className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+                      With Driver
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right">

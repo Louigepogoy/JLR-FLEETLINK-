@@ -22,7 +22,7 @@ function VerifyIdentityContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo') || '/dashboard';
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, hasHydrated } = useAuthStore();
 
   const [checking, setChecking] = useState(true);
   const [status, setStatus] = useState<VerificationStatus>('unverified');
@@ -39,6 +39,7 @@ function VerifyIdentityContent() {
   const selfieRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!isAuthenticated) {
       router.push('/auth/login');
       return;
@@ -50,7 +51,7 @@ function VerifyIdentityContent() {
       setShowForm(data.approval_status === 'unverified' || !data.approval_status);
     }).catch(() => {}).finally(() => setChecking(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+  }, [hasHydrated, isAuthenticated]);
 
   const handleFile = (field: 'licenseImage' | 'selfieImage', file: File | undefined) => {
     if (!file) return;

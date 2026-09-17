@@ -24,20 +24,33 @@ export default function VehicleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(2);
   const [dates, setDates] = useState({ startDate: '', endDate: '', pickupTime: '09:00', dropoffTime: '17:00' });
+  const [withDriver, setWithDriver] = useState(false);
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
+  const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
 
   useEffect(() => {
     api.get(`/vehicles/${id}`).then((res) => setVehicle(res.data.data)).catch(() => toast.error('Vehicle not found')).finally(() => setLoading(false));
     api.get(`/vehicles/${id}/maintenance-dates`).then((res) => setMaintenanceDates(res.data.data)).catch(() => {});
+    api.get(`/vehicles/${id}/booked-dates`).then((res) => setBookedDates(res.data.data)).catch(() => {});
   }, [id]);
 
   const days = dates.startDate && dates.endDate
     ? Math.max(Math.ceil((new Date(dates.endDate).getTime() - new Date(dates.startDate).getTime()) / 86400000) + 1, 1)
     : 0;
-  const total = vehicle ? days * parseFloat(String(vehicle.price_per_day)) : 0;
+  const today = new Date().toISOString().split('T')[0];
+  const upcomingBookedDates = bookedDates.filter((b) => b.end_date >= today);
+  const hasDateConflict = Boolean(
+    dates.startDate && dates.endDate &&
+    [...maintenanceDates, ...bookedDates].some(
+      (b) => b.start_date <= dates.endDate && b.end_date >= dates.startDate
+    )
+  );
+  const driverFeePerDay = vehicle ? parseFloat(String(vehicle.driver_fee_per_day || 0)) : 0;
+  const driverFee = withDriver && vehicle?.driver_available ? days * driverFeePerDay : 0;
+  const total = vehicle ? days * parseFloat(String(vehicle.price_per_day)) + driverFee : 0;
 
   const handleBook = async () => {
     if (!isAuthenticated) {
@@ -53,9 +66,13 @@ export default function VehicleDetailPage() {
       toast.error('Please select dates');
       return;
     }
+    if (hasDateConflict) {
+      toast.error('This vehicle is already booked or unavailable for the selected dates');
+      return;
+    }
     setBookingLoading(true);
     try {
-      const res = await api.post('/bookings', { vehicleId: id, ...dates });
+      const res = await api.post('/bookings', { vehicleId: id, ...dates, withDriver: withDriver && vehicle?.driver_available });
       setBooking(res.data.data);
       setStep(4);
       toast.success('Booking created! Proceed to payment.');
@@ -224,6 +241,21 @@ export default function VehicleDetailPage() {
                     </div>
                   )}
 
+                  {upcomingBookedDates.length > 0 && (
+                    <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
+                      <p className="font-semibold mb-1">Already booked:</p>
+                      {upcomingBookedDates.map((b) => (
+                        <p key={b.id}>{formatDate(b.start_date)} - {formatDate(b.end_date)}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {hasDateConflict && (
+                    <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400 font-semibold">
+                      Selected dates overlap with a booking or maintenance block. Please choose different dates.
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                       <label className="text-sm text-[var(--muted)]">Pickup Date</label>
@@ -249,12 +281,34 @@ export default function VehicleDetailPage() {
                     </div>
                   </div>
 
+                  {Boolean(vehicle.driver_available) && (
+                    <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--card-border)] p-3 mb-4 cursor-pointer">
+                      <span className="text-sm">
+                        <span className="font-medium">With Driver</span>
+                        <span className="block text-xs text-[var(--muted)]">
+                          +{formatCurrency(driverFeePerDay)}/day for a driver
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={withDriver}
+                        onChange={(e) => setWithDriver(e.target.checked)}
+                      />
+                    </label>
+                  )}
+
                   {days > 0 && (
                     <div className="bg-[var(--primary)]/10 rounded-xl p-4 mb-6">
                       <div className="flex justify-between text-sm mb-1">
                         <span>{formatCurrency(Number(vehicle.price_per_day))} x {days} days</span>
-                        <span>{formatCurrency(total)}</span>
+                        <span>{formatCurrency(days * parseFloat(String(vehicle.price_per_day)))}</span>
                       </div>
+                      {driverFee > 0 && (
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Driver x {days} days</span>
+                          <span>{formatCurrency(driverFee)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-bold text-lg">
                         <span>Total</span>
                         <span className="text-[var(--primary)]">{formatCurrency(total)}</span>
@@ -272,7 +326,7 @@ export default function VehicleDetailPage() {
                     </Link>
                   )}
 
-                  <button onClick={handleBook} disabled={bookingLoading || days === 0} className="btn-primary w-full">
+                  <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict} className="btn-primary w-full">
                     {bookingLoading ? 'Booking...' : 'Confirm Cebu Booking'}
                   </button>
                 </>
@@ -288,6 +342,7 @@ export default function VehicleDetailPage() {
                       <Clock className="w-4 h-4 text-[var(--primary)]" />
                       Return: {formatDate(String(booking.end_date))} at {formatTime(String(booking.dropoff_time || '17:00'))}
                     </p>
+                    {Boolean(booking.with_driver) && <p>Includes driver: +{formatCurrency(Number(booking.driver_fee || 0))}</p>}
                     <p>Total: {formatCurrency(Number(booking.total_amount))}</p>
                     <p>Paid: {formatCurrency(Number(booking.paid_amount || 0))}</p>
                     <p>Status: <span className="capitalize">{String(booking.payment_status)}</span></p>

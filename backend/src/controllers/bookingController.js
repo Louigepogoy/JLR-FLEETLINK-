@@ -18,7 +18,7 @@ const createBooking = async (req, res, next) => {
       });
     }
 
-    const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes } = req.body;
+    const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes, withDriver } = req.body;
     const pickup = pickupTime || '09:00';
     const dropoff = dropoffTime || '17:00';
 
@@ -48,13 +48,28 @@ const createBooking = async (req, res, next) => {
       });
     }
 
+    const bookingConflict = await query(
+      `SELECT id FROM bookings
+       WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
+       AND start_date <= $3 AND end_date >= $2`,
+      [vehicleId, startDate, endDate]
+    );
+    if (bookingConflict.rows.length) {
+      return res.status(409).json({
+        success: false,
+        message: 'This vehicle is already booked for the selected dates.',
+      });
+    }
+
     const days = calculateDays(startDate, endDate);
-    const totalAmount = days * parseFloat(vehicle.price_per_day);
+    const wantsDriver = (withDriver === true || withDriver === 'true') && vehicle.driver_available;
+    const driverFee = wantsDriver ? days * parseFloat(vehicle.driver_fee_per_day) : 0;
+    const totalAmount = days * parseFloat(vehicle.price_per_day) + driverFee;
 
     const result = await query(
-      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, pickup_time, dropoff_time, total_amount, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff, totalAmount, notes || null]
+      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, pickup_time, dropoff_time, total_amount, with_driver, driver_fee, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff, totalAmount, wantsDriver, driverFee, notes || null]
     );
 
     const booking = result.rows[0];

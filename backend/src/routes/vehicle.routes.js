@@ -5,7 +5,7 @@ const { uploadVehicleImages } = require('../middleware/upload');
 const {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
-  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate,
+  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate, getBookedDates,
   getPendingVehicleVerifications, recordVehicleVerification,
 } = require('../controllers/vehicleController');
 
@@ -19,6 +19,7 @@ router.post('/', authenticate, authorize('user', 'admin'), uploadVehicleImages, 
 router.put('/:id', authenticate, authorize('user', 'admin'), uploadVehicleImages, updateVehicle);
 router.delete('/:id', authenticate, authorize('user', 'admin'), deleteVehicle);
 
+router.get('/:id/booked-dates', getBookedDates);
 router.get('/:id/maintenance-dates', getMaintenanceDates);
 router.post('/:id/maintenance-dates', authenticate, authorize('user', 'admin'), addMaintenanceDate);
 router.delete('/:id/maintenance-dates/:blockId', authenticate, authorize('user', 'admin'), deleteMaintenanceDate);

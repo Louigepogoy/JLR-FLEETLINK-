@@ -13,8 +13,10 @@ import {
   Shield,
 } from 'lucide-react';
 import { cebuLocations, vehicleTypes } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 
 export default function Hero() {
+  const { isAuthenticated } = useAuthStore();
   const [search, setSearch] = useState({ location: 'Cebu City', type: '' });
 
   const vehicleHref = useMemo(() => {
@@ -115,7 +117,10 @@ export default function Hero() {
               List your car, van, truck, or motorcycle and start earning from verified Cebu renters.
             </p>
 
-            <Link href="/auth/register" className="btn-primary inline-flex items-center gap-2 px-8 py-4 text-base">
+            <Link
+              href={isAuthenticated ? '/dashboard/subscription' : '/auth/register'}
+              className="btn-primary inline-flex items-center gap-2 px-8 py-4 text-base"
+            >
               Rent Out Your Vehicle <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>

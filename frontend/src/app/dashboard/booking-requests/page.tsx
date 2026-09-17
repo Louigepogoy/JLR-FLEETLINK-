@@ -21,6 +21,8 @@ type OwnerBooking = {
   dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
+  with_driver?: boolean;
+  driver_fee?: number;
   status: string;
   payment_status: string;
 };
@@ -68,6 +70,11 @@ export default function BookingRequestsPage() {
                   <Clock className="h-3.5 w-3.5 text-[var(--primary)]" />
                   {formatDate(b.start_date)} {formatTime(b.pickup_time)} — {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
                 </p>
+                {b.with_driver && (
+                  <span className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+                    With Driver — provide a driver for this trip
+                  </span>
+                )}
               </div>
               <div className="text-right">
                 <p className="font-bold text-lg">{formatCurrency(b.total_amount)}</p>

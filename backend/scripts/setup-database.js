@@ -45,6 +45,7 @@ async function setup() {
     const supportTicketsMigrationPath = path.join(__dirname, '../database/migrations/011_support_tickets.sql');
     const xenditPaymentIntentsMigrationPath = path.join(__dirname, '../database/migrations/012_xendit_payment_intents.sql');
     const paymongoRenameMigrationPath = path.join(__dirname, '../database/migrations/013_paymongo_rename_columns.sql');
+    const driverServiceMigrationPath = path.join(__dirname, '../database/migrations/014_driver_service.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -91,6 +92,8 @@ async function setup() {
       console.log('Xendit payment intents migration applied.');
       await runSqlFile(paymongoRenameMigrationPath);
       console.log('PayMongo column rename migration applied.');
+      await runSqlFile(driverServiceMigrationPath);
+      console.log('Driver service migration applied.');
     }
 
     await runSqlFile(seedPath);

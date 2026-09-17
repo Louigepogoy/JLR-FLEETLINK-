@@ -50,16 +50,17 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, hasHydrated, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (!isAuthenticated) {
       router.push('/auth/login');
     } else if (user && user.role !== role && user.role !== 'admin') {
       router.push(getDashboardPath(user.role));
     }
-  }, [isAuthenticated, user, role, router]);
+  }, [hasHydrated, isAuthenticated, user, role, router]);
 
   const navItems = navByRole[role] || [];
 
@@ -69,7 +70,7 @@ export default function DashboardLayout({
     router.push('/');
   };
 
-  if (!isAuthenticated) return null;
+  if (!hasHydrated || !isAuthenticated) return null;
 
   return (
     <div className="min-h-screen flex">

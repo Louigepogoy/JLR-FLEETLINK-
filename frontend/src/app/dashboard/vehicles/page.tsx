@@ -36,6 +36,8 @@ type OwnerVehicle = {
   longitude?: number;
   images?: string[];
   proof_photos?: Record<string, string>;
+  driver_available?: boolean;
+  driver_fee_per_day?: number;
 };
 
 type OwnerSubscription = {
@@ -64,6 +66,8 @@ const emptyForm = {
   latitude: 10.3157,
   longitude: 123.8854,
   description: '',
+  driverAvailable: false,
+  driverFeePerDay: '',
 };
 
 export default function MyVehiclesPage() {
@@ -154,6 +158,8 @@ export default function MyVehiclesPage() {
       latitude: Number(vehicle.latitude || location.lat),
       longitude: Number(vehicle.longitude || location.lng),
       description: vehicle.description || '',
+      driverAvailable: Boolean(vehicle.driver_available),
+      driverFeePerDay: vehicle.driver_fee_per_day ? String(vehicle.driver_fee_per_day) : '',
     });
     setProofPhotos(loadProofPhotosFromVehicle(vehicle));
     setShowForm(true);
@@ -180,6 +186,7 @@ export default function MyVehiclesPage() {
         pricePerDay: String(parseFloat(form.pricePerDay)),
         latitude: String(Number(form.latitude)),
         longitude: String(Number(form.longitude)),
+        driverFeePerDay: String(form.driverAvailable ? parseFloat(form.driverFeePerDay || '0') || 0 : 0),
         ...(editingVehicle ? { status: editingVehicle.status } : {}),
       }).forEach(([key, value]) => data.append(key, String(value)));
 
@@ -313,6 +320,33 @@ export default function MyVehiclesPage() {
             </div>
           ))}
 
+          <div className="md:col-span-2 rounded-xl border border-[var(--card-border)] p-4">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.driverAvailable}
+                onChange={(e) => setForm({ ...form, driverAvailable: e.target.checked })}
+              />
+              Offer a driver for this vehicle
+            </label>
+            {form.driverAvailable && (
+              <div className="mt-3">
+                <label className="text-sm font-medium">Driver Fee/Day (PHP)</label>
+                <input
+                  type="number"
+                  min={0}
+                  required
+                  className="input-field mt-1"
+                  value={form.driverFeePerDay}
+                  onChange={(e) => setForm({ ...form, driverFeePerDay: e.target.value })}
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">
+                  Customers can choose &quot;With Driver&quot; at booking for this extra fee per day, on top of your daily rate.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="text-sm font-medium">Type</label>
             <select className="input-field mt-1" value={form.vehicleType}
@@ -414,6 +448,11 @@ export default function MyVehiclesPage() {
             <p className="text-sm text-[var(--muted)] mt-3">{[v.city || v.location, v.barangay].filter(Boolean).join(', ')}</p>
             {v.pickup_address && <p className="text-xs text-[var(--muted)]">Pickup: {v.pickup_address}</p>}
             <p className="text-[var(--primary)] font-bold mt-2">{formatCurrency(v.price_per_day)}/day</p>
+            {v.driver_available && (
+              <p className="text-xs text-[var(--muted)]">
+                + {formatCurrency(v.driver_fee_per_day || 0)}/day with driver
+              </p>
+            )}
             <MaintenanceDates vehicleId={v.id} />
             <div className="flex justify-between items-center mt-3">
               <span className="text-xs capitalize px-2 py-1 rounded-full bg-[var(--primary)]/20">{v.status}</span>

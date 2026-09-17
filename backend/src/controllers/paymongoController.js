@@ -32,7 +32,15 @@ const finalizeCheckoutSession = async (checkoutSession) => {
   const paymentMethod = mapPaymentMethod(paidPayment);
   const referenceNumber = paidPayment.id || checkoutSession.id;
 
-  await query(`UPDATE payment_intents SET status = 'paid', updated_at = NOW() WHERE id = $1`, [intent.id]);
+  // Atomic claim: only the caller that actually flips 'pending' -> 'paid' proceeds to credit the
+  // booking/subscription. Closes the race where the webhook and the reconcile fallback (or two
+  // redelivered webhook events) both read 'pending' before either write lands, which would
+  // otherwise double-credit the same payment.
+  const claim = await query(
+    `UPDATE payment_intents SET status = 'paid', updated_at = NOW() WHERE id = $1 AND status = 'pending' RETURNING id`,
+    [intent.id]
+  );
+  if (!claim.rows[0]) return { handled: false, reason: 'already processed' };
 
   if (intent.purpose === 'booking_payment') {
     await finalizeBookingPayment({
