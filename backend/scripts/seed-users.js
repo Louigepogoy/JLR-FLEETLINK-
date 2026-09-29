@@ -7,9 +7,9 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../src/config/db');
 
 const users = [
-  { email: 'admin@jlrfleetlink.com', password: 'Admin@123', fullName: 'System Administrator', phone: '+639171000001', role: 'admin', license: null },
-  { email: 'owner@jlrfleetlink.com', password: 'Owner@123', fullName: 'Juan Dela Cruz', phone: '+639181000002', role: 'owner', license: 'N01-12-345678' },
-  { email: 'customer@jlrfleetlink.com', password: 'Customer@123', fullName: 'Maria Santos', phone: '+639191000003', role: 'customer', license: 'N02-98-765432' },
+  { email: 'admin@jlrfleetlink.com', password: 'Admin@123', fullName: 'System Administrator', phone: '+639171000001', role: 'admin', label: 'admin', license: null },
+  { email: 'owner@jlrfleetlink.com', password: 'Owner@123', fullName: 'Juan Dela Cruz', phone: '+639181000002', role: 'user', label: 'user', license: 'N01-12-345678' },
+  { email: 'customer@jlrfleetlink.com', password: 'Customer@123', fullName: 'Maria Santos', phone: '+639191000003', role: 'user', label: 'user', license: 'N02-98-765432' },
 ];
 
 async function seed() {
@@ -24,7 +24,7 @@ async function seed() {
          is_active = true`,
       [u.email, hash, u.fullName, u.phone, u.role, u.license]
     );
-    console.log(`✓ ${u.role}: ${u.email} / ${u.password}`);
+    console.log(`✓ ${u.label}: ${u.email} / ${u.password}`);
   }
   await pool.end();
   console.log('\nDone! See CREDENTIALS.md');

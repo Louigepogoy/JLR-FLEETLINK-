@@ -10,6 +10,10 @@ const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/mailer');
 const OTP_TTL_MINUTES = 10;
 const generateOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
 
+// Seeded demo accounts (see scripts/seed-users.js) skip email OTP so a defense/demo login
+// doesn't depend on checking a real inbox.
+const DEMO_EMAILS = ['admin@jlrfleetlink.com', 'owner@jlrfleetlink.com', 'customer@jlrfleetlink.com'];
+
 const registerValidation = [
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 8 }),
@@ -98,6 +102,18 @@ const login = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'Your account has been deactivated. Contact support.',
+      });
+    }
+
+    if (DEMO_EMAILS.includes(user.email)) {
+      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      });
+      await recordLoginAttempt({ req, email, success: true, reason: 'success_demo', userId: user.id });
+      return res.json({
+        success: true,
+        requiresOtp: false,
+        data: { user: sanitizeUser(user), token },
       });
     }
 

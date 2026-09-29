@@ -37,6 +37,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const res = await api.post('/auth/login', form);
+      if (res.data.requiresOtp === false) {
+        const { user, token } = res.data.data;
+        setAuth(user, token);
+        toast.success(`Welcome back, ${user.full_name}!`);
+        router.push(getDashboardPath(user.role));
+        return;
+      }
       toast.success(res.data.message || 'Verification code sent to your email');
       setStep('otp');
     } catch (err: unknown) {
