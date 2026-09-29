@@ -9,9 +9,13 @@ import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+import { useAuthStore } from '@/store/authStore';
+import { getDashboardPath } from '@/lib/utils';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { setAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -29,6 +33,22 @@ export default function RegisterPage() {
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; errors?: Array<{ msg: string }> } } };
       toast.error(error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleCredential = async (credential: string) => {
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/google', { credential });
+      const { user, token } = res.data.data;
+      setAuth(user, token);
+      toast.success(`Welcome, ${user.full_name}!`);
+      router.push(getDashboardPath(user.role));
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Google sign-up failed');
     } finally {
       setLoading(false);
     }
@@ -96,6 +116,13 @@ export default function RegisterPage() {
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Creating account...' : 'Create Account'}
           </button>
+
+          <div className="flex items-center gap-3 my-2">
+            <div className="h-px flex-1 bg-[var(--card-border)]" />
+            <span className="text-xs text-[var(--muted)]">OR</span>
+            <div className="h-px flex-1 bg-[var(--card-border)]" />
+          </div>
+          <GoogleSignInButton onCredential={handleGoogleCredential} />
         </form>
 
         <p className="text-center text-sm text-[var(--muted)] mt-6">

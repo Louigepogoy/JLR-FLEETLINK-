@@ -15,11 +15,12 @@ CREATE TYPE report_status AS ENUM ('pending', 'reviewed', 'resolved', 'dismissed
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255),
   full_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50),
   role user_role NOT NULL DEFAULT 'user',
   avatar_url TEXT,
+  google_id VARCHAR(255) UNIQUE,
   license_number VARCHAR(50),
   license_image_url TEXT,
   selfie_image_url TEXT,

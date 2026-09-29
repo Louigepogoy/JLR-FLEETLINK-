@@ -47,6 +47,7 @@ async function setup() {
     const paymongoRenameMigrationPath = path.join(__dirname, '../database/migrations/013_paymongo_rename_columns.sql');
     const driverServiceMigrationPath = path.join(__dirname, '../database/migrations/014_driver_service.sql');
     const ownerPayoutsMigrationPath = path.join(__dirname, '../database/migrations/015_owner_payouts.sql');
+    const googleOauthMigrationPath = path.join(__dirname, '../database/migrations/016_google_oauth.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -97,6 +98,8 @@ async function setup() {
       console.log('Driver service migration applied.');
       await runSqlFile(ownerPayoutsMigrationPath);
       console.log('Owner payouts migration applied.');
+      await runSqlFile(googleOauthMigrationPath);
+      console.log('Google OAuth migration applied.');
     }
 
     await runSqlFile(seedPath);

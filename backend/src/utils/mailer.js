@@ -8,16 +8,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const sendOtpEmail = async (to, code) => {
-  await transporter.sendMail({
-    from: `"JLR Fleetlink" <${process.env.EMAIL_USER}>`,
-    to,
-    subject: 'Your JLR Fleetlink login code',
-    text: `Your login verification code is ${code}. It expires in 10 minutes. If you did not request this, ignore this email.`,
-    html: `<p>Your login verification code is <strong style="font-size:20px">${code}</strong>.</p><p>It expires in 10 minutes. If you did not request this, ignore this email.</p>`,
-  });
-};
-
 const sendPasswordResetEmail = async (to, code) => {
   await transporter.sendMail({
     from: `"JLR Fleetlink" <${process.env.EMAIL_USER}>`,
@@ -28,4 +18,4 @@ const sendPasswordResetEmail = async (to, code) => {
   });
 };
 
-module.exports = { sendOtpEmail, sendPasswordResetEmail };
+module.exports = { sendPasswordResetEmail };

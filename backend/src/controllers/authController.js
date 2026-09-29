@@ -1,18 +1,16 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const { OAuth2Client } = require('google-auth-library');
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 const { sanitizeUser } = require('../utils/helpers');
 const { recordLoginAttempt } = require('../utils/loginLog');
-const { sendOtpEmail, sendPasswordResetEmail } = require('../utils/mailer');
+const { sendPasswordResetEmail } = require('../utils/mailer');
 
 const OTP_TTL_MINUTES = 10;
 const generateOtpCode = () => String(Math.floor(100000 + Math.random() * 900000));
-
-// Seeded demo accounts (see scripts/seed-users.js) skip email OTP so a defense/demo login
-// doesn't depend on checking a real inbox.
-const DEMO_EMAILS = ['admin@jlrfleetlink.com', 'owner@jlrfleetlink.com', 'customer@jlrfleetlink.com'];
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const registerValidation = [
   body('email').isEmail().normalizeEmail(),
@@ -24,11 +22,6 @@ const registerValidation = [
 const loginValidation = [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
-];
-
-const otpValidation = [
-  body('email').isEmail().normalizeEmail(),
-  body('code').trim().isLength({ min: 6, max: 6 }).isNumeric(),
 ];
 
 const forgotPasswordValidation = [
@@ -91,7 +84,7 @@ const login = async (req, res, next) => {
     }
 
     const user = result.rows[0];
-    const valid = await bcrypt.compare(password, user.password_hash);
+    const valid = user.password_hash ? await bcrypt.compare(password, user.password_hash) : false;
     if (!valid) {
       await recordLoginAttempt({ req, email, success: false, reason: 'invalid_password', userId: user.id });
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -105,81 +98,9 @@ const login = async (req, res, next) => {
       });
     }
 
-    if (DEMO_EMAILS.includes(user.email)) {
-      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-      });
-      await recordLoginAttempt({ req, email, success: true, reason: 'success_demo', userId: user.id });
-      return res.json({
-        success: true,
-        requiresOtp: false,
-        data: { user: sanitizeUser(user), token },
-      });
-    }
-
-    const code = generateOtpCode();
-    const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
-
-    await query(
-      `INSERT INTO login_otps (user_id, code_hash, expires_at) VALUES ($1, $2, $3)`,
-      [user.id, codeHash, expiresAt]
-    );
-
-    await sendOtpEmail(user.email, code);
-    await recordLoginAttempt({ req, email, success: false, reason: 'otp_sent', userId: user.id });
-
-    res.json({
-      success: true,
-      requiresOtp: true,
-      message: `Verification code sent to ${user.email}. Enter it to finish signing in.`,
-      data: { email: user.email },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const verifyOtp = async (req, res, next) => {
-  try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
-    }
-
-    const { email, code } = req.body;
-    const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
-    const user = userResult.rows[0];
-
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Invalid email or code' });
-    }
-
-    const otpResult = await query(
-      `SELECT * FROM login_otps
-       WHERE user_id = $1 AND used = false AND expires_at > NOW()
-       ORDER BY created_at DESC LIMIT 1`,
-      [user.id]
-    );
-    const otp = otpResult.rows[0];
-
-    if (!otp) {
-      await recordLoginAttempt({ req, email, success: false, reason: 'otp_expired', userId: user.id });
-      return res.status(400).json({ success: false, message: 'Code expired or not found. Please log in again.' });
-    }
-
-    const validCode = await bcrypt.compare(code, otp.code_hash);
-    if (!validCode) {
-      await recordLoginAttempt({ req, email, success: false, reason: 'invalid_otp', userId: user.id });
-      return res.status(401).json({ success: false, message: 'Invalid code' });
-    }
-
-    await query('UPDATE login_otps SET used = true WHERE id = $1', [otp.id]);
-
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     });
-
     await recordLoginAttempt({ req, email, success: true, reason: 'success', userId: user.id });
 
     res.json({
@@ -187,6 +108,69 @@ const verifyOtp = async (req, res, next) => {
       data: { user: sanitizeUser(user), token },
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+const googleLogin = async (req, res, next) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ success: false, message: 'Missing Google credential' });
+    }
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(503).json({ success: false, message: 'Google Sign-In is not configured.' });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    let result = await query('SELECT * FROM users WHERE google_id = $1 OR email = $2', [googleId, email]);
+    let user = result.rows[0];
+
+    if (!user) {
+      const insertResult = await query(
+        `INSERT INTO users (email, full_name, role, google_id, avatar_url, approval_status, is_active)
+         VALUES ($1, $2, 'user', $3, $4, 'unverified', true)
+         RETURNING *`,
+        [email, name, googleId, picture || null]
+      );
+      user = insertResult.rows[0];
+    } else if (!user.google_id) {
+      const updateResult = await query(
+        'UPDATE users SET google_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+        [googleId, user.id]
+      );
+      user = updateResult.rows[0];
+    }
+
+    if (!user.is_active) {
+      await recordLoginAttempt({ req, email, success: false, reason: 'inactive', userId: user.id });
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Contact support.',
+      });
+    }
+
+    // Google already verified this email address, so there's no need for our own OTP step too.
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    });
+
+    await recordLoginAttempt({ req, email, success: true, reason: 'success_google', userId: user.id });
+
+    res.json({
+      success: true,
+      data: { user: sanitizeUser(user), token },
+    });
+  } catch (error) {
+    if (error.message?.includes('Token used too late') || error.message?.includes('Wrong recipient')) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired Google sign-in. Please try again.' });
+    }
     next(error);
   }
 };
@@ -286,6 +270,6 @@ const getLoginLogs = async (req, res, next) => {
 };
 
 module.exports = {
-  register, login, verifyOtp, forgotPassword, resetPassword, getMe, getLoginLogs,
-  registerValidation, loginValidation, otpValidation, forgotPasswordValidation, resetPasswordValidation,
+  register, login, googleLogin, forgotPassword, resetPassword, getMe, getLoginLogs,
+  registerValidation, loginValidation, forgotPasswordValidation, resetPasswordValidation,
 };
