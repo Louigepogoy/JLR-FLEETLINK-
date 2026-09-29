@@ -164,7 +164,7 @@ function SubscriptionContent() {
               vehicle.
             </h2>
             <p className="mt-4 text-sm text-[var(--muted)]">
-              Choose the plan that fits your Cebu rental business and unlock listing capacity.
+              Choose the plan that fits your rental business and unlock listing capacity.
             </p>
           </div>
 

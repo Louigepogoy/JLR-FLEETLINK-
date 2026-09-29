@@ -26,7 +26,7 @@ function Counter({ target }: { target: number }) {
 }
 
 export default function Stats() {
-  const [stats, setStats] = useState({ availableVehicles: 0, activeUsers: 0, citiesCovered: 11 });
+  const [stats, setStats] = useState({ availableVehicles: 0, activeUsers: 0, provincesCovered: 83 });
 
   useEffect(() => {
     api.get('/vehicles/stats/summary').then((res) => setStats(res.data.data)).catch(() => {});
@@ -35,7 +35,7 @@ export default function Stats() {
   const items = [
     { value: stats.availableVehicles, suffix: '', label: 'Vehicles Available Now' },
     { value: stats.activeUsers, suffix: '', label: 'Registered Users' },
-    { value: stats.citiesCovered, suffix: '', label: 'Cebu Cities & Municipalities' },
+    { value: stats.provincesCovered, suffix: '', label: 'Provinces Served Nationwide' },
   ];
 
   return (

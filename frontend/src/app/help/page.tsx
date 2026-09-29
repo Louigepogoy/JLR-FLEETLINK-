@@ -9,7 +9,7 @@ const faqSections = [
     items: [
       {
         q: 'How do I book a vehicle?',
-        a: 'Browse available vehicles in Cebu, open a listing, pick your pickup and return dates and times, then confirm your booking. You\'ll be asked to verify your driver\'s license before your first booking.',
+        a: 'Browse available vehicles anywhere in the Philippines, open a listing, pick your pickup and return dates and times, then confirm your booking. You\'ll be asked to verify your driver\'s license before your first booking.',
       },
       {
         q: 'Why do I need to verify my license before booking?',
@@ -21,7 +21,7 @@ const faqSections = [
       },
       {
         q: 'What areas do you cover?',
-        a: 'JLR Fleetlink currently operates only within Cebu City and nearby Cebu Province areas (Mandaue, Lapu-Lapu, Talisay, Toledo, Minglanilla, Consolacion, Cordova, Carcar, Naga, and other Cebu municipalities).',
+        a: 'JLR Fleetlink operates nationwide: owners can list vehicles in any province of Luzon, Visayas, or Mindanao, including Metro Manila. Use the province filter or the Map view on Browse Vehicles to find rentals near you.',
       },
     ],
   },

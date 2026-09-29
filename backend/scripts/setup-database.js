@@ -52,6 +52,7 @@ async function setup() {
     const chatMediaMigrationPath = path.join(__dirname, '../database/migrations/018_chat_media_reactions.sql');
     const bookingReviewsMigrationPath = path.join(__dirname, '../database/migrations/019_booking_reviews.sql');
     const chatActionsMigrationPath = path.join(__dirname, '../database/migrations/020_chat_reply_forward_delete.sql');
+    const philippinesMigrationPath = path.join(__dirname, '../database/migrations/021_philippines_locations.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -112,6 +113,8 @@ async function setup() {
       console.log('Booking reviews/ratings migration applied.');
       await runSqlFile(chatActionsMigrationPath);
       console.log('Chat reply/forward/delete migration applied.');
+      await runSqlFile(philippinesMigrationPath);
+      console.log('Philippines-wide locations migration applied.');
     }
 
     await runSqlFile(seedPath);

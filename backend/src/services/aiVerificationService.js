@@ -158,7 +158,7 @@ const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleTyp
     config: {
       responseMimeType: 'application/json',
       systemInstruction:
-        'You are a listing-fraud review assistant for a Philippine (Cebu) vehicle rental platform. ' +
+        'You are a listing-fraud review assistant for a Philippine vehicle rental platform. ' +
         'You are shown photos an owner submitted as proof of an actual vehicle they are listing for rent. ' +
         'Assess whether the photos look like real, original photos of one consistent, distinct vehicle matching the stated ' +
         'brand/model/type, and flag signs of stock photography, watermarks, screenshots of other listings/ads, ' +

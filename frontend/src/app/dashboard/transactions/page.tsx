@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Receipt } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, ReceiptIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -38,7 +39,7 @@ export default function TransactionsPage() {
 
   return (
     <DashboardLayout role="user">
-      <h2 className="text-2xl font-bold mb-6">Transaction History</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={ReceiptIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Transaction History</h2>
       {transactions.length === 0 ? (
         <EmptyState icon={Receipt} title="No transactions yet" description="Your renter payments and provider earnings will show up here." />
       ) : (

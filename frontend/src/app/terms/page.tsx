@@ -5,7 +5,7 @@ import Footer from '@/components/layout/Footer';
 const sections = [
   {
     title: '1. About JLR Fleetlink',
-    body: 'JLR Fleetlink is a vehicle rental platform connecting customers with independent vehicle owners across Cebu City and nearby Cebu Province areas. We provide the booking, verification, and payment platform; vehicle owners are independently responsible for their vehicles and listings.',
+    body: 'JLR Fleetlink is a vehicle rental platform connecting customers with independent vehicle owners across the Philippines. We provide the booking, verification, and payment platform; vehicle owners are independently responsible for their vehicles and listings.',
   },
   {
     title: '2. Eligibility',

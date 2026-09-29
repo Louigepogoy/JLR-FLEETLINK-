@@ -37,6 +37,20 @@ export function formatDateTime(date: string, time?: string | null) {
   return `${formatDate(date)} at ${formatTime(time)}`;
 }
 
+// A rental day is 24 hours from pickup, so a booking always returns at the pickup time, N days later
+// (pickup 9:00 PM today for 1 day -> return 9:00 PM tomorrow). Returns "YYYY-MM-DD".
+export function addRentalDays(startDate: string, days: number) {
+  const [y, m, d] = startDate.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+// Today's date in the user's own timezone as "YYYY-MM-DD" (toISOString() would give the UTC date,
+// which is still "yesterday" before 8 AM in the Philippines).
+export function localDateString(date = new Date()) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function getDashboardPath(role: string) {
   return role === 'admin' ? '/dashboard/admin' : '/dashboard';
 }
@@ -90,23 +104,3 @@ export const bookingStatusColors: Record<string, string> = {
   completed: 'bg-gray-500/20 text-gray-500',
   cancelled: 'bg-red-500/20 text-red-500',
 };
-
-export const cebuLocations = [
-  { label: 'Cebu City', value: 'Cebu City', group: 'Cebu City', lat: 10.3157, lng: 123.8854 },
-  { label: 'Mandaue City', value: 'Mandaue City', group: 'Nearby Cebu areas', lat: 10.3403, lng: 123.9416 },
-  { label: 'Lapu-Lapu City', value: 'Lapu-Lapu City', group: 'Nearby Cebu areas', lat: 10.3103, lng: 123.9494 },
-  { label: 'Talisay City', value: 'Talisay City', group: 'Nearby Cebu areas', lat: 10.2447, lng: 123.8494 },
-  { label: 'Toledo City', value: 'Toledo City', group: 'Cebu Province', lat: 10.3773, lng: 123.6386 },
-  { label: 'Minglanilla', value: 'Minglanilla', group: 'Nearby Cebu areas', lat: 10.2447, lng: 123.7964 },
-  { label: 'Consolacion', value: 'Consolacion', group: 'Nearby Cebu areas', lat: 10.3776, lng: 123.9570 },
-  { label: 'Cordova', value: 'Cordova', group: 'Nearby Cebu areas', lat: 10.2538, lng: 123.9494 },
-  { label: 'Carcar', value: 'Carcar', group: 'Cebu Province', lat: 10.1061, lng: 123.6402 },
-  { label: 'Naga Cebu', value: 'Naga Cebu', group: 'Nearby Cebu areas', lat: 10.2088, lng: 123.7580 },
-  { label: 'Other Cebu municipalities', value: 'Other Cebu municipalities', group: 'Cebu Province', lat: 10.3157, lng: 123.8854 },
-];
-
-export const cebuLocationOptions = cebuLocations.map((location) => location.value);
-
-export function getCebuLocation(value?: string) {
-  return cebuLocations.find((location) => location.value === value) || cebuLocations[0];
-}

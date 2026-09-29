@@ -29,7 +29,7 @@ const sections = [
   },
   {
     title: '7. Location Data',
-    body: 'Vehicle listings include a pickup location within Cebu Province, set by the vehicle owner. We do not track your real-time device location.',
+    body: 'Vehicle listings include a pickup location in the Philippines, pinned on a map by the vehicle owner. We do not track your real-time device location.',
   },
   {
     title: '8. Changes to This Policy',

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Car, Check, HelpCircle, IdCard, User, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, VerifyIdIcon } from '@/components/illustrations/MiniIcons';
 import AiRiskPanel, { type AiResult } from '@/components/dashboard/AiRiskPanel';
 import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
@@ -136,7 +137,7 @@ export default function AdminApprovalsPage() {
     <DashboardLayout role="admin">
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <div>
-          <h2 className="text-2xl font-bold">Verifications</h2>
+          <h2 className="text-2xl font-bold flex items-center gap-3"><IconChip icon={VerifyIdIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Verifications</h2>
           <p className="text-sm text-[var(--muted)]">Review driver&apos;s license and vehicle photo submissions, with AI-assisted risk checks.</p>
         </div>
       </div>

@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Bell, LogOut, Menu, X } from 'lucide-react';
 import {
-  LayoutDashboard, Car, Calendar, CreditCard, Users, Settings,
-  BarChart3, Bell, LogOut, Menu, X, ClipboardCheck,
-  Crown, Flag, History, LifeBuoy, Wallet, MessageCircle,
-} from 'lucide-react';
+  BrowseCarIcon, CalendarCheckIcon, CardIcon, ChartIcon, CrownIcon, EarningsIcon, FlagIcon, HistoryIcon,
+  IconChip, MessagesIcon, MyVehicleIcon, OverviewIcon, ReceiptIcon, RequestsIcon, SettingsIcon, SupportIcon,
+  UsersIcon, VerifyIdIcon, WalletIcon, type MiniIcon,
+} from '@/components/illustrations/MiniIcons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
@@ -19,34 +20,34 @@ import toast from 'react-hot-toast';
 
 const UNREAD_POLL_MS = 15000;
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; showUnread?: boolean };
+type NavItem = { href: string; label: string; icon: MiniIcon; showUnread?: boolean };
 
 const navByRole: Record<string, NavItem[]> = {
   user: [
-    { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-    { href: '/dashboard/messages', label: 'Messages', icon: MessageCircle, showUnread: true },
-    { href: '/dashboard/bookings', label: 'My Bookings', icon: Calendar },
-    { href: '/vehicles', label: 'Browse Vehicles', icon: Car },
-    { href: '/dashboard/vehicles', label: 'My Vehicles', icon: Car },
-    { href: '/dashboard/booking-requests', label: 'Booking Requests', icon: ClipboardCheck },
-    { href: '/dashboard/earnings', label: 'Earnings', icon: BarChart3 },
-    { href: '/dashboard/transactions', label: 'Transactions', icon: CreditCard },
-    { href: '/dashboard/subscription', label: 'Become a Provider', icon: Crown },
-    { href: '/dashboard/support', label: 'Support', icon: LifeBuoy },
+    { href: '/dashboard', label: 'Overview', icon: OverviewIcon },
+    { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
+    { href: '/dashboard/bookings', label: 'My Bookings', icon: CalendarCheckIcon },
+    { href: '/vehicles', label: 'Browse Vehicles', icon: BrowseCarIcon },
+    { href: '/dashboard/vehicles', label: 'My Vehicles', icon: MyVehicleIcon },
+    { href: '/dashboard/booking-requests', label: 'Booking Requests', icon: RequestsIcon },
+    { href: '/dashboard/earnings', label: 'Earnings', icon: EarningsIcon },
+    { href: '/dashboard/transactions', label: 'Transactions', icon: ReceiptIcon },
+    { href: '/dashboard/subscription', label: 'Become a Provider', icon: CrownIcon },
+    { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
   ],
   admin: [
-    { href: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard },
-    { href: '/dashboard/admin/messages', label: 'Messages', icon: MessageCircle, showUnread: true },
-    { href: '/dashboard/admin/approvals', label: 'Verifications', icon: ClipboardCheck },
-    { href: '/dashboard/admin/users', label: 'Users', icon: Users },
-    { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: History },
-    { href: '/dashboard/admin/bookings', label: 'Bookings', icon: Calendar },
-    { href: '/dashboard/admin/reports', label: 'Reports', icon: Flag },
-    { href: '/dashboard/admin/support', label: 'Support Tickets', icon: LifeBuoy },
-    { href: '/dashboard/admin/payments', label: 'Payments', icon: CreditCard },
-    { href: '/dashboard/admin/payouts', label: 'Owner Payouts', icon: Wallet },
-    { href: '/dashboard/admin/analytics', label: 'Analytics', icon: BarChart3 },
-    { href: '/dashboard/admin/settings', label: 'Settings', icon: Settings },
+    { href: '/dashboard/admin', label: 'Overview', icon: OverviewIcon },
+    { href: '/dashboard/admin/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
+    { href: '/dashboard/admin/approvals', label: 'Verifications', icon: VerifyIdIcon },
+    { href: '/dashboard/admin/users', label: 'Users', icon: UsersIcon },
+    { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: HistoryIcon },
+    { href: '/dashboard/admin/bookings', label: 'Bookings', icon: CalendarCheckIcon },
+    { href: '/dashboard/admin/reports', label: 'Reports', icon: FlagIcon },
+    { href: '/dashboard/admin/support', label: 'Support Tickets', icon: SupportIcon },
+    { href: '/dashboard/admin/payments', label: 'Payments', icon: CardIcon },
+    { href: '/dashboard/admin/payouts', label: 'Owner Payouts', icon: WalletIcon },
+    { href: '/dashboard/admin/analytics', label: 'Analytics', icon: ChartIcon },
+    { href: '/dashboard/admin/settings', label: 'Settings', icon: SettingsIcon },
   ],
 };
 
@@ -101,20 +102,21 @@ export default function DashboardLayout({
           <Link href="/" className="text-xl font-bold gradient-text">JLR Fleetlink</Link>
           <p className="text-xs text-[var(--muted)] mt-1">{role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}</p>
         </div>
-        <nav className="p-4 space-y-1">
+        {/* pb-24 keeps the last menu items clear of the Logout button pinned to the bottom. */}
+        <nav className="p-4 pb-24 space-y-1">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setSidebarOpen(false)}
               className={cn(
-                'flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all',
+                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all',
                 pathname === item.href
                   ? 'gradient-bg text-white shadow-lg'
                   : 'hover:bg-[var(--primary)]/10 text-[var(--muted)]'
               )}
             >
-              <item.icon className="w-4 h-4" />
+              <IconChip icon={item.icon} className="h-8 w-8 rounded-lg" iconClassName="h-5 w-5" />
               {item.label}
               {item.showUnread && unreadMessages > 0 && (
                 <span className={cn(

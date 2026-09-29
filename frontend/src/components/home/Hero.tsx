@@ -12,19 +12,20 @@ import {
   Search,
   Shield,
 } from 'lucide-react';
-import { cebuLocations, vehicleTypes } from '@/lib/utils';
+import ProvinceSelect from '@/components/ui/ProvinceSelect';
+import { vehicleTypes } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 
 export default function Hero() {
   const { isAuthenticated } = useAuthStore();
-  const [search, setSearch] = useState({ location: 'Cebu City', type: '' });
+  const [search, setSearch] = useState({ province: '', type: '' });
 
   const vehicleHref = useMemo(() => {
     const params = new URLSearchParams();
-    if (search.location) params.set('location', search.location);
+    if (search.province) params.set('province', search.province);
     if (search.type) params.set('type', search.type);
     return `/vehicles?${params.toString()}`;
-  }, [search.location, search.type]);
+  }, [search.province, search.type]);
 
   return (
     <section className="relative min-h-screen flex items-center pt-24 pb-14 overflow-hidden bg-white dark:bg-[#07111f]">
@@ -35,7 +36,7 @@ export default function Hero() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-semibold mb-6 dark:bg-blue-500/10 dark:text-blue-200">
           <Shield className="w-4 h-4" />
-          Cebu City and Cebu Province rentals only
+          Rentals across the Philippines — Luzon, Visayas & Mindanao
         </div>
 
         <motion.div
@@ -50,18 +51,15 @@ export default function Hero() {
                 <MapPin className="w-4 h-4" />
               </span>
               <div className="text-left">
-                <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-none mb-1">Where Nearby</span>
+                <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-none mb-1">Where</span>
                 <div className="relative flex items-center">
-                  <select
-                    className="appearance-none bg-transparent text-sm font-bold text-slate-900 outline-none pr-5 cursor-pointer dark:text-white"
-                    value={search.location}
-                    onChange={(e) => setSearch({ ...search, location: e.target.value })}
-                    aria-label="Pickup location"
-                  >
-                    {cebuLocations.map((location) => (
-                      <option key={location.value} value={location.value}>{location.label}</option>
-                    ))}
-                  </select>
+                  <ProvinceSelect
+                    className="appearance-none bg-transparent text-sm font-bold text-slate-900 outline-none pr-5 cursor-pointer max-w-[11rem] dark:text-white dark:[&>*]:bg-slate-900"
+                    value={search.province}
+                    onChange={(province) => setSearch({ ...search, province })}
+                    allLabel="Anywhere in the Philippines"
+                    ariaLabel="Pickup province"
+                  />
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-0 pointer-events-none" />
                 </div>
               </div>
@@ -114,7 +112,7 @@ export default function Hero() {
             </h1>
 
             <p className="text-lg text-[var(--muted)] mb-8 max-w-md">
-              List your car, van, truck, or motorcycle and start earning from verified Cebu renters.
+              List your car, van, truck, or motorcycle and start earning from verified renters nationwide.
             </p>
 
             <Link

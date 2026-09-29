@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MapPin, Users, Fuel, Settings2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { formatPlace } from '@/lib/philippines';
 import { RatingBadge } from '@/components/reviews/StarRating';
 
 interface Vehicle {
@@ -16,6 +17,7 @@ interface Vehicle {
   vehicle_type: string;
   price_per_day: number;
   location: string;
+  province?: string;
   city?: string;
   barangay?: string;
   pickup_address?: string;
@@ -33,8 +35,7 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
   // Falls back to the placeholder when the photo file is missing on the server instead of a broken image.
   const [imageFailed, setImageFailed] = useState(false);
   const image = imageFailed ? undefined : vehicle.images?.[0];
-  const city = vehicle.city || vehicle.location;
-  const pickupText = [city, vehicle.barangay].filter(Boolean).join(', ');
+  const pickupText = formatPlace(vehicle.city || vehicle.location, vehicle.province);
 
   return (
     <motion.div
@@ -65,7 +66,7 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
           </span>
         ) : (
           <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-emerald-500/90 text-white">
-            Cebu Verified
+            Verified
           </span>
         )}
       </div>

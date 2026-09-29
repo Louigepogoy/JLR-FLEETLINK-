@@ -14,11 +14,15 @@ import EmptyState from '@/components/ui/EmptyState';
 import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { addRentalDays, formatCurrency, formatDate, formatTime, localDateString } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines';
+import { PickupMap } from '@/components/maps';
 import type { ReviewSummary } from '@/lib/reviews';
 import ReviewList from '@/components/reviews/ReviewList';
 import { RatingBadge } from '@/components/reviews/StarRating';
+
+const MAX_RENTAL_DAYS = 30;
 
 export default function VehicleDetailPage() {
   const { id } = useParams();
@@ -27,7 +31,7 @@ export default function VehicleDetailPage() {
   const [vehicle, setVehicle] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(2);
-  const [dates, setDates] = useState({ startDate: '', endDate: '', pickupTime: '09:00', dropoffTime: '17:00' });
+  const [dates, setDates] = useState({ startDate: '', pickupTime: '09:00', rentalDays: 1 });
   const [withDriver, setWithDriver] = useState(false);
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -46,15 +50,18 @@ export default function VehicleDetailPage() {
       .catch(() => setReviews({ average: null, count: 0, reviews: [] }));
   }, [id]);
 
-  const days = dates.startDate && dates.endDate
-    ? Math.max(Math.ceil((new Date(dates.endDate).getTime() - new Date(dates.startDate).getTime()) / 86400000) + 1, 1)
-    : 0;
-  const today = new Date().toISOString().split('T')[0];
+  // 1 day = 24 hours: the vehicle is returned at the same time as pickup, `rentalDays` days later.
+  const endDate = dates.startDate ? addRentalDays(dates.startDate, dates.rentalDays) : '';
+  const dropoffTime = dates.pickupTime;
+  const days = dates.startDate ? dates.rentalDays : 0;
+  const today = localDateString();
+  const nowTime = new Date().toTimeString().slice(0, 5);
+  const pickupInPast = dates.startDate === today && dates.pickupTime < nowTime;
   const upcomingBookedDates = bookedDates.filter((b) => b.end_date >= today);
   const hasDateConflict = Boolean(
-    dates.startDate && dates.endDate &&
+    dates.startDate && endDate &&
     [...maintenanceDates, ...bookedDates].some(
-      (b) => b.start_date <= dates.endDate && b.end_date >= dates.startDate
+      (b) => b.start_date <= endDate && b.end_date >= dates.startDate
     )
   );
   const driverFeePerDay = vehicle ? parseFloat(String(vehicle.driver_fee_per_day || 0)) : 0;
@@ -87,8 +94,12 @@ export default function VehicleDetailPage() {
       toast.error('You cannot book your own vehicle');
       return;
     }
-    if (!dates.startDate || !dates.endDate) {
-      toast.error('Please select dates');
+    if (!dates.startDate) {
+      toast.error('Please select a pickup date');
+      return;
+    }
+    if (pickupInPast) {
+      toast.error('That pickup time has already passed. Please choose a later time.');
       return;
     }
     if (hasDateConflict) {
@@ -97,7 +108,14 @@ export default function VehicleDetailPage() {
     }
     setBookingLoading(true);
     try {
-      const res = await api.post('/bookings', { vehicleId: id, ...dates, withDriver: withDriver && vehicle?.driver_available });
+      const res = await api.post('/bookings', {
+        vehicleId: id,
+        startDate: dates.startDate,
+        pickupTime: dates.pickupTime,
+        endDate,
+        dropoffTime,
+        withDriver: withDriver && vehicle?.driver_available,
+      });
       setBooking(res.data.data);
       setStep(4);
       toast.success('Booking created! Proceed to payment.');
@@ -138,15 +156,14 @@ export default function VehicleDetailPage() {
     </>
   );
 
-  const city = String(vehicle.city || vehicle.location || 'Cebu City');
+  const city = String(vehicle.city || vehicle.location || '');
+  const province = vehicle.province ? String(vehicle.province) : '';
   const barangay = vehicle.barangay ? String(vehicle.barangay) : '';
   const pickupAddress = vehicle.pickup_address ? String(vehicle.pickup_address) : 'Owner-provided pickup point';
-  const latitude = Number(vehicle.latitude || 10.3157);
-  const longitude = Number(vehicle.longitude || 123.8854);
-  const pickupQuery = encodeURIComponent(
-    [pickupAddress, barangay, city, 'Cebu', 'Philippines'].filter(Boolean).join(', ')
-  );
-  const mapSrc = `https://maps.google.com/maps?q=${pickupQuery || `${latitude},${longitude}`}&z=17&output=embed`;
+  const fallbackPin = getProvince(province) || PHILIPPINES_CENTER;
+  const latitude = Number(vehicle.latitude || fallbackPin.lat);
+  const longitude = Number(vehicle.longitude || fallbackPin.lng);
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
   const images = Array.isArray(vehicle.images) ? vehicle.images as string[] : [];
   const isOwner = isAuthenticated && user?.id === vehicle.owner_id;
 
@@ -162,8 +179,8 @@ export default function VehicleDetailPage() {
               <ImageGallery images={images} alt={String(vehicle.title)} className="h-72" />
               <div className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
-                  <span className="px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-semibold">Available in {city}</span>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">Cebu Province Verified</span>
+                  <span className="px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-semibold">Available in {formatPlace(city, province)}</span>
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">Verified Listing</span>
                 </div>
                 <h1 className="text-3xl font-bold mb-2">{String(vehicle.title)}</h1>
                 <p className="text-[var(--muted)] mb-1">{String(vehicle.brand)} {String(vehicle.model)} - {String(vehicle.year)}</p>
@@ -174,7 +191,7 @@ export default function VehicleDetailPage() {
                 />
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
-                    { icon: MapPin, val: [city, barangay].filter(Boolean).join(', ') },
+                    { icon: MapPin, val: formatPlace(city, province, barangay) },
                     { icon: Users, val: `${vehicle.seats} seats` },
                     { icon: Fuel, val: vehicle.fuel_type },
                     { icon: Settings2, val: vehicle.transmission },
@@ -231,19 +248,17 @@ export default function VehicleDetailPage() {
                   )}
                 </div>
                 <div className="mt-5 overflow-hidden rounded-xl border border-[var(--card-border)]">
-                  <div className="px-4 py-3 bg-[var(--primary)]/10 text-sm">
-                    <p className="font-semibold">Static pickup preview</p>
-                    <p className="text-[var(--muted)]">City: {city}</p>
-                    {barangay && <p className="text-[var(--muted)]">Barangay: {barangay}</p>}
-                    <p className="text-[var(--muted)]">Pickup area: {pickupAddress}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 bg-[var(--primary)]/10 text-sm">
+                    <div>
+                      <p className="font-semibold">Pickup location</p>
+                      <p className="text-[var(--muted)]">{formatPlace(city, province, barangay)}</p>
+                      <p className="text-[var(--muted)]">Pickup area: {pickupAddress}</p>
+                    </div>
+                    <a href={directionsUrl} target="_blank" rel="noopener noreferrer" className="btn-outline shrink-0 py-1.5 px-3 text-xs">
+                      Get directions
+                    </a>
                   </div>
-                  <iframe
-                    title="Static pickup map preview"
-                    src={mapSrc}
-                    className="h-56 w-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
+                  <PickupMap lat={latitude} lng={longitude} className="h-56" />
                 </div>
                 {Boolean(vehicle.description) && (
                   <p className="mt-4 text-sm text-[var(--muted)]">{String(vehicle.description)}</p>
@@ -305,26 +320,73 @@ export default function VehicleDetailPage() {
                     <div>
                       <label className="text-sm text-[var(--muted)]">Pickup Date</label>
                       <input type="date" className="input-field mt-1" value={dates.startDate}
-                        min={new Date().toISOString().split('T')[0]}
+                        min={today}
                         onChange={(e) => setDates({ ...dates, startDate: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-sm text-[var(--muted)]">Pickup Time</label>
                       <input type="time" className="input-field mt-1" value={dates.pickupTime}
-                        onChange={(e) => setDates({ ...dates, pickupTime: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="text-sm text-[var(--muted)]">Return Date</label>
-                      <input type="date" className="input-field mt-1" value={dates.endDate}
-                        min={dates.startDate || new Date().toISOString().split('T')[0]}
-                        onChange={(e) => setDates({ ...dates, endDate: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="text-sm text-[var(--muted)]">Return Time</label>
-                      <input type="time" className="input-field mt-1" value={dates.dropoffTime}
-                        onChange={(e) => setDates({ ...dates, dropoffTime: e.target.value })} />
+                        onChange={(e) => setDates({ ...dates, pickupTime: e.target.value || '09:00' })} />
                     </div>
                   </div>
+
+                  <div className="mb-4">
+                    <label className="text-sm text-[var(--muted)]">Number of days (1 day = 24 hours)</label>
+                    <div className="mt-1 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setDates({ ...dates, rentalDays: Math.max(1, dates.rentalDays - 1) })}
+                        disabled={dates.rentalDays <= 1}
+                        className="btn-outline h-11 w-11 !p-0 text-lg disabled:opacity-40"
+                        aria-label="Fewer days"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_RENTAL_DAYS}
+                        className="input-field w-20 text-center"
+                        value={dates.rentalDays}
+                        onChange={(e) => setDates({
+                          ...dates,
+                          rentalDays: Math.min(MAX_RENTAL_DAYS, Math.max(1, Math.floor(Number(e.target.value) || 1))),
+                        })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDates({ ...dates, rentalDays: Math.min(MAX_RENTAL_DAYS, dates.rentalDays + 1) })}
+                        disabled={dates.rentalDays >= MAX_RENTAL_DAYS}
+                        className="btn-outline h-11 w-11 !p-0 text-lg disabled:opacity-40"
+                        aria-label="More days"
+                      >
+                        +
+                      </button>
+                      <span className="text-sm text-[var(--muted)]">{dates.rentalDays * 24} hours</span>
+                    </div>
+                  </div>
+
+                  {dates.startDate && (
+                    <div className="mb-4 flex items-start gap-2 rounded-xl border border-[var(--card-border)] p-3 text-sm">
+                      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" />
+                      <div>
+                        <p>
+                          <span className="text-[var(--muted)]">Pickup:</span>{' '}
+                          <span className="font-medium">{formatDate(dates.startDate)}, {formatTime(dates.pickupTime)}</span>
+                        </p>
+                        <p>
+                          <span className="text-[var(--muted)]">Return:</span>{' '}
+                          <span className="font-medium">{formatDate(endDate)}, {formatTime(dropoffTime)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {pickupInPast && (
+                    <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400 font-semibold">
+                      That pickup time has already passed today. Please choose a later time.
+                    </div>
+                  )}
 
                   {Boolean(vehicle.driver_available) && (
                     <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--card-border)] p-3 mb-4 cursor-pointer">
@@ -345,12 +407,12 @@ export default function VehicleDetailPage() {
                   {days > 0 && (
                     <div className="bg-[var(--primary)]/10 rounded-xl p-4 mb-6">
                       <div className="flex justify-between text-sm mb-1">
-                        <span>{formatCurrency(Number(vehicle.price_per_day))} x {days} days</span>
+                        <span>{formatCurrency(Number(vehicle.price_per_day))} x {days} day{days > 1 ? 's' : ''}</span>
                         <span>{formatCurrency(days * parseFloat(String(vehicle.price_per_day)))}</span>
                       </div>
                       {driverFee > 0 && (
                         <div className="flex justify-between text-sm mb-1">
-                          <span>Driver x {days} days</span>
+                          <span>Driver x {days} day{days > 1 ? 's' : ''}</span>
                           <span>{formatCurrency(driverFee)}</span>
                         </div>
                       )}
@@ -358,6 +420,7 @@ export default function VehicleDetailPage() {
                         <span>Total</span>
                         <span className="text-[var(--primary)]">{formatCurrency(total)}</span>
                       </div>
+                      <p className="mt-2 text-[11px] text-[var(--muted)]">1 day = 24 hours. Return the vehicle by the same time you picked it up.</p>
                     </div>
                   )}
 
@@ -371,8 +434,8 @@ export default function VehicleDetailPage() {
                     </Link>
                   )}
 
-                  <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict} className="btn-primary w-full">
-                    {bookingLoading ? 'Booking...' : 'Confirm Cebu Booking'}
+                  <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict || pickupInPast} className="btn-primary w-full">
+                    {bookingLoading ? 'Booking...' : 'Confirm Booking'}
                   </button>
                 </>
               ) : (

@@ -54,6 +54,7 @@ CREATE TABLE vehicles (
   seats INTEGER NOT NULL DEFAULT 4,
   price_per_day DECIMAL(12,2) NOT NULL,
   location VARCHAR(255) NOT NULL,
+  province VARCHAR(100) NOT NULL,
   city VARCHAR(100) NOT NULL,
   barangay VARCHAR(100),
   pickup_address VARCHAR(255),
@@ -69,22 +70,7 @@ CREATE TABLE vehicles (
   verification_status VARCHAR(20) NOT NULL DEFAULT 'unreviewed',
   verification_notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT vehicles_cebu_city_check CHECK (
-    city IN (
-      'Cebu City',
-      'Mandaue City',
-      'Lapu-Lapu City',
-      'Talisay City',
-      'Toledo City',
-      'Minglanilla',
-      'Consolacion',
-      'Cordova',
-      'Carcar',
-      'Naga Cebu',
-      'Other Cebu municipalities'
-    )
-  )
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE bookings (
@@ -380,6 +366,7 @@ CREATE TRIGGER booking_overlap_check
 CREATE INDEX idx_vehicles_owner ON vehicles(owner_id);
 CREATE INDEX idx_vehicles_status ON vehicles(status);
 CREATE INDEX idx_vehicles_city ON vehicles(city);
+CREATE INDEX idx_vehicles_province ON vehicles(province);
 CREATE INDEX idx_bookings_customer ON bookings(customer_id);
 CREATE INDEX idx_bookings_vehicle ON bookings(vehicle_id);
 CREATE INDEX idx_payments_booking ON payments(booking_id);

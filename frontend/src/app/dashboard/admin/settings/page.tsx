@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, SettingsIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 
 export default function AdminSettingsPage() {
@@ -44,7 +45,7 @@ export default function AdminSettingsPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-6">Platform Settings</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={SettingsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Platform Settings</h2>
 
       <div className="glass-card p-6 max-w-lg mb-8">
         <h3 className="font-semibold mb-4">Commission Percentage</h3>

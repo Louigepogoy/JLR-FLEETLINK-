@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, RequestsIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import ReportModal from '@/components/reports/ReportModal';
 import api from '@/lib/api';
@@ -94,7 +95,7 @@ export default function BookingRequestsPage() {
 
   return (
     <DashboardLayout role="user">
-      <h2 className="text-2xl font-bold mb-6">Booking Requests</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={RequestsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Booking Requests</h2>
       <div className="space-y-4">
         {bookings.map((b) => (
           <div key={b.id} className="glass-card p-6">

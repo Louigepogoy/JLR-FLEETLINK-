@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, WalletIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -55,7 +56,7 @@ export default function AdminPayoutsPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-2">Owner Payouts</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-2"><IconChip icon={WalletIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Owner Payouts</h2>
       <p className="text-sm text-[var(--muted)] mb-6">
         PayMongo does not auto-transfer funds to owners. Send each owner their pending amount manually
         (GCash/bank), then mark it paid here.

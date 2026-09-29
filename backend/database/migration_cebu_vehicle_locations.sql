@@ -1,4 +1,7 @@
--- Add Cebu-only pickup fields for existing Neon PostgreSQL databases.
+-- Adds the pickup-location columns for older databases. This originally restricted vehicles to Cebu
+-- (a city CHECK constraint and a rewrite of non-Cebu cities); that was lifted in
+-- migrations/021_philippines_locations.sql, so this file now only adds missing columns and fills
+-- blanks — it must never overwrite a location, because setup-database.js re-runs it every time.
 
 ALTER TABLE vehicles
   ADD COLUMN IF NOT EXISTS city VARCHAR(100),
@@ -9,82 +12,14 @@ ALTER TABLE vehicles
 
 UPDATE vehicles
 SET
-  city = CASE
-    WHEN COALESCE(city, location) IN (
-      'Cebu City',
-      'Mandaue City',
-      'Lapu-Lapu City',
-      'Talisay City',
-      'Toledo City',
-      'Minglanilla',
-      'Consolacion',
-      'Cordova',
-      'Carcar',
-      'Naga Cebu',
-      'Other Cebu municipalities'
-    ) THEN COALESCE(city, location)
-    ELSE 'Other Cebu municipalities'
-  END,
-  location = CASE
-    WHEN COALESCE(city, location) IN (
-      'Cebu City',
-      'Mandaue City',
-      'Lapu-Lapu City',
-      'Talisay City',
-      'Toledo City',
-      'Minglanilla',
-      'Consolacion',
-      'Cordova',
-      'Carcar',
-      'Naga Cebu',
-      'Other Cebu municipalities'
-    ) THEN COALESCE(city, location)
-    ELSE 'Other Cebu municipalities'
-  END,
-  pickup_address = COALESCE(pickup_address, location, 'Cebu pickup area'),
+  city = COALESCE(city, location),
   latitude = COALESCE(latitude, 10.3157000),
   longitude = COALESCE(longitude, 123.8854000)
-WHERE city IS NULL
-   OR city NOT IN (
-      'Cebu City',
-      'Mandaue City',
-      'Lapu-Lapu City',
-      'Talisay City',
-      'Toledo City',
-      'Minglanilla',
-      'Consolacion',
-      'Cordova',
-      'Carcar',
-      'Naga Cebu',
-      'Other Cebu municipalities'
-   )
-   OR pickup_address IS NULL
-   OR latitude IS NULL
-   OR longitude IS NULL;
+WHERE city IS NULL OR latitude IS NULL OR longitude IS NULL;
 
 ALTER TABLE vehicles
   ALTER COLUMN city SET NOT NULL,
   ALTER COLUMN latitude SET NOT NULL,
   ALTER COLUMN longitude SET NOT NULL;
-
-ALTER TABLE vehicles
-  DROP CONSTRAINT IF EXISTS vehicles_cebu_city_check;
-
-ALTER TABLE vehicles
-  ADD CONSTRAINT vehicles_cebu_city_check CHECK (
-    city IN (
-      'Cebu City',
-      'Mandaue City',
-      'Lapu-Lapu City',
-      'Talisay City',
-      'Toledo City',
-      'Minglanilla',
-      'Consolacion',
-      'Cordova',
-      'Carcar',
-      'Naga Cebu',
-      'Other Cebu municipalities'
-    )
-  );
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_city ON vehicles(city);

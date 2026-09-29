@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { bookingStatusColors, formatCurrency, formatDate } from '@/lib/utils';
@@ -28,7 +29,7 @@ export default function AdminBookingsPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-6">All Bookings</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={CalendarCheckIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />All Bookings</h2>
       {bookings.length === 0 ? (
         <EmptyState icon={Calendar} title="No bookings found" />
       ) : (

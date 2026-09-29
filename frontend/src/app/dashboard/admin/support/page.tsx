@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LifeBuoy, MessageSquareText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, SupportIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -65,7 +66,7 @@ export default function AdminSupportPage() {
     <DashboardLayout role="admin">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Support Tickets</h2>
+          <h2 className="text-2xl font-bold flex items-center gap-3"><IconChip icon={SupportIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Support Tickets</h2>
           <p className="text-sm text-[var(--muted)]">General customer support inquiries.</p>
         </div>
         <div className="flex flex-wrap gap-2">

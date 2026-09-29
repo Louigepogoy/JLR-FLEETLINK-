@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { MessageCircle, Users } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, UsersIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
@@ -52,7 +53,7 @@ export default function AdminUsersPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-6">User Management</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={UsersIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />User Management</h2>
       {users.length === 0 ? (
         <EmptyState icon={Users} title="No users found" />
       ) : (

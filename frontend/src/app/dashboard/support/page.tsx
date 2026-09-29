@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { LifeBuoy, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, SupportIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -57,7 +58,7 @@ export default function SupportPage() {
   return (
     <DashboardLayout role="user">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold flex items-center gap-2"><LifeBuoy className="w-6 h-6 text-[var(--primary)]" /> Support</h2>
+        <h2 className="text-2xl font-bold flex items-center gap-3"><IconChip icon={SupportIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Support</h2>
         <p className="text-sm text-[var(--muted)]">Have a question or an issue? Send us a message and we&apos;ll get back to you.</p>
       </div>
 

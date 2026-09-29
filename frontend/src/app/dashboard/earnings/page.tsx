@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, EarningsIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
@@ -73,7 +74,7 @@ export default function EarningsPage() {
 
   return (
     <DashboardLayout role="user">
-      <h2 className="text-2xl font-bold mb-6">Earnings Dashboard</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={EarningsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Earnings Dashboard</h2>
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="glass-card p-6">
           <p className="text-sm text-[var(--muted)]">Total Earnings</p>

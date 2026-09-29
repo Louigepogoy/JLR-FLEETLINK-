@@ -2,10 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, Car, CreditCard, Crown, TrendingUp } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import {
+  CalendarCheckIcon, CrownIcon, IconChip, type MiniIcon, MyVehicleIcon, OverviewIcon, PendingIcon, RequestsIcon, TrendUpIcon,
+} from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
+
+function StatCard({ icon, label, value }: { icon: MiniIcon; label: string; value: string | number }) {
+  return (
+    <div className="glass-card flex items-center gap-4 p-6">
+      <IconChip icon={icon} className="h-14 w-14 rounded-2xl" iconClassName="h-9 w-9" />
+      <div className="min-w-0">
+        <p className="text-2xl font-bold leading-tight xl:text-3xl">{value}</p>
+        <p className="text-sm text-[var(--muted)]">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardOverviewPage() {
   const [loading, setLoading] = useState(true);
@@ -58,20 +72,16 @@ export default function DashboardOverviewPage() {
 
   return (
     <DashboardLayout role="user">
-      <h2 className="text-2xl font-bold mb-6">Overview</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={OverviewIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Overview</h2>
 
       <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] mb-3">As a Renter</h3>
       <div className="grid md:grid-cols-3 gap-6 mb-8">
         {[
-          { icon: Calendar, label: 'Total Bookings', value: rentalStats.total, color: 'sky' },
-          { icon: Car, label: 'Active Rentals', value: rentalStats.active, color: 'green' },
-          { icon: CreditCard, label: 'Pending Approval', value: rentalStats.pending, color: 'yellow' },
-        ].map(({ icon: Icon, label, value, color }) => (
-          <div key={label} className="glass-card p-6">
-            <Icon className={`w-8 h-8 text-${color}-500 mb-3`} />
-            <p className="text-3xl font-bold">{value}</p>
-            <p className="text-sm text-[var(--muted)]">{label}</p>
-          </div>
+          { icon: CalendarCheckIcon, label: 'Total Bookings', value: rentalStats.total },
+          { icon: MyVehicleIcon, label: 'Active Rentals', value: rentalStats.active },
+          { icon: PendingIcon, label: 'Pending Approval', value: rentalStats.pending },
+        ].map(({ icon, label, value }) => (
+          <StatCard key={label} icon={icon} label={label} value={value} />
         ))}
       </div>
 
@@ -88,7 +98,7 @@ export default function DashboardOverviewPage() {
               <div key={b.id} className="flex justify-between items-center p-4 rounded-xl border border-[var(--card-border)]">
                 <div>
                   <p className="font-medium">{b.title}</p>
-                  <p className="text-xs text-[var(--muted)]">{b.start_date} → {b.end_date}</p>
+                  <p className="text-xs text-[var(--muted)]">{formatDate(b.start_date)} → {formatDate(b.end_date)}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-semibold">{formatCurrency(b.total_amount)}</p>
@@ -102,36 +112,24 @@ export default function DashboardOverviewPage() {
 
       <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] mb-3">As a Provider</h3>
       <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <div className="glass-card p-6">
-          <TrendingUp className="w-8 h-8 text-green-500 mb-3" />
-          <p className="text-3xl font-bold">{formatCurrency(earnings.total_earnings)}</p>
-          <p className="text-sm text-[var(--muted)]">Total Earnings</p>
-        </div>
-        <div className="glass-card p-6">
-          <Car className="w-8 h-8 text-sky-500 mb-3" />
-          <p className="text-3xl font-bold">{vehicleCount}</p>
-          <p className="text-sm text-[var(--muted)]">Listed Vehicles</p>
-        </div>
-        <div className="glass-card p-6">
-          <Calendar className="w-8 h-8 text-yellow-500 mb-3" />
-          <p className="text-3xl font-bold">{pendingRequests}</p>
-          <p className="text-sm text-[var(--muted)]">Pending Booking Requests</p>
-        </div>
+        <StatCard icon={TrendUpIcon} label="Total Earnings" value={formatCurrency(earnings.total_earnings)} />
+        <StatCard icon={MyVehicleIcon} label="Listed Vehicles" value={vehicleCount} />
+        <StatCard icon={RequestsIcon} label="Pending Booking Requests" value={pendingRequests} />
       </div>
       <div className="grid md:grid-cols-3 gap-6">
-        <Link href="/dashboard/vehicles" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
-          <h3 className="font-semibold mb-2">Manage Vehicles</h3>
-          <p className="text-sm text-[var(--muted)]">Add, edit, or remove your vehicle listings</p>
-        </Link>
-        <Link href="/dashboard/booking-requests" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
-          <h3 className="font-semibold mb-2">Booking Requests</h3>
-          <p className="text-sm text-[var(--muted)]">Approve or reject requests on your vehicles</p>
-        </Link>
-        <Link href="/dashboard/subscription" className="glass-card p-6 hover:border-[var(--primary)] transition-colors">
-          <Crown className="w-6 h-6 text-blue-500 mb-3" />
-          <h3 className="font-semibold mb-2">Subscription</h3>
-          <p className="text-sm text-[var(--muted)]">Choose a plan to publish and grow your fleet</p>
-        </Link>
+        {[
+          { href: '/dashboard/vehicles', icon: MyVehicleIcon, title: 'Manage Vehicles', desc: 'Add, edit, or remove your vehicle listings' },
+          { href: '/dashboard/booking-requests', icon: RequestsIcon, title: 'Booking Requests', desc: 'Approve or reject requests on your vehicles' },
+          { href: '/dashboard/subscription', icon: CrownIcon, title: 'Subscription', desc: 'Choose a plan to publish and grow your fleet' },
+        ].map((item) => (
+          <Link key={item.href} href={item.href} className="glass-card group flex gap-4 p-6 hover:border-[var(--primary)] transition-colors">
+            <IconChip icon={item.icon} className="h-12 w-12 rounded-xl transition-transform group-hover:scale-105" iconClassName="h-8 w-8" />
+            <div>
+              <h3 className="font-semibold mb-1">{item.title}</h3>
+              <p className="text-sm text-[var(--muted)]">{item.desc}</p>
+            </div>
+          </Link>
+        ))}
       </div>
     </DashboardLayout>
   );

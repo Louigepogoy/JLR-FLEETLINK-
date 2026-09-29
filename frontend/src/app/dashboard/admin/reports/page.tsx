@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Flag, MessageSquareText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, FlagIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 
@@ -72,7 +73,7 @@ export default function AdminReportsPage() {
     <DashboardLayout role="admin">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">User Reports</h2>
+          <h2 className="text-2xl font-bold flex items-center gap-3"><IconChip icon={FlagIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />User Reports</h2>
           <p className="text-sm text-[var(--muted)]">Reports submitted by customers and owners.</p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -25,7 +25,7 @@ export default function BrandMarquee() {
           viewport={{ once: true }}
           className="text-center text-xs font-semibold uppercase tracking-widest text-[var(--muted)] mb-6"
         >
-          Popular Brands Available in Cebu
+          Popular Brands Available Nationwide
         </motion.p>
 
         <div className="relative overflow-hidden brand-marquee-mask">

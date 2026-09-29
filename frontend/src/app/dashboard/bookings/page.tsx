@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
@@ -135,7 +136,7 @@ function MyBookingsContent() {
 
   return (
     <DashboardLayout role="user">
-      <h2 className="text-2xl font-bold mb-6">My Bookings</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={CalendarCheckIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />My Bookings</h2>
       <div className="space-y-4">
         {bookings.map((b) => (
           <div key={b.id} className="glass-card p-6">
@@ -231,7 +232,7 @@ function MyBookingsContent() {
           <EmptyState
             icon={Calendar}
             title="No bookings yet"
-            description="Browse available vehicles in Cebu and book your first ride."
+            description="Browse available vehicles across the Philippines and book your first ride."
             actionLabel="Browse Vehicles"
             actionHref="/vehicles"
           />

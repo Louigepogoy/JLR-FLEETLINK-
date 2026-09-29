@@ -51,7 +51,7 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-[var(--muted)]">
               <li className="flex items-center gap-2"><Mail className="w-4 h-4" /> support@jlrfleetlink.com</li>
               <li className="flex items-center gap-2"><Phone className="w-4 h-4" /> +63 930 550 3346</li>
-              <li className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Cebu, Philippines</li>
+              <li className="flex items-center gap-2"><MapPin className="w-4 h-4" /> Serving the whole Philippines</li>
             </ul>
           </div>
         </div>

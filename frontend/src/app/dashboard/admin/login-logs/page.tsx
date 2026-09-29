@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { History } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, HistoryIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 
@@ -45,7 +46,7 @@ export default function LoginLogsPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-6">Login Logs</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={HistoryIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Login Logs</h2>
       {logs.length === 0 ? (
         <EmptyState icon={History} title="No login attempts recorded yet" />
       ) : (

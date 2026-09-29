@@ -1,26 +1,26 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { IdCard, Search, CreditCard, Car } from 'lucide-react';
+import { BrowseCarIllo, IlloTile, PayPhoneIllo, RideEarnIllo, VerifyIdIllo } from '@/components/illustrations/SpotIllustrations';
 
 const steps = [
   {
-    icon: IdCard,
+    icon: VerifyIdIllo,
     title: 'Verify Your Identity',
     desc: 'Sign up with your driver\'s license and a live selfie. An admin reviews and approves every new account.',
   },
   {
-    icon: Search,
+    icon: BrowseCarIllo,
     title: 'Browse or List a Vehicle',
-    desc: 'Search verified Cebu vehicles to rent, or list your own — every account can do both.',
+    desc: 'Search verified vehicles anywhere in the Philippines, or list your own — every account can do both.',
   },
   {
-    icon: CreditCard,
+    icon: PayPhoneIllo,
     title: 'Pay Securely',
     desc: 'Book with GCash or card, with support for partial down payments before pickup.',
   },
   {
-    icon: Car,
+    icon: RideEarnIllo,
     title: 'Ride or Earn',
     desc: 'Pick up your vehicle at the agreed spot, or start earning once your listing is booked.',
   },
@@ -50,13 +50,15 @@ export default function HowItWorks() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
-              className="glass-card p-6"
+              className="glass-card p-6 group"
             >
-              <div className="flex items-center gap-3 mb-4">
-                <span className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center text-white font-bold">
+              <div className="relative mb-5 w-fit">
+                <IlloTile className="h-20 w-20 transition-transform duration-300 group-hover:scale-105">
+                  <step.icon className="h-14 w-14" />
+                </IlloTile>
+                <span className="absolute -left-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full gradient-bg text-xs font-bold text-white shadow-md ring-2 ring-[var(--background)]">
                   {i + 1}
                 </span>
-                <step.icon className="w-6 h-6 text-[var(--primary)]" />
               </div>
               <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
               <p className="text-sm text-[var(--muted)]">{step.desc}</p>

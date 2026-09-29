@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { IconChip, ChartIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
@@ -46,7 +47,7 @@ export default function AdminAnalyticsPage() {
 
   return (
     <DashboardLayout role="admin">
-      <h2 className="text-2xl font-bold mb-6">Revenue Analytics</h2>
+      <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={ChartIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Revenue Analytics</h2>
       <div className="grid md:grid-cols-2 gap-6 mb-8">
         <div className="glass-card p-6">
           <p className="text-sm text-[var(--muted)]">Total Platform Revenue</p>

@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { calculateDays } = require('../utils/helpers');
+const { calculateRentalPeriod } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 
 const createBooking = async (req, res, next) => {
@@ -21,6 +21,11 @@ const createBooking = async (req, res, next) => {
     const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes, withDriver } = req.body;
     const pickup = pickupTime || '09:00';
     const dropoff = dropoffTime || '17:00';
+
+    const period = calculateRentalPeriod(startDate, pickup, endDate, dropoff);
+    if (!period) {
+      return res.status(400).json({ success: false, message: 'Return date and time must be after the pickup date and time' });
+    }
 
     const vehicleResult = await query(
       "SELECT * FROM vehicles WHERE id = $1 AND status = 'available'",
@@ -61,7 +66,7 @@ const createBooking = async (req, res, next) => {
       });
     }
 
-    const days = calculateDays(startDate, endDate);
+    const { days } = period;
     const wantsDriver = (withDriver === true || withDriver === 'true') && vehicle.driver_available;
     const driverFee = wantsDriver ? days * parseFloat(vehicle.driver_fee_per_day) : 0;
     const totalAmount = days * parseFloat(vehicle.price_per_day) + driverFee;

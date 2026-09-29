@@ -18,43 +18,13 @@ const PROOF_FIELD_MAP = {
 
 const PUBLIC_GALLERY_KEYS = ['front', 'back', 'side', 'interior'];
 
-const CEBU_LOCATIONS = [
-  'Cebu City',
-  'Mandaue City',
-  'Lapu-Lapu City',
-  'Talisay City',
-  'Toledo City',
-  'Minglanilla',
-  'Consolacion',
-  'Cordova',
-  'Carcar',
-  'Naga Cebu',
-  'Other Cebu municipalities',
-];
+// All 82 provinces + Metro Manila with their capital's coordinates (default map pin).
+// Mirrors frontend/src/lib/philippines.ts.
+const PH_PROVINCES = require('../data/ph-provinces.json');
+const PROVINCE_BY_NAME = new Map(PH_PROVINCES.map((p) => [p.name, p]));
 
-const CEBU_LOCATION_COORDS = {
-  'Cebu City': { latitude: 10.3157, longitude: 123.8854 },
-  'Mandaue City': { latitude: 10.3403, longitude: 123.9416 },
-  'Lapu-Lapu City': { latitude: 10.3103, longitude: 123.9494 },
-  'Talisay City': { latitude: 10.2447, longitude: 123.8494 },
-  'Toledo City': { latitude: 10.3773, longitude: 123.6386 },
-  Minglanilla: { latitude: 10.2447, longitude: 123.7964 },
-  Consolacion: { latitude: 10.3776, longitude: 123.9570 },
-  Cordova: { latitude: 10.2538, longitude: 123.9494 },
-  Carcar: { latitude: 10.1061, longitude: 123.6402 },
-  'Naga Cebu': { latitude: 10.2088, longitude: 123.7580 },
-  'Other Cebu municipalities': { latitude: 10.3157, longitude: 123.8854 },
-};
-
-const NEARBY_CEBU_AREAS = [
-  'Mandaue City',
-  'Lapu-Lapu City',
-  'Talisay City',
-  'Minglanilla',
-  'Consolacion',
-  'Cordova',
-  'Naga Cebu',
-];
+// Rough bounding box of the Philippines, to reject pins dropped in the wrong country.
+const PH_BOUNDS = { minLat: 4.2, maxLat: 21.3, minLng: 116.5, maxLng: 127 };
 
 const VEHICLE_LIMIT_BY_PLAN = {
   basic: 5,
@@ -62,34 +32,39 @@ const VEHICLE_LIMIT_BY_PLAN = {
   premium: 20,
 };
 
+const locationError = (message) => {
+  const error = new Error(message);
+  error.status = 400;
+  error.statusCode = 400;
+  return error;
+};
+
 const normalizeVehicleLocation = (bodyData) => {
-  const city = bodyData.city || bodyData.location;
+  const provinceName = String(bodyData.province || '').trim();
+  const province = PROVINCE_BY_NAME.get(provinceName);
+  if (!province) throw locationError('Please choose a valid Philippine province for the vehicle.');
 
-  if (!CEBU_LOCATIONS.includes(city)) {
-    const error = new Error('Vehicle location must be within Cebu City or Cebu Province.');
-    error.status = 400;
-    error.statusCode = 400;
-    throw error;
-  }
+  const city = String(bodyData.city || '').trim();
+  if (!city || city.length > 100) throw locationError('Please enter the city or municipality (up to 100 characters).');
 
-  const fallbackCoords = CEBU_LOCATION_COORDS[city];
   const latitude = bodyData.latitude === undefined || bodyData.latitude === ''
-    ? fallbackCoords.latitude
+    ? province.lat
     : Number(bodyData.latitude);
   const longitude = bodyData.longitude === undefined || bodyData.longitude === ''
-    ? fallbackCoords.longitude
+    ? province.lng
     : Number(bodyData.longitude);
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    const error = new Error('Pickup latitude and longitude must be valid numbers.');
-    error.status = 400;
-    error.statusCode = 400;
-    throw error;
+    throw locationError('Pickup latitude and longitude must be valid numbers.');
+  }
+  if (latitude < PH_BOUNDS.minLat || latitude > PH_BOUNDS.maxLat || longitude < PH_BOUNDS.minLng || longitude > PH_BOUNDS.maxLng) {
+    throw locationError('The pickup pin must be inside the Philippines.');
   }
 
   return {
+    province: province.name,
     city,
-    location: city,
+    location: `${city}, ${province.name}`,
     barangay: bodyData.barangay || null,
     pickupAddress: bodyData.pickupAddress || bodyData.pickup_address || null,
     latitude,
@@ -172,9 +147,10 @@ const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
 
 const getPublicStats = async (req, res, next) => {
   try {
-    const [vehicles, users] = await Promise.all([
+    const [vehicles, users, provinces] = await Promise.all([
       query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available'"),
       query("SELECT COUNT(*)::int AS count FROM users WHERE approval_status = 'approved' AND is_active = true"),
+      query("SELECT COUNT(DISTINCT province)::int AS count FROM vehicles WHERE status <> 'inactive'"),
     ]);
 
     res.json({
@@ -182,7 +158,9 @@ const getPublicStats = async (req, res, next) => {
       data: {
         availableVehicles: vehicles.rows[0].count,
         activeUsers: users.rows[0].count,
-        citiesCovered: CEBU_LOCATIONS.length,
+        // Where the platform operates (every province) vs. where listings exist today.
+        provincesCovered: PH_PROVINCES.length,
+        provincesWithListings: provinces.rows[0].count,
       },
     });
   } catch (error) {
@@ -192,7 +170,7 @@ const getPublicStats = async (req, res, next) => {
 
 const getVehicles = async (req, res, next) => {
   try {
-    const { search, type, minPrice, maxPrice, location, area, status = 'available' } = req.query;
+    const { search, type, minPrice, maxPrice, location, province, status = 'available' } = req.query;
     let sql = `
       SELECT v.*, u.full_name as owner_name,
         EXISTS (
@@ -221,14 +199,14 @@ const getVehicles = async (req, res, next) => {
       sql += ` AND v.vehicle_type = $${idx++}`;
       params.push(type);
     }
+    if (province) {
+      sql += ` AND v.province = $${idx++}`;
+      params.push(province);
+    }
     if (location) {
-      sql += ` AND (v.city ILIKE $${idx} OR v.location ILIKE $${idx})`;
+      sql += ` AND (v.city ILIKE $${idx} OR v.province ILIKE $${idx} OR v.barangay ILIKE $${idx} OR v.pickup_address ILIKE $${idx})`;
       params.push(`%${location}%`);
       idx++;
-    }
-    if (area === 'nearby') {
-      sql += ` AND v.city = ANY($${idx++}::text[])`;
-      params.push(NEARBY_CEBU_AREAS);
     }
     if (minPrice) {
       sql += ` AND v.price_per_day >= $${idx++}`;
@@ -304,8 +282,8 @@ const createVehicle = async (req, res, next) => {
       `INSERT INTO vehicles (owner_id, title, brand, model, plate_number, year, vehicle_type, transmission,
         fuel_type, seats, price_per_day, location, city, barangay, pickup_address,
         latitude, longitude, description, images, proof_photos, features,
-        driver_available, driver_fee_per_day)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+        driver_available, driver_fee_per_day, province)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        RETURNING *`,
       [
         req.user.id, title, brand, model, plateNumber || null, year, vehicleType, transmission,
@@ -313,7 +291,7 @@ const createVehicle = async (req, res, next) => {
         vehicleLocation.barangay, vehicleLocation.pickupAddress, vehicleLocation.latitude,
         vehicleLocation.longitude, description || null,
         vehicleImages, JSON.stringify(proofPhotos), features || [],
-        isDriverAvailable, isDriverAvailable ? (driverFeePerDay || 0) : 0,
+        isDriverAvailable, isDriverAvailable ? (driverFeePerDay || 0) : 0, vehicleLocation.province,
       ]
     );
 
@@ -334,7 +312,7 @@ const updateVehicle = async (req, res, next) => {
     }
 
     const fields = ['title', 'brand', 'model', 'plate_number', 'year', 'vehicle_type', 'transmission',
-      'fuel_type', 'seats', 'price_per_day', 'location', 'city', 'barangay',
+      'fuel_type', 'seats', 'price_per_day', 'location', 'province', 'city', 'barangay',
       'pickup_address', 'latitude', 'longitude', 'description', 'images', 'proof_photos', 'features', 'status',
       'driver_available', 'driver_fee_per_day'];
     const mapping = {
@@ -358,8 +336,9 @@ const updateVehicle = async (req, res, next) => {
       bodyData.images = buildGalleryImages(mergedProof);
     }
 
-    if (bodyData.location !== undefined || bodyData.city !== undefined) {
+    if (bodyData.location !== undefined || bodyData.city !== undefined || bodyData.province !== undefined) {
       const vehicleLocation = normalizeVehicleLocation(bodyData);
+      bodyData.province = vehicleLocation.province;
       bodyData.location = vehicleLocation.location;
       bodyData.city = vehicleLocation.city;
       bodyData.barangay = vehicleLocation.barangay;
@@ -596,15 +575,9 @@ const vehicleValidation = [
   body('transmission').trim().notEmpty(),
   body('fuelType').trim().notEmpty(),
   body('pricePerDay').isFloat({ min: 0 }),
-  body('city').optional().isIn(CEBU_LOCATIONS).withMessage('City must be in Cebu only'),
-  body('location').optional().isIn(CEBU_LOCATIONS).withMessage('Location must be in Cebu only'),
-  body().custom((value) => {
-    const city = value.city || value.location;
-    if (!city || !CEBU_LOCATIONS.includes(city)) {
-      throw new Error('Vehicle location must be within Cebu City or Cebu Province.');
-    }
-    return true;
-  }),
+  body('province').trim().custom((value) => PROVINCE_BY_NAME.has(value))
+    .withMessage('Please choose a valid Philippine province'),
+  body('city').trim().isLength({ min: 1, max: 100 }).withMessage('Please enter the city or municipality'),
 ];
 
 module.exports = {
