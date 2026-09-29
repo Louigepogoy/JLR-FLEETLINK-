@@ -17,6 +17,7 @@ export type AiResult = {
 interface AiRiskPanelProps {
   analyzeUrl: string;
   initialResult?: AiResult | null;
+  onResult?: (result: AiResult) => void;
 }
 
 const verdictStyles: Record<AiResult['verdict'], { label: string; classes: string; icon: typeof ShieldCheck }> = {
@@ -25,7 +26,7 @@ const verdictStyles: Record<AiResult['verdict'], { label: string; classes: strin
   high_risk: { label: 'High Risk', classes: 'bg-red-500/10 text-red-600', icon: ShieldAlert },
 };
 
-export default function AiRiskPanel({ analyzeUrl, initialResult = null }: AiRiskPanelProps) {
+export default function AiRiskPanel({ analyzeUrl, initialResult = null, onResult }: AiRiskPanelProps) {
   const [result, setResult] = useState<AiResult | null>(initialResult);
   const [loading, setLoading] = useState(false);
 
@@ -34,6 +35,7 @@ export default function AiRiskPanel({ analyzeUrl, initialResult = null }: AiRisk
     try {
       const res = await api.post(analyzeUrl);
       setResult(res.data.data);
+      onResult?.(res.data.data);
       toast.success('AI check complete');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };

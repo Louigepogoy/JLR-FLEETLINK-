@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Calendar, Car, Clock, Fuel, Hash, MapPin, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
+import { Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -15,6 +15,10 @@ import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import type { ReviewSummary } from '@/lib/reviews';
+import ReviewList from '@/components/reviews/ReviewList';
+import { RatingBadge } from '@/components/reviews/StarRating';
 
 export default function VehicleDetailPage() {
   const { id } = useParams();
@@ -30,11 +34,16 @@ export default function VehicleDetailPage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
   const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
+  const [messagingOwner, setMessagingOwner] = useState(false);
+  const [reviews, setReviews] = useState<ReviewSummary | null>(null);
 
   useEffect(() => {
     api.get(`/vehicles/${id}`).then((res) => setVehicle(res.data.data)).catch(() => toast.error('Vehicle not found')).finally(() => setLoading(false));
     api.get(`/vehicles/${id}/maintenance-dates`).then((res) => setMaintenanceDates(res.data.data)).catch(() => {});
     api.get(`/vehicles/${id}/booked-dates`).then((res) => setBookedDates(res.data.data)).catch(() => {});
+    api.get(`/reviews/vehicle/${id}`)
+      .then((res) => setReviews(res.data.data))
+      .catch(() => setReviews({ average: null, count: 0, reviews: [] }));
   }, [id]);
 
   const days = dates.startDate && dates.endDate
@@ -51,6 +60,22 @@ export default function VehicleDetailPage() {
   const driverFeePerDay = vehicle ? parseFloat(String(vehicle.driver_fee_per_day || 0)) : 0;
   const driverFee = withDriver && vehicle?.driver_available ? days * driverFeePerDay : 0;
   const total = vehicle ? days * parseFloat(String(vehicle.price_per_day)) + driverFee : 0;
+
+  const handleMessageOwner = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please sign in to message the owner');
+      router.push('/auth/login');
+      return;
+    }
+    setMessagingOwner(true);
+    try {
+      const conversation = await startConversation({ vehicleId: String(id) });
+      router.push(messagesPath(user?.role, conversation.id));
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not start chat'));
+      setMessagingOwner(false);
+    }
+  };
 
   const handleBook = async () => {
     if (!isAuthenticated) {
@@ -141,7 +166,12 @@ export default function VehicleDetailPage() {
                   <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">Cebu Province Verified</span>
                 </div>
                 <h1 className="text-3xl font-bold mb-2">{String(vehicle.title)}</h1>
-                <p className="text-[var(--muted)] mb-4">{String(vehicle.brand)} {String(vehicle.model)} - {String(vehicle.year)}</p>
+                <p className="text-[var(--muted)] mb-1">{String(vehicle.brand)} {String(vehicle.model)} - {String(vehicle.year)}</p>
+                <RatingBadge
+                  average={vehicle.avg_rating as number | null}
+                  count={Number(vehicle.rating_count || 0)}
+                  className="mb-4 flex"
+                />
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
                     { icon: MapPin, val: [city, barangay].filter(Boolean).join(', ') },
@@ -157,7 +187,7 @@ export default function VehicleDetailPage() {
                 </div>
                 <div className="mt-5 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4">
                   <p className="font-semibold mb-3">Owner Contact</p>
-                  <div className="flex items-center gap-3">
+                  <Link href={profilePath(String(vehicle.owner_id))} className="flex items-center gap-3 group" title="View owner profile">
                     <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
                       {vehicle.owner_avatar_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -175,15 +205,30 @@ export default function VehicleDetailPage() {
                       )}
                     </div>
                     <div className="grid gap-1 text-sm text-[var(--muted)]">
-                      <p className="font-medium text-[var(--foreground)]">
+                      <p className="font-medium text-[var(--foreground)] group-hover:underline">
                         {String(vehicle.owner_name || 'Vehicle owner')}
                       </p>
+                      <RatingBadge
+                        average={vehicle.owner_avg_rating as number | null}
+                        count={Number(vehicle.owner_rating_count || 0)}
+                      />
                       <p className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-[var(--primary)]" />
                         {String(vehicle.owner_phone || 'No phone provided')}
                       </p>
+                      <p className="text-xs text-[var(--primary)]">View profile</p>
                     </div>
-                  </div>
+                  </Link>
+                  {!isOwner && (
+                    <button
+                      onClick={handleMessageOwner}
+                      disabled={messagingOwner}
+                      className="btn-outline mt-4 flex w-full items-center justify-center gap-2 py-2 text-sm disabled:opacity-50"
+                    >
+                      {messagingOwner ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                      Message Owner
+                    </button>
+                  )}
                 </div>
                 <div className="mt-5 overflow-hidden rounded-xl border border-[var(--card-border)]">
                   <div className="px-4 py-3 bg-[var(--primary)]/10 text-sm">
@@ -375,6 +420,10 @@ export default function VehicleDetailPage() {
                 </div>
               )}
             </motion.div>
+          </div>
+
+          <div className="mt-8">
+            <ReviewList title="Vehicle Reviews" summary={reviews} />
           </div>
         </div>
       </main>

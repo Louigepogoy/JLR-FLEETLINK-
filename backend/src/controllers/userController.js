@@ -276,6 +276,58 @@ const updateUserRole = async (req, res, next) => {
   }
 };
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Public profile anyone can view: only non-sensitive fields (no email, license or selfie), plus activity
+// stats and the user's active vehicle listings. The contact number is included only for signed-in viewers
+// (req.user set by optionalAuthenticate) so guests and scrapers can't harvest everyone's number.
+const getPublicProfile = async (req, res, next) => {
+  try {
+    if (!UUID_PATTERN.test(req.params.id)) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const userResult = await query(
+      `SELECT u.id, u.full_name, u.avatar_url, u.role, u.created_at, u.phone,
+              (u.approval_status = 'approved') AS is_verified,
+              (SELECT COUNT(*)::int FROM vehicles v WHERE v.owner_id = u.id AND v.status <> 'inactive') AS vehicles_listed,
+              (SELECT COUNT(*)::int FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id
+                WHERE v.owner_id = u.id AND b.status = 'completed') AS rentals_hosted,
+              (SELECT COUNT(*)::int FROM bookings b
+                WHERE b.customer_id = u.id AND b.status = 'completed') AS trips_completed,
+              (SELECT ROUND(AVG(r.user_rating)::numeric, 1) FROM booking_reviews r WHERE r.reviewee_id = u.id) AS avg_rating,
+              (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.reviewee_id = u.id) AS rating_count
+       FROM users u
+       WHERE u.id = $1 AND u.is_active = true`,
+      [req.params.id]
+    );
+    if (!userResult.rows[0]) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const vehicles = await query(
+      `SELECT v.id, v.title, v.brand, v.model, v.year, v.vehicle_type, v.price_per_day, v.location, v.city,
+              v.barangay, v.seats, v.fuel_type, v.transmission, v.images, v.status,
+              EXISTS (
+                SELECT 1 FROM vehicle_maintenance_dates vmd
+                WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
+              ) AS on_maintenance,
+              (SELECT ROUND(AVG(r.vehicle_rating)::numeric, 1) FROM booking_reviews r WHERE r.vehicle_id = v.id) AS avg_rating,
+              (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.vehicle_id = v.id) AS rating_count
+       FROM vehicles v
+       WHERE v.owner_id = $1 AND v.status <> 'inactive'
+       ORDER BY v.created_at DESC`,
+      [req.params.id]
+    );
+
+    const { phone, ...profile } = userResult.rows[0];
+    const contact = req.user ? { phone: phone || null } : { phone_hidden: true };
+    res.json({ success: true, data: { ...profile, ...contact, vehicles: vehicles.rows } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAllUsers,
   getPendingRegistrations,
@@ -286,4 +338,5 @@ module.exports = {
   changePassword,
   toggleUserStatus,
   updateUserRole,
+  getPublicProfile,
 };

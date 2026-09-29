@@ -3,8 +3,10 @@ const path = require('path');
 const { GoogleGenAI } = require('@google/genai');
 const { uploadDir } = require('../middleware/upload');
 
-// Gemini renames/retires model IDs periodically; override via GEMINI_MODEL in .env if this stops working.
-const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+// Gemini renames/retires model IDs periodically and individual models get overloaded (503), so we try
+// GEMINI_MODEL first and fall back to stable aliases before giving up.
+const MODELS = [...new Set([process.env.GEMINI_MODEL, 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest'].filter(Boolean))];
+const REQUEST_TIMEOUT_MS = 45000;
 
 const MEDIA_TYPES = {
   '.jpg': 'image/jpeg',
@@ -19,7 +21,53 @@ const getClient = () => {
     error.status = 503;
     throw error;
   }
-  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { timeout: REQUEST_TIMEOUT_MS } });
+};
+
+// Gemini errors carry an HTTP-like status and a raw JSON message; classify them so we can move on to
+// the next model or show the admin a readable message.
+const classifyGeminiError = (err) => {
+  const status = Number(err?.status) || 0;
+  const text = String(err?.message || '');
+  if (status === 400 && /API key/i.test(text)) return 'bad-key';
+  if (status === 401 || status === 403 || /PERMISSION_DENIED|API_KEY_INVALID/i.test(text)) return 'bad-key';
+  if ([429, 500, 503, 504].includes(status) || /UNAVAILABLE|overloaded|high demand|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED|timed? ?out|abort/i.test(text)) {
+    return 'busy';
+  }
+  if (status === 404 || /NOT_FOUND|is not found|not supported/i.test(text)) return 'missing-model';
+  return 'fatal';
+};
+
+const aiError = (message, status = 503) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const generateWithFallback = async (request) => {
+  const ai = getClient();
+  let sawBusy = false;
+  for (const model of MODELS) {
+    try {
+      const response = await ai.models.generateContent({ ...request, model });
+      return { response, model };
+    } catch (err) {
+      const kind = classifyGeminiError(err);
+      console.warn(`AI check: ${model} failed (${kind}): ${String(err?.message).slice(0, 200)}`);
+      if (kind === 'bad-key') {
+        throw aiError('The Gemini API key was rejected. Check GEMINI_API_KEY in backend/.env.', 502);
+      }
+      if (kind === 'fatal') {
+        throw aiError('The AI service returned an unexpected error. Please try again.', 502);
+      }
+      if (kind === 'busy') sawBusy = true;
+    }
+  }
+  throw aiError(
+    !sawBusy
+      ? 'No available Gemini model was found. Set GEMINI_MODEL in backend/.env to a current model name.'
+      : 'The AI service is busy right now. Please try the AI check again in a minute.'
+  );
 };
 
 const urlToLocalPath = (url) => {
@@ -45,16 +93,22 @@ const RESULT_SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object, no m
   "summary": "<1-2 sentence plain-language summary for a human admin>"
 }`;
 
+// Returns snake_case fields to match the ai_verification_results columns and the frontend AiResult type.
 const parseAiJson = (text) => {
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('AI response did not contain valid JSON');
-  const parsed = JSON.parse(match[0]);
-  const riskScore = Math.max(0, Math.min(100, Number(parsed.riskScore) || 0));
+  let parsed;
+  try {
+    parsed = match ? JSON.parse(match[0]) : null;
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) throw aiError('The AI returned an unreadable answer. Please run the check again.', 502);
+  const riskScore = Math.round(Math.max(0, Math.min(100, Number(parsed.riskScore ?? parsed.risk_score) || 0)));
   const verdict = ['low_risk', 'medium_risk', 'high_risk'].includes(parsed.verdict)
     ? parsed.verdict
     : (riskScore >= 70 ? 'high_risk' : riskScore >= 30 ? 'medium_risk' : 'low_risk');
   return {
-    riskScore,
+    risk_score: riskScore,
     verdict,
     reasons: Array.isArray(parsed.reasons) ? parsed.reasons.map(String).slice(0, 10) : [],
     summary: typeof parsed.summary === 'string' ? parsed.summary : '',
@@ -70,10 +124,9 @@ const analyzeLicenseVerification = async ({ licenseImageUrl, selfieImageUrl, lic
     throw error;
   }
 
-  const ai = getClient();
-  const response = await ai.models.generateContent({
-    model: MODEL,
+  const { response, model } = await generateWithFallback({
     config: {
+      responseMimeType: 'application/json',
       systemInstruction:
         'You are a KYC (know-your-customer) fraud review assistant for a Philippine vehicle rental platform. ' +
         'You are shown a driver\'s license photo and a live selfie submitted by the same user during identity verification. ' +
@@ -90,7 +143,7 @@ const analyzeLicenseVerification = async ({ licenseImageUrl, selfieImageUrl, lic
     ],
   });
 
-  return { ...parseAiJson(response.text || ''), model: MODEL };
+  return { ...parseAiJson(response.text || ''), model };
 };
 
 const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleType, plateNumber }) => {
@@ -101,10 +154,9 @@ const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleTyp
     throw error;
   }
 
-  const ai = getClient();
-  const response = await ai.models.generateContent({
-    model: MODEL,
+  const { response, model: usedModel } = await generateWithFallback({
     config: {
+      responseMimeType: 'application/json',
       systemInstruction:
         'You are a listing-fraud review assistant for a Philippine (Cebu) vehicle rental platform. ' +
         'You are shown photos an owner submitted as proof of an actual vehicle they are listing for rent. ' +
@@ -122,7 +174,7 @@ const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleTyp
     ],
   });
 
-  return { ...parseAiJson(response.text || ''), model: MODEL };
+  return { ...parseAiJson(response.text || ''), model: usedModel };
 };
 
 module.exports = { analyzeLicenseVerification, analyzeVehiclePhotos };

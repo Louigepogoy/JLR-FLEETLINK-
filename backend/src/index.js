@@ -22,6 +22,8 @@ const verificationRoutes = require('./routes/verification.routes');
 const aiVerificationRoutes = require('./routes/aiVerification.routes');
 const supportRoutes = require('./routes/support.routes');
 const paymongoRoutes = require('./routes/paymongo.routes');
+const chatRoutes = require('./routes/chat.routes');
+const reviewRoutes = require('./routes/review.routes');
 const { handleWebhook: handlePaymongoWebhook } = require('./controllers/paymongoController');
 
 const app = express();
@@ -80,6 +82,8 @@ app.use('/api/verification', verificationRoutes);
 app.use('/api/admin/ai-verification', aiVerificationRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/paymongo', paymongoRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {

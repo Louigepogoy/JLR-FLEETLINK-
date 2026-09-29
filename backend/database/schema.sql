@@ -102,6 +102,7 @@ CREATE TABLE bookings (
   payment_status payment_status DEFAULT 'pending',
   status booking_status DEFAULT 'pending',
   notes TEXT,
+  completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT valid_dates CHECK (end_date >= start_date)
@@ -271,6 +272,88 @@ CREATE TABLE notifications (
   is_read BOOLEAN DEFAULT FALSE,
   link VARCHAR(500),
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_one_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_two_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vehicle_id UUID REFERENCES vehicles(id) ON DELETE SET NULL,
+  last_message_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT conversations_ordered_pair CHECK (user_one_id < user_two_id),
+  CONSTRAINT conversations_unique_pair UNIQUE (user_one_id, user_two_id)
+);
+CREATE INDEX idx_conversations_user_one ON conversations(user_one_id, last_message_at DESC);
+CREATE INDEX idx_conversations_user_two ON conversations(user_two_id, last_message_at DESC);
+
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_type VARCHAR(20) NOT NULL DEFAULT 'text',
+  body TEXT,
+  image_url TEXT,
+  latitude DECIMAL(9,6),
+  longitude DECIMAL(9,6),
+  reply_to_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  forwarded BOOLEAN NOT NULL DEFAULT false,
+  deleted_at TIMESTAMPTZ,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT messages_content_check CHECK (
+    (body IS NULL OR char_length(body) <= 2000)
+    AND (
+      deleted_at IS NOT NULL
+      OR (message_type = 'text' AND char_length(body) >= 1)
+      OR (message_type = 'image' AND image_url IS NOT NULL)
+      OR (message_type = 'location' AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)
+    )
+  )
+);
+CREATE INDEX idx_messages_conversation ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_unread ON messages(conversation_id, sender_id) WHERE read_at IS NULL;
+
+CREATE TABLE booking_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  reviewer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reviewee_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  vehicle_id UUID REFERENCES vehicles(id) ON DELETE CASCADE,
+  reviewer_role VARCHAR(10) NOT NULL CHECK (reviewer_role IN ('customer', 'owner')),
+  user_rating SMALLINT NOT NULL CHECK (user_rating BETWEEN 1 AND 5),
+  vehicle_rating SMALLINT CHECK (vehicle_rating BETWEEN 1 AND 5),
+  comment TEXT CHECK (comment IS NULL OR char_length(comment) <= 1000),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT booking_reviews_one_per_side UNIQUE (booking_id, reviewer_id),
+  CONSTRAINT booking_reviews_vehicle_rating_by_customer CHECK (
+    (reviewer_role = 'customer' AND vehicle_rating IS NOT NULL AND vehicle_id IS NOT NULL)
+    OR (reviewer_role = 'owner' AND vehicle_rating IS NULL)
+  )
+);
+CREATE INDEX idx_booking_reviews_reviewee ON booking_reviews(reviewee_id, created_at DESC);
+CREATE INDEX idx_booking_reviews_vehicle ON booking_reviews(vehicle_id, created_at DESC);
+
+CREATE TABLE message_hidden (
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+CREATE TABLE conversation_clears (
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  cleared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (conversation_id, user_id)
+);
+
+CREATE TABLE message_reactions (
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  emoji VARCHAR(16) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (message_id, user_id)
 );
 
 -- Prevent double booking: no overlapping approved/active bookings for same vehicle

@@ -54,4 +54,10 @@ const uploadProfileAvatar = multer({
   { name: 'avatar', maxCount: 1 },
 ]);
 
-module.exports = { uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadDir };
+const uploadChatImage = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter,
+}).single('chatImage');
+
+module.exports = { uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadChatImage, uploadDir };

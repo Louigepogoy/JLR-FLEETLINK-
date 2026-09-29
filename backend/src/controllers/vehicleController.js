@@ -198,7 +198,9 @@ const getVehicles = async (req, res, next) => {
         EXISTS (
           SELECT 1 FROM vehicle_maintenance_dates vmd
           WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
-        ) AS on_maintenance
+        ) AS on_maintenance,
+        (SELECT ROUND(AVG(r.vehicle_rating)::numeric, 1) FROM booking_reviews r WHERE r.vehicle_id = v.id) AS avg_rating,
+        (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.vehicle_id = v.id) AS rating_count
       FROM vehicles v
       JOIN users u ON v.owner_id = u.id
       WHERE 1=1
@@ -252,7 +254,11 @@ const getVehicleById = async (req, res, next) => {
         EXISTS (
           SELECT 1 FROM vehicle_maintenance_dates vmd
           WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
-        ) AS on_maintenance
+        ) AS on_maintenance,
+        (SELECT ROUND(AVG(r.vehicle_rating)::numeric, 1) FROM booking_reviews r WHERE r.vehicle_id = v.id) AS avg_rating,
+        (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.vehicle_id = v.id) AS rating_count,
+        (SELECT ROUND(AVG(r.user_rating)::numeric, 1) FROM booking_reviews r WHERE r.reviewee_id = v.owner_id) AS owner_avg_rating,
+        (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.reviewee_id = v.owner_id) AS owner_rating_count
        FROM vehicles v JOIN users u ON v.owner_id = u.id
        WHERE v.id = $1`,
       [req.params.id]

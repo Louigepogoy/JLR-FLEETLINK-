@@ -171,8 +171,21 @@ const updateBookingStatus = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
+    // Keeps the lifecycle sensible — in particular a booking can only be completed (which unlocks
+    // ratings) after it was approved, never straight from pending.
+    const allowedTransitions = {
+      pending: ['approved', 'rejected', 'cancelled'],
+      approved: ['active', 'completed', 'cancelled'],
+      active: ['completed'],
+    };
+    if (!(allowedTransitions[b.status] || []).includes(status)) {
+      return res.status(400).json({ success: false, message: `A ${b.status} booking cannot be changed to ${status}` });
+    }
+
     const result = await query(
-      `UPDATE bookings SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      `UPDATE bookings SET status = $1::booking_status, updated_at = NOW(),
+         completed_at = CASE WHEN $1::booking_status = 'completed' THEN NOW() ELSE completed_at END
+       WHERE id = $2 RETURNING *`,
       [status, req.params.id]
     );
 
@@ -183,12 +196,22 @@ const updateBookingStatus = async (req, res, next) => {
       await query("UPDATE vehicles SET status = 'available' WHERE id = $1", [b.vehicle_id]);
     }
 
-    await createNotification(
-      b.customer_id,
-      `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-      `Your booking for ${b.title} has been ${status}`,
-      'booking'
-    );
+    if (status === 'completed') {
+      await createNotification(
+        b.customer_id,
+        'Trip completed — rate your experience',
+        `Thanks for renting ${b.title}! Tap to rate the vehicle and the owner.`,
+        'booking',
+        '/dashboard/bookings'
+      );
+    } else {
+      await createNotification(
+        b.customer_id,
+        `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+        `Your booking for ${b.title} has been ${status === 'active' ? 'marked as picked up' : status}`,
+        'booking'
+      );
+    }
 
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {

@@ -48,6 +48,10 @@ async function setup() {
     const driverServiceMigrationPath = path.join(__dirname, '../database/migrations/014_driver_service.sql');
     const ownerPayoutsMigrationPath = path.join(__dirname, '../database/migrations/015_owner_payouts.sql');
     const googleOauthMigrationPath = path.join(__dirname, '../database/migrations/016_google_oauth.sql');
+    const chatMigrationPath = path.join(__dirname, '../database/migrations/017_chat.sql');
+    const chatMediaMigrationPath = path.join(__dirname, '../database/migrations/018_chat_media_reactions.sql');
+    const bookingReviewsMigrationPath = path.join(__dirname, '../database/migrations/019_booking_reviews.sql');
+    const chatActionsMigrationPath = path.join(__dirname, '../database/migrations/020_chat_reply_forward_delete.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -100,6 +104,14 @@ async function setup() {
       console.log('Owner payouts migration applied.');
       await runSqlFile(googleOauthMigrationPath);
       console.log('Google OAuth migration applied.');
+      await runSqlFile(chatMigrationPath);
+      console.log('Chat migration applied.');
+      await runSqlFile(chatMediaMigrationPath);
+      console.log('Chat photos/location/reactions migration applied.');
+      await runSqlFile(bookingReviewsMigrationPath);
+      console.log('Booking reviews/ratings migration applied.');
+      await runSqlFile(chatActionsMigrationPath);
+      console.log('Chat reply/forward/delete migration applied.');
     }
 
     await runSqlFile(seedPath);

@@ -1,15 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Users } from 'lucide-react';
+import { MessageCircle, Users } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
+import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import { useAuthStore } from '@/store/authStore';
 
 export default function AdminUsersPage() {
+  const router = useRouter();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
+
+  const messageUser = async (userId: string) => {
+    try {
+      const conversation = await startConversation({ userId });
+      router.push(messagesPath('admin', conversation.id));
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not start chat'));
+    }
+  };
 
   const fetchUsers = () => api.get('/users').then((res) => setUsers(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   useEffect(() => { fetchUsers(); }, []);
@@ -56,7 +71,9 @@ export default function AdminUsersPage() {
           <tbody>
             {users.map((u: { id: string; full_name: string; email: string; role: string; is_active: boolean; approval_status?: string }) => (
               <tr key={u.id} className="border-b border-[var(--card-border)]">
-                <td className="p-4 font-medium">{u.full_name}</td>
+                <td className="p-4 font-medium">
+                  <Link href={profilePath(u.id)} className="hover:underline hover:text-[var(--primary)]">{u.full_name}</Link>
+                </td>
                 <td className="p-4 text-[var(--muted)]">{u.email}</td>
                 <td className="p-4">
                   <span className={`text-xs px-2 py-1 rounded-full capitalize ${
@@ -79,7 +96,12 @@ export default function AdminUsersPage() {
                     {u.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </td>
-                <td className="p-4 space-x-2">
+                <td className="p-4 space-x-2 whitespace-nowrap">
+                  {u.id !== currentUserId && u.is_active && (
+                    <button onClick={() => messageUser(u.id)} className="text-xs btn-outline py-1 px-3 inline-flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" /> Message
+                    </button>
+                  )}
                   <button onClick={() => toggleStatus(u.id, u.is_active)} className="text-xs btn-outline py-1 px-3">
                     {u.is_active ? 'Deactivate' : 'Activate'}
                   </button>

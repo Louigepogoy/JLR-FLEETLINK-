@@ -7,17 +7,24 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Car, Calendar, CreditCard, Users, Settings,
   BarChart3, Bell, LogOut, Menu, X, ClipboardCheck,
-  Crown, Flag, History, LifeBuoy, Wallet,
+  Crown, Flag, History, LifeBuoy, Wallet, MessageCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import RatingPrompt from '@/components/reviews/RatingPrompt';
+import api from '@/lib/api';
 import { cn, getDashboardPath } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const navByRole: Record<string, Array<{ href: string; label: string; icon: typeof LayoutDashboard }>> = {
+const UNREAD_POLL_MS = 15000;
+
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; showUnread?: boolean };
+
+const navByRole: Record<string, NavItem[]> = {
   user: [
     { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
+    { href: '/dashboard/messages', label: 'Messages', icon: MessageCircle, showUnread: true },
     { href: '/dashboard/bookings', label: 'My Bookings', icon: Calendar },
     { href: '/vehicles', label: 'Browse Vehicles', icon: Car },
     { href: '/dashboard/vehicles', label: 'My Vehicles', icon: Car },
@@ -29,6 +36,7 @@ const navByRole: Record<string, Array<{ href: string; label: string; icon: typeo
   ],
   admin: [
     { href: '/dashboard/admin', label: 'Overview', icon: LayoutDashboard },
+    { href: '/dashboard/admin/messages', label: 'Messages', icon: MessageCircle, showUnread: true },
     { href: '/dashboard/admin/approvals', label: 'Verifications', icon: ClipboardCheck },
     { href: '/dashboard/admin/users', label: 'Users', icon: Users },
     { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: History },
@@ -53,6 +61,16 @@ export default function DashboardLayout({
   const router = useRouter();
   const { user, isAuthenticated, hasHydrated, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    const loadUnread = () =>
+      api.get('/chat/unread-count').then((res) => setUnreadMessages(res.data.data.count)).catch(() => {});
+    loadUnread();
+    const timer = setInterval(loadUnread, UNREAD_POLL_MS);
+    return () => clearInterval(timer);
+  }, [hasHydrated, isAuthenticated]);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -98,6 +116,14 @@ export default function DashboardLayout({
             >
               <item.icon className="w-4 h-4" />
               {item.label}
+              {item.showUnread && unreadMessages > 0 && (
+                <span className={cn(
+                  'ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
+                  pathname === item.href ? 'bg-white text-[var(--primary)]' : 'gradient-bg text-white'
+                )}>
+                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -145,6 +171,7 @@ export default function DashboardLayout({
           </motion.div>
         </main>
       </div>
+      <RatingPrompt />
     </div>
   );
 }

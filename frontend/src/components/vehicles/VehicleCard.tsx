@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { MapPin, Users, Fuel, Settings2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { RatingBadge } from '@/components/reviews/StarRating';
 
 interface Vehicle {
   id: string;
@@ -23,10 +25,14 @@ interface Vehicle {
   images?: string[];
   status: string;
   on_maintenance?: boolean;
+  avg_rating?: number | string | null;
+  rating_count?: number;
 }
 
 export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; index?: number }) {
-  const image = vehicle.images?.[0];
+  // Falls back to the placeholder when the photo file is missing on the server instead of a broken image.
+  const [imageFailed, setImageFailed] = useState(false);
+  const image = imageFailed ? undefined : vehicle.images?.[0];
   const city = vehicle.city || vehicle.location;
   const pickupText = [city, vehicle.barangay].filter(Boolean).join(', ');
 
@@ -44,6 +50,7 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
           <img
             src={image}
             alt={vehicle.title}
+            onError={() => setImageFailed(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
         ) : (
@@ -65,7 +72,8 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
 
       <div className="p-5">
         <h3 className="font-semibold text-lg mb-1">{vehicle.title}</h3>
-        <p className="text-sm text-[var(--muted)] mb-3">{vehicle.brand} {vehicle.model} - {vehicle.year}</p>
+        <p className="text-sm text-[var(--muted)] mb-1">{vehicle.brand} {vehicle.model} - {vehicle.year}</p>
+        <RatingBadge average={vehicle.avg_rating} count={vehicle.rating_count} className="mb-3 flex" />
 
         <div className="flex flex-wrap gap-3 text-xs text-[var(--muted)] mb-4">
           <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{pickupText}</span>
@@ -77,12 +85,13 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
           <p className="mb-4 text-xs text-[var(--muted)]">Pickup area: {vehicle.pickup_address}</p>
         )}
 
-        <div className="flex items-center justify-between">
-          <div>
+        {/* The price may wrap onto two lines on narrow cards, but the button never squeezes or breaks. */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 leading-tight">
             <span className="text-xl font-bold text-[var(--primary)]">{formatCurrency(vehicle.price_per_day)}</span>
             <span className="text-xs text-[var(--muted)]">/day</span>
           </div>
-          <Link href={`/vehicles/${vehicle.id}`} className="btn-primary text-sm py-2 px-4">
+          <Link href={`/vehicles/${vehicle.id}`} className="btn-primary shrink-0 whitespace-nowrap text-sm py-2 px-4">
             Book Now
           </Link>
         </div>

@@ -36,6 +36,21 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// For public routes that show extra detail to signed-in users: sets req.user when a valid token for an
+// active user is sent, and otherwise just continues as a guest (never rejects the request).
+const optionalAuthenticate = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return next();
+  try {
+    const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+    const result = await query('SELECT id, role, is_active FROM users WHERE id = $1', [decoded.userId]);
+    if (result.rows[0]?.is_active) req.user = result.rows[0];
+  } catch {
+    // Invalid or expired token: treat as a guest.
+  }
+  next();
+};
+
 const authorize = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: 'Access denied' });
@@ -43,4 +58,4 @@ const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, optionalAuthenticate, authorize };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,10 +22,13 @@ export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalP
   const remaining = parseFloat(String(booking.total_amount)) - parseFloat(String(booking.paid_amount || 0));
   const [amount, setAmount] = useState(remaining);
   const [loading, setLoading] = useState(false);
+  const [prev, setPrev] = useState({ isOpen, remaining });
 
-  useEffect(() => {
+  // Reset the amount when the modal opens or the balance changes (adjusting state during render).
+  if (prev.isOpen !== isOpen || prev.remaining !== remaining) {
+    setPrev({ isOpen, remaining });
     if (isOpen) setAmount(remaining);
-  }, [isOpen, remaining]);
+  }
 
   const handleCheckout = async () => {
     if (amount <= 0 || amount > remaining) {

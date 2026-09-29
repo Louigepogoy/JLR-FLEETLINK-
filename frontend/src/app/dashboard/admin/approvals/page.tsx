@@ -53,23 +53,30 @@ export default function AdminApprovalsPage() {
   const [modal, setModal] = useState<ActionModal>(null);
   const [modalNotes, setModalNotes] = useState('');
 
-  const fetchPending = () => {
-    setLoadingUsers(true);
+  const loadPending = () =>
     api.get('/users/pending')
       .then((res) => setPending(res.data.data))
       .catch(() => toast.error('Failed to load pending registrations'))
       .finally(() => setLoadingUsers(false));
-  };
 
-  const fetchPendingVehicles = () => {
-    setLoadingVehicles(true);
+  const loadPendingVehicles = () =>
     api.get('/vehicles/admin/pending-verifications')
       .then((res) => setPendingVehicles(res.data.data))
       .catch(() => toast.error('Failed to load pending vehicle verifications'))
       .finally(() => setLoadingVehicles(false));
+
+  const fetchPending = () => {
+    setLoadingUsers(true);
+    loadPending();
   };
 
-  useEffect(() => { fetchPending(); fetchPendingVehicles(); }, []);
+  const fetchPendingVehicles = () => {
+    setLoadingVehicles(true);
+    loadPendingVehicles();
+  };
+
+  // Loading flags already start as true, so the initial load skips setting them.
+  useEffect(() => { loadPending(); loadPendingVehicles(); }, []);
 
   const handleApproveUser = async (id: string) => {
     try {
@@ -235,6 +242,9 @@ export default function AdminApprovalsPage() {
                     key={selectedUser.id}
                     analyzeUrl={`/admin/ai-verification/license/${selectedUser.id}`}
                     initialResult={selectedUser.ai_result}
+                    onResult={(ai_result) =>
+                      setPending((list) => list.map((u) => (u.id === selectedUser.id ? { ...u, ai_result } : u)))
+                    }
                   />
 
                   <p className="text-xs text-[var(--muted)] mb-4 p-3 rounded-lg bg-[var(--primary)]/5">
@@ -333,6 +343,9 @@ export default function AdminApprovalsPage() {
                     key={selectedVehicle.id}
                     analyzeUrl={`/admin/ai-verification/vehicle/${selectedVehicle.id}`}
                     initialResult={selectedVehicle.ai_result}
+                    onResult={(ai_result) =>
+                      setPendingVehicles((list) => list.map((v) => (v.id === selectedVehicle.id ? { ...v, ai_result } : v)))
+                    }
                   />
 
                   <p className="text-xs text-[var(--muted)] mb-4 p-3 rounded-lg bg-[var(--primary)]/5">

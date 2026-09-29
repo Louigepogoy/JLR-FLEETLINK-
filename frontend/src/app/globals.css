@@ -134,9 +134,10 @@ select.input-field {
   -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
+/* Keep the brands marching for reduced-motion users (e.g. Windows "Animation effects" off), just slower. */
 @media (prefers-reduced-motion: reduce) {
   .brand-marquee-track {
-    animation: none;
+    animation-duration: 60s;
   }
 }
 

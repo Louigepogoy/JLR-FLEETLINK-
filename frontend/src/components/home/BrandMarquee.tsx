@@ -29,7 +29,8 @@ export default function BrandMarquee() {
         </motion.p>
 
         <div className="relative overflow-hidden brand-marquee-mask">
-          <div className="flex w-max items-center gap-4 brand-marquee-track">
+          {/* pr-4 matches gap-4 so the -50% loop lands exactly on the duplicate set (no jump). */}
+          <div className="flex w-max items-center gap-4 pr-4 brand-marquee-track">
             {[...brands, ...brands].map((brand, i) => (
               <div
                 key={`${brand.name}-${i}`}

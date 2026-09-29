@@ -1,8 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, Clock, FileText, MapPin } from 'lucide-react';
+import { Calendar, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import EmptyState from '@/components/ui/EmptyState';
 import PaymentModal from '@/components/payment/PaymentModal';
@@ -10,6 +11,9 @@ import ReportModal from '@/components/reports/ReportModal';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { bookingStatusColors, formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import ReviewModal from '@/components/reviews/ReviewModal';
+import { fetchPendingReviews, REVIEWS_CHANGED_EVENT, type PendingReview } from '@/lib/reviews';
 
 type CustomerBooking = {
   id: string;
@@ -28,6 +32,7 @@ type CustomerBooking = {
   payment_status: string;
   owner_id: string;
   owner_name: string;
+  vehicle_id: string;
   images?: string[];
   city?: string;
   barangay?: string;
@@ -42,6 +47,15 @@ function MyBookingsContent() {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
+  const [ratingFor, setRatingFor] = useState<PendingReview | null>(null);
+
+  useEffect(() => {
+    const loadPending = () => fetchPendingReviews().then(setPendingReviews).catch(() => {});
+    loadPending();
+    window.addEventListener(REVIEWS_CHANGED_EVENT, loadPending);
+    return () => window.removeEventListener(REVIEWS_CHANGED_EVENT, loadPending);
+  }, []);
 
   const fetchBookings = () => {
     api.get('/bookings/my').then((res) => setBookings(res.data.data)).catch(() => {}).finally(() => setLoading(false));
@@ -82,6 +96,15 @@ function MyBookingsContent() {
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Failed to cancel booking');
+    }
+  };
+
+  const messageOwner = async (b: CustomerBooking) => {
+    try {
+      const conversation = await startConversation({ userId: b.owner_id, vehicleId: b.vehicle_id });
+      router.push(messagesPath('user', conversation.id));
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not start chat'));
     }
   };
 
@@ -129,6 +152,12 @@ function MyBookingsContent() {
                 <div>
                   <h3 className="font-semibold text-lg">{b.title}</h3>
                   <p className="text-sm text-[var(--muted)]">{b.brand} {b.model}</p>
+                  {b.owner_name && (
+                    <p className="text-sm text-[var(--muted)]">
+                      Owner:{' '}
+                      <Link href={profilePath(b.owner_id)} className="text-[var(--primary)] hover:underline">{b.owner_name}</Link>
+                    </p>
+                  )}
                   <p className="text-sm mt-1 flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-[var(--primary)]" />
                     {formatDate(b.start_date)} {formatTime(b.pickup_time)} — {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
@@ -154,6 +183,17 @@ function MyBookingsContent() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3 mt-4">
+              {pendingReviews.some((p) => p.booking_id === b.id) && (
+                <button
+                  className="btn-primary text-sm flex items-center gap-2"
+                  onClick={() => setRatingFor(pendingReviews.find((p) => p.booking_id === b.id) || null)}
+                >
+                  <Star className="h-4 w-4" /> Rate this Trip
+                </button>
+              )}
+              <button className="btn-outline text-sm flex items-center gap-2" onClick={() => messageOwner(b)}>
+                <MessageCircle className="h-4 w-4" /> Message Owner
+              </button>
               {b.payment_status !== 'fully_paid' && ['approved', 'active', 'pending'].includes(b.status) && (
                 <button
                   className="btn-primary text-sm"
@@ -205,6 +245,12 @@ function MyBookingsContent() {
           onClose={() => setShowPayment(false)}
         />
       )}
+      <ReviewModal
+        pending={ratingFor}
+        onClose={() => setRatingFor(null)}
+        onSubmitted={() => setRatingFor(null)}
+        laterLabel="Cancel"
+      />
       {reportBooking && (
         <ReportModal
           isOpen={!!reportBooking}

@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate, authorize } = require('../middleware/auth');
 const { uploadProfileAvatar } = require('../middleware/upload');
 const {
   getAllUsers, getPendingRegistrations, approveRegistration, rejectRegistration, requestMoreInfo,
-  updateProfile, changePassword, toggleUserStatus, updateUserRole,
+  updateProfile, changePassword, toggleUserStatus, updateUserRole, getPublicProfile,
 } = require('../controllers/userController');
+
+// Public (no login needed), like vehicle listings: only non-sensitive profile fields.
+// Signed-in users additionally see the contact number.
+router.get('/:id/profile', optionalAuthenticate, getPublicProfile);
 
 router.get('/pending', authenticate, authorize('admin'), getPendingRegistrations);
 router.patch('/:id/approve', authenticate, authorize('admin'), approveRegistration);

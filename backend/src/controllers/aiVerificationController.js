@@ -5,7 +5,7 @@ const saveAiResult = (subjectType, subjectId, result) =>
   query(
     `INSERT INTO ai_verification_results (subject_type, subject_id, risk_score, verdict, reasons, summary, model)
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [subjectType, subjectId, result.riskScore, result.verdict, JSON.stringify(result.reasons), result.summary, result.model]
+    [subjectType, subjectId, result.risk_score, result.verdict, JSON.stringify(result.reasons), result.summary, result.model]
   );
 
 const runLicenseAnalysis = async (req, res, next) => {
