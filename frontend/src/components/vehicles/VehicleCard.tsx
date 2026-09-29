@@ -41,7 +41,11 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
       <div className="relative h-48 bg-gradient-to-br from-sky-500/20 via-emerald-500/10 to-amber-400/20 overflow-hidden">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt={vehicle.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img
+            src={image}
+            alt={vehicle.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
         ) : (
           <div className="flex items-center justify-center h-full text-2xl font-bold text-[var(--primary)]">JLR</div>
         )}

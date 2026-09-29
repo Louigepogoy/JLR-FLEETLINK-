@@ -15,7 +15,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="relative h-11 w-11 overflow-hidden rounded-xl gradient-bg p-1.5">
+              <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
                 <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
               </div>
               <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>

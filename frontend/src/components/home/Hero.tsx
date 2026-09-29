@@ -118,7 +118,7 @@ export default function Hero() {
             </p>
 
             <Link
-              href={isAuthenticated ? '/dashboard/subscription' : '/auth/register'}
+              href={isAuthenticated ? '/dashboard/vehicles' : '/auth/register'}
               className="btn-primary inline-flex items-center gap-2 px-8 py-4 text-base"
             >
               Rent Out Your Vehicle <ArrowRight className="w-4 h-4" />

@@ -80,7 +80,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl gradient-bg p-1.5">
+            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
               <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
             </div>
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
@@ -114,7 +114,7 @@ export default function Navbar() {
               <>
                 <Link
                   href={getDashboardPath(user?.role || 'user')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium hover:bg-[var(--primary)]/10 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-[var(--foreground)] hover:bg-[var(--primary)]/10 transition-colors"
                 >
                   <LayoutDashboard className="w-4 h-4" />
                   Dashboard
@@ -246,7 +246,7 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <Link href={getDashboardPath(user?.role || 'user')} className="block py-2" onClick={() => setMobileOpen(false)}>Dashboard</Link>
+                  <Link href={getDashboardPath(user?.role || 'user')} className="block py-2 text-[var(--foreground)]" onClick={() => setMobileOpen(false)}>Dashboard</Link>
                   <button onClick={handleLogout} className="block w-full text-left py-2 text-red-500">Logout</button>
                 </>
               )}

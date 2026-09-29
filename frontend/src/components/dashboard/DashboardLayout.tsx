@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Car, Calendar, CreditCard, Users, Settings,
   BarChart3, Bell, LogOut, Menu, X, ClipboardCheck,
-  Crown, Flag, History, LifeBuoy,
+  Crown, Flag, History, LifeBuoy, Wallet,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
@@ -36,6 +36,7 @@ const navByRole: Record<string, Array<{ href: string; label: string; icon: typeo
     { href: '/dashboard/admin/reports', label: 'Reports', icon: Flag },
     { href: '/dashboard/admin/support', label: 'Support Tickets', icon: LifeBuoy },
     { href: '/dashboard/admin/payments', label: 'Payments', icon: CreditCard },
+    { href: '/dashboard/admin/payouts', label: 'Owner Payouts', icon: Wallet },
     { href: '/dashboard/admin/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/dashboard/admin/settings', label: 'Settings', icon: Settings },
   ],

@@ -199,7 +199,20 @@ CREATE TABLE transactions (
   status payment_status DEFAULT 'pending',
   invoice_number VARCHAR(50) UNIQUE,
   description TEXT,
+  payout_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (payout_status IN ('pending', 'paid')),
+  paid_out_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE owner_payout_accounts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  payout_method VARCHAR(20) NOT NULL CHECK (payout_method IN ('gcash', 'bank')),
+  account_name VARCHAR(255) NOT NULL,
+  account_number VARCHAR(50) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'unverified' CHECK (status IN ('unverified', 'verified')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE commissions (
@@ -287,6 +300,7 @@ CREATE INDEX idx_bookings_customer ON bookings(customer_id);
 CREATE INDEX idx_bookings_vehicle ON bookings(vehicle_id);
 CREATE INDEX idx_payments_booking ON payments(booking_id);
 CREATE INDEX idx_transactions_booking ON transactions(booking_id);
+CREATE INDEX idx_transactions_payout_status ON transactions(user_id, payout_status) WHERE type = 'payment';
 CREATE INDEX idx_notifications_user ON notifications(user_id);
 CREATE INDEX idx_users_approval_status ON users(approval_status);
 CREATE INDEX idx_owner_subscriptions_owner ON owner_subscriptions(owner_id);
