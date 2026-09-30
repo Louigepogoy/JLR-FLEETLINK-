@@ -4,15 +4,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Bell, LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, X } from 'lucide-react';
 import {
-  BrowseCarIcon, CalendarCheckIcon, CardIcon, ChartIcon, CrownIcon, EarningsIcon, FlagIcon, HistoryIcon,
+  BrowseCarIcon, CalendarCheckIcon, CardIcon, ChartIcon, CrownIcon, DisputeIcon, EarningsIcon, FlagIcon, HistoryIcon,
   IconChip, MessagesIcon, MyVehicleIcon, OverviewIcon, ReceiptIcon, RequestsIcon, SettingsIcon, SupportIcon,
   UsersIcon, VerifyIdIcon, WalletIcon, type MiniIcon,
 } from '@/components/illustrations/MiniIcons';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import NotificationBell from '@/components/layout/NotificationBell';
+import ProfileMenu from '@/components/layout/ProfileMenu';
 import RatingPrompt from '@/components/reviews/RatingPrompt';
 import api from '@/lib/api';
 import { cn, getDashboardPath } from '@/lib/utils';
@@ -42,6 +44,7 @@ const navByRole: Record<string, NavItem[]> = {
     { href: '/dashboard/admin/users', label: 'Users', icon: UsersIcon },
     { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: HistoryIcon },
     { href: '/dashboard/admin/bookings', label: 'Bookings', icon: CalendarCheckIcon },
+    { href: '/dashboard/admin/disputes', label: 'Pickup Disputes', icon: DisputeIcon },
     { href: '/dashboard/admin/reports', label: 'Reports', icon: FlagIcon },
     { href: '/dashboard/admin/support', label: 'Support Tickets', icon: SupportIcon },
     { href: '/dashboard/admin/payments', label: 'Payments', icon: CardIcon },
@@ -144,23 +147,14 @@ export default function DashboardLayout({
           <button className="lg:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X /> : <Menu />}
           </button>
-          <div>
-            <h1 className="font-semibold">Welcome, {user?.full_name}</h1>
-            <p className="text-xs text-[var(--muted)]">{user?.email}</p>
+          <div className="min-w-0 flex-1 px-3 lg:px-0">
+            <h1 className="truncate font-semibold">Welcome, {user?.full_name}</h1>
+            <p className="hidden truncate text-xs text-[var(--muted)] sm:block">{user?.email}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
-            <button className="p-2 rounded-xl hover:bg-[var(--primary)]/10">
-              <Bell className="w-5 h-5" />
-            </button>
-            <div className="w-9 h-9 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold overflow-hidden shrink-0">
-              {user?.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.avatar_url} alt={user.full_name} className="h-full w-full object-cover" />
-              ) : (
-                user?.full_name?.charAt(0)
-              )}
-            </div>
+            <NotificationBell />
+            <ProfileMenu />
           </div>
         </header>
         <main className="flex-1 p-6">

@@ -1,9 +1,8 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
+import { Calendar, CalendarClock, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
@@ -11,12 +10,17 @@ import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { bookingStatusColors, formatCurrency, formatDate, formatTime } from '@/lib/utils';
-import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
+import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
+import PickupInspectionPanel from '@/components/booking/PickupInspectionPanel';
+import PaymentDeadlineNotice from '@/components/booking/PaymentDeadlineNotice';
+import BookingPartyCard from '@/components/booking/BookingPartyCard';
+import BookingStatusTabs, { matchesBookingTab, type BookingTab } from '@/components/booking/BookingStatusTabs';
+import type { InspectionFields } from '@/lib/inspection';
 import { fetchPendingReviews, REVIEWS_CHANGED_EVENT, type PendingReview } from '@/lib/reviews';
 
-type CustomerBooking = {
+type CustomerBooking = InspectionFields & {
   id: string;
   title: string;
   brand: string;
@@ -33,11 +37,17 @@ type CustomerBooking = {
   payment_status: string;
   owner_id: string;
   owner_name: string;
+  owner_avatar_url?: string | null;
+  owner_verified?: boolean | null;
+  owner_email?: string | null;
+  owner_phone?: string | null;
+  plate_number?: string | null;
   vehicle_id: string;
   images?: string[];
   city?: string;
   barangay?: string;
   pickup_address?: string;
+  created_at: string;
 };
 
 function MyBookingsContent() {
@@ -45,6 +55,8 @@ function MyBookingsContent() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
+  const [tab, setTab] = useState<BookingTab>('all');
+  const visibleBookings = bookings.filter((b) => matchesBookingTab(tab, b.status));
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -137,8 +149,9 @@ function MyBookingsContent() {
   return (
     <DashboardLayout role="user">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={CalendarCheckIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />My Bookings</h2>
+      {bookings.length > 0 && <BookingStatusTabs bookings={bookings} tab={tab} onChange={setTab} />}
       <div className="space-y-4">
-        {bookings.map((b) => (
+        {visibleBookings.map((b) => (
           <div key={b.id} className="glass-card p-6">
             <div className="flex flex-wrap justify-between gap-4">
               <div className="flex gap-4">
@@ -152,16 +165,16 @@ function MyBookingsContent() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">{b.title}</h3>
-                  <p className="text-sm text-[var(--muted)]">{b.brand} {b.model}</p>
-                  {b.owner_name && (
-                    <p className="text-sm text-[var(--muted)]">
-                      Owner:{' '}
-                      <Link href={profilePath(b.owner_id)} className="text-[var(--primary)] hover:underline">{b.owner_name}</Link>
-                    </p>
-                  )}
+                  <p className="text-sm text-[var(--muted)]">
+                    {b.brand} {b.model}{b.plate_number ? ` · ${b.plate_number}` : ''}
+                  </p>
                   <p className="text-sm mt-1 flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-[var(--primary)]" />
                     {formatDate(b.start_date)} {formatTime(b.pickup_time)} — {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
+                  </p>
+                  <p className="text-xs mt-1 flex items-center gap-1 text-[var(--muted)]">
+                    <CalendarClock className="h-3.5 w-3.5 text-[var(--primary)]" />
+                    Booked on {formatTimestamp(b.created_at)}
                   </p>
                   <p className="mt-2 flex items-center gap-1 text-sm text-[var(--muted)]">
                     <MapPin className="h-4 w-4 text-[var(--primary)]" />
@@ -178,11 +191,29 @@ function MyBookingsContent() {
                 <p className="text-xl font-bold">{formatCurrency(b.total_amount)}</p>
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
                 <div className="flex gap-2 mt-2 justify-end">
-                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${bookingStatusColors[b.status]}`}>{b.status}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full capitalize ${bookingStatusColors[b.status]}`}>{bookingStatusLabel(b.status)}</span>
                   <span className="text-xs px-2 py-1 rounded-full bg-[var(--primary)]/20 capitalize">{b.payment_status?.replace('_', ' ')}</span>
                 </div>
               </div>
             </div>
+            <BookingPartyCard
+              label="Vehicle owner"
+              userId={b.owner_id}
+              name={b.owner_name}
+              avatarUrl={b.owner_avatar_url}
+              verified={b.owner_verified}
+              email={b.owner_email}
+              phone={b.owner_phone}
+              hiddenContactNote={b.status === 'pending' ? "Owner's contact details appear once you pay and your booking is confirmed." : undefined}
+            />
+            {b.status === 'pending' && b.payment_status === 'pending' && (
+              <PaymentDeadlineNotice
+                secondsLeft={b.payment_seconds_left}
+                onExpired={fetchBookings}
+                onPay={() => { setSelected(b as unknown as Record<string, unknown>); setShowPayment(true); }}
+              />
+            )}
+            <PickupInspectionPanel booking={b} onChanged={fetchBookings} />
             <div className="flex flex-wrap gap-3 mt-4">
               {pendingReviews.some((p) => p.booking_id === b.id) && (
                 <button
@@ -236,6 +267,9 @@ function MyBookingsContent() {
             actionLabel="Browse Vehicles"
             actionHref="/vehicles"
           />
+        )}
+        {bookings.length > 0 && visibleBookings.length === 0 && (
+          <p className="py-8 text-center text-sm text-[var(--muted)]">No bookings in this category.</p>
         )}
       </div>
 

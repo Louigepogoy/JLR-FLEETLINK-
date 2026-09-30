@@ -229,4 +229,5 @@ module.exports = {
   createSubscriptionCheckout,
   handleWebhook,
   reconcilePendingPayments,
+  finalizeCheckoutSession,
 };

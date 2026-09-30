@@ -39,9 +39,11 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      // Stagger within a row of cards only, so cards far down the list don't wait seconds to appear.
+      transition={{ duration: 0.5, ease: 'easeOut', delay: (index % 4) * 0.08 }}
       whileHover={{ y: -5 }}
       className="glass-card overflow-hidden group"
     >

@@ -36,6 +36,7 @@ CREATE TABLE users (
 CREATE TABLE platform_settings (
   id SERIAL PRIMARY KEY,
   commission_percentage DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+  inspection_window_minutes INTEGER NOT NULL DEFAULT 60 CHECK (inspection_window_minutes BETWEEN 5 AND 1440),
   updated_by UUID REFERENCES users(id),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -89,6 +90,13 @@ CREATE TABLE bookings (
   status booking_status DEFAULT 'pending',
   notes TEXT,
   completed_at TIMESTAMPTZ,
+  -- Pickup inspection: the owner hands the vehicle over, then the customer has until
+  -- inspection_deadline to accept or reject it before it is auto-accepted.
+  handed_over_at TIMESTAMPTZ,
+  inspection_deadline TIMESTAMPTZ,
+  inspection_result VARCHAR(20) CHECK (inspection_result IN ('accepted', 'auto_accepted', 'rejected')),
+  inspected_at TIMESTAMPTZ,
+  inspection_reminder_sent BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT valid_dates CHECK (end_date >= start_date)
@@ -279,7 +287,7 @@ CREATE TABLE messages (
   sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   message_type VARCHAR(20) NOT NULL DEFAULT 'text',
   body TEXT,
-  image_url TEXT,
+  image_url TEXT, -- file URL for both image and video messages
   latitude DECIMAL(9,6),
   longitude DECIMAL(9,6),
   reply_to_id UUID REFERENCES messages(id) ON DELETE SET NULL,
@@ -292,7 +300,7 @@ CREATE TABLE messages (
     AND (
       deleted_at IS NOT NULL
       OR (message_type = 'text' AND char_length(body) >= 1)
-      OR (message_type = 'image' AND image_url IS NOT NULL)
+      OR (message_type IN ('image', 'video') AND image_url IS NOT NULL)
       OR (message_type = 'location' AND latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)
     )
   )
@@ -319,6 +327,27 @@ CREATE TABLE booking_reviews (
 );
 CREATE INDEX idx_booking_reviews_reviewee ON booking_reviews(reviewee_id, created_at DESC);
 CREATE INDEX idx_booking_reviews_vehicle ON booking_reviews(vehicle_id, created_at DESC);
+
+-- Opened when a customer rejects the vehicle at pickup; an admin resolves it.
+CREATE TABLE booking_disputes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL CHECK (char_length(reason) BETWEEN 5 AND 2000),
+  -- [{ "url": "...", "type": "image" | "video" }]
+  evidence JSONB NOT NULL DEFAULT '[]',
+  status VARCHAR(20) NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'refunded', 'partially_refunded', 'dismissed')),
+  refund_amount DECIMAL(12,2),
+  -- How the refund was paid out, and the PayMongo refund ids / note on what was sent manually.
+  refund_method VARCHAR(20) CHECK (refund_method IN ('paymongo', 'manual', 'partly_manual')),
+  refund_reference TEXT,
+  admin_notes TEXT,
+  resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_booking_disputes_status ON booking_disputes(status, created_at);
 
 CREATE TABLE message_hidden (
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -369,6 +398,7 @@ CREATE INDEX idx_vehicles_city ON vehicles(city);
 CREATE INDEX idx_vehicles_province ON vehicles(province);
 CREATE INDEX idx_bookings_customer ON bookings(customer_id);
 CREATE INDEX idx_bookings_vehicle ON bookings(vehicle_id);
+CREATE INDEX idx_bookings_inspection_pending ON bookings(inspection_deadline) WHERE handed_over_at IS NOT NULL AND inspection_result IS NULL;
 CREATE INDEX idx_payments_booking ON payments(booking_id);
 CREATE INDEX idx_transactions_booking ON transactions(booking_id);
 CREATE INDEX idx_transactions_payout_status ON transactions(user_id, payout_status) WHERE type = 'payment';

@@ -59,7 +59,8 @@ export default function AdminPayoutsPage() {
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-2"><IconChip icon={WalletIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Owner Payouts</h2>
       <p className="text-sm text-[var(--muted)] mb-6">
         PayMongo does not auto-transfer funds to owners. Send each owner their pending amount manually
-        (GCash/bank), then mark it paid here.
+        (GCash/bank), then mark it paid here. Only payments whose renter accepted the vehicle at pickup (or
+        whose dispute was resolved without a full refund) appear here — the rest stay on hold.
       </p>
       {payouts.length === 0 ? (
         <EmptyState icon={Wallet} title="No pending payouts" description="All owner earnings have been paid out." />

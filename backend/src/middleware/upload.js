@@ -54,10 +54,35 @@ const uploadProfileAvatar = multer({
   { name: 'avatar', maxCount: 1 },
 ]);
 
-const uploadChatImage = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: imageFilter,
-}).single('chatImage');
+const CHAT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const CHAT_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+const CHAT_VIDEO_TYPES = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime' };
 
-module.exports = { uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadChatImage, uploadDir };
+const chatMediaFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (CHAT_VIDEO_TYPES[ext] === file.mimetype) return cb(null, true);
+  imageFilter(req, file, (err) => (
+    err ? cb(new Error('Only JPEG, PNG, WebP images or MP4, WebM, MOV videos are allowed')) : cb(null, true)
+  ));
+};
+
+// Multer only supports one size limit, so this allows the video maximum; sendMedia enforces the
+// smaller image limit itself.
+const uploadChatMedia = multer({
+  storage,
+  limits: { fileSize: CHAT_VIDEO_MAX_BYTES },
+  fileFilter: chatMediaFilter,
+}).single('chatMedia');
+
+// Photo/video evidence when a customer rejects a vehicle at pickup. Same limits as chat media.
+const MAX_DISPUTE_EVIDENCE_FILES = 5;
+const uploadDisputeEvidence = multer({
+  storage,
+  limits: { fileSize: CHAT_VIDEO_MAX_BYTES, files: MAX_DISPUTE_EVIDENCE_FILES },
+  fileFilter: chatMediaFilter,
+}).array('evidence', MAX_DISPUTE_EVIDENCE_FILES);
+
+module.exports = {
+  uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadChatMedia, uploadDisputeEvidence,
+  uploadDir, CHAT_IMAGE_MAX_BYTES,
+};

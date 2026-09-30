@@ -18,7 +18,7 @@ type PayoutAccount = {
 export default function EarningsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
-    summary: { total_earnings: 0, monthly_earnings: 0, pending_payout: 0, paid_out: 0 },
+    summary: { total_earnings: 0, monthly_earnings: 0, on_hold: 0, pending_payout: 0, paid_out: 0 },
     monthlyBreakdown: [],
   });
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccount>(null);
@@ -75,7 +75,7 @@ export default function EarningsPage() {
   return (
     <DashboardLayout role="user">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={EarningsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Earnings Dashboard</h2>
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <div className="glass-card p-6">
           <p className="text-sm text-[var(--muted)]">Total Earnings</p>
           <p className="text-3xl font-bold gradient-text">{formatCurrency(data.summary.total_earnings)}</p>
@@ -85,9 +85,14 @@ export default function EarningsPage() {
           <p className="text-3xl font-bold">{formatCurrency(data.summary.monthly_earnings)}</p>
         </div>
         <div className="glass-card p-6">
+          <p className="text-sm text-[var(--muted)]">On Hold</p>
+          <p className="text-3xl font-bold text-[var(--muted)]">{formatCurrency(data.summary.on_hold || 0)}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">Held until the renter accepts the vehicle</p>
+        </div>
+        <div className="glass-card p-6">
           <p className="text-sm text-[var(--muted)]">Pending Payout</p>
           <p className="text-3xl font-bold text-amber-500">{formatCurrency(data.summary.pending_payout)}</p>
-          <p className="text-xs text-[var(--muted)] mt-1">Not yet sent to you</p>
+          <p className="text-xs text-[var(--muted)] mt-1">Ready — not yet sent to you</p>
         </div>
         <div className="glass-card p-6">
           <p className="text-sm text-[var(--muted)]">Paid Out</p>
@@ -101,6 +106,11 @@ export default function EarningsPage() {
         <p className="text-sm text-[var(--muted)] mb-4">
           Where should we send your earnings? An admin sends this manually and marks it paid — PayMongo does not
           auto-transfer funds to your account.
+        </p>
+        <p className="text-sm text-[var(--muted)] mb-4">
+          Renters pay JLR Fleetlink, not you. We hold each payment until the renter accepts your vehicle at pickup
+          (or their inspection time runs out), then it becomes ready for payout. Never accept cash directly from a
+          renter.
         </p>
         <form onSubmit={handleSavePayoutAccount} className="grid sm:grid-cols-3 gap-3">
           <select

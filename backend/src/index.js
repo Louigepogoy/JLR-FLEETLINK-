@@ -24,7 +24,9 @@ const supportRoutes = require('./routes/support.routes');
 const paymongoRoutes = require('./routes/paymongo.routes');
 const chatRoutes = require('./routes/chat.routes');
 const reviewRoutes = require('./routes/review.routes');
+const disputeRoutes = require('./routes/dispute.routes');
 const { handleWebhook: handlePaymongoWebhook } = require('./controllers/paymongoController');
+const { startInspectionScheduler } = require('./services/inspectionService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -84,6 +86,7 @@ app.use('/api/support', supportRoutes);
 app.use('/api/paymongo', paymongoRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/disputes', disputeRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {
@@ -96,6 +99,7 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`JLR Fleetlink API running on port ${PORT}`);
+  startInspectionScheduler();
 });
 
 module.exports = app;

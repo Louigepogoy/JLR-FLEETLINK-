@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { body, param, query: queryParam, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { uploadDir } = require('../middleware/upload');
+const { uploadDir, CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const { createNotification } = require('../utils/notifications');
 const { containsProfanity } = require('../utils/profanity');
 
@@ -30,6 +30,7 @@ const CONVERSATION_SELECT = `
          CASE
            WHEN lm.deleted_at IS NOT NULL THEN 'Message unsent'
            WHEN lm.message_type = 'image' THEN COALESCE(NULLIF(lm.body, ''), 'Sent a photo')
+           WHEN lm.message_type = 'video' THEN COALESCE(NULLIF(lm.body, ''), 'Sent a video')
            WHEN lm.message_type = 'location' THEN 'Shared a location'
            ELSE lm.body
          END AS last_message,
@@ -296,7 +297,7 @@ const createMessage = async (sender, conversation, fields) => {
   await query('UPDATE conversations SET last_message_at = NOW() WHERE id = $1', [conversation.id]);
 
   if (!pendingUnread.rows.length) {
-    const text = fields.type === 'image' ? 'Sent you a photo' : fields.type === 'location' ? 'Shared a location' : fields.body;
+    const text = { image: 'Sent you a photo', video: 'Sent you a video', location: 'Shared a location' }[fields.type] || fields.body;
     const preview = text.length > 80 ? `${text.slice(0, 77)}...` : text;
     await createNotification(
       conversation.other_id,
@@ -338,12 +339,17 @@ const sendMessage = async (req, res, next) => {
   }
 };
 
-// Photo message (multipart field "chatImage", optional caption in "body", optional "replyToId").
-const sendImage = async (req, res, next) => {
+// Photo or video message (multipart field "chatMedia", optional caption in "body", optional "replyToId").
+const sendMedia = async (req, res, next) => {
   const removeUpload = () => req.file && fs.promises.unlink(req.file.path).catch(() => {});
   try {
     if (sendValidationErrors(req, res)) return removeUpload();
-    if (!req.file) return res.status(400).json({ success: false, message: 'Please choose a photo to send' });
+    if (!req.file) return res.status(400).json({ success: false, message: 'Please choose a photo or video to send' });
+    const type = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+    if (type === 'image' && req.file.size > CHAT_IMAGE_MAX_BYTES) {
+      removeUpload();
+      return res.status(400).json({ success: false, message: 'Photo is too large (max 5 MB)' });
+    }
 
     const conversation = await getConversationForUser(req.user.id, req.params.id);
     if (!conversation) {
@@ -365,7 +371,7 @@ const sendImage = async (req, res, next) => {
 
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
     const message = await createMessage(req.user, conversation, {
-      type: 'image', body: caption, imageUrl: `${baseUrl}/uploads/${req.file.filename}`, replyToId: reply.id,
+      type, body: caption, imageUrl: `${baseUrl}/uploads/${req.file.filename}`, replyToId: reply.id,
     });
     res.status(201).json({ success: true, data: message });
   } catch (error) {
@@ -528,7 +534,7 @@ const messageValidation = [
     .isFloat({ min: -180, max: 180 }).withMessage('Invalid location').toFloat(),
 ];
 
-const imageMessageValidation = [
+const mediaMessageValidation = [
   ...conversationIdValidation,
   replyToValidation,
   body('body').optional().isString().trim().isLength({ max: 2000 }).withMessage('Caption is too long'),
@@ -553,7 +559,7 @@ const forwardValidation = [
 
 module.exports = {
   getConversations, getUnreadCount, searchUsers, startConversation, startSupportConversation,
-  getMessages, sendMessage, sendImage, reactToMessage, deleteMessage, forwardMessage, deleteConversation,
+  getMessages, sendMessage, sendMedia, reactToMessage, deleteMessage, forwardMessage, deleteConversation,
   conversationIdValidation, startConversationValidation, searchUsersValidation, messageValidation,
-  imageMessageValidation, reactionValidation, deleteMessageValidation, forwardValidation,
+  mediaMessageValidation, reactionValidation, deleteMessageValidation, forwardValidation,
 };

@@ -78,6 +78,66 @@ const getCheckoutSession = async (sessionId) => {
 };
 
 /**
+ * Expires an unpaid Checkout Session so its link can no longer be paid (used when an unpaid
+ * booking is auto-cancelled).
+ */
+const expireCheckoutSession = async (sessionId) => {
+  const secretKey = getSecretKey();
+
+  const res = await fetch(`${API_BASE}/checkout_sessions/${sessionId}/expire`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(secretKey) },
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    const message = json?.errors?.[0]?.detail || 'Failed to expire PayMongo checkout session';
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
+
+  return json.data;
+};
+
+/**
+ * Refunds (part of) a paid PayMongo payment back to the method the customer paid with. Amount is in
+ * whole pesos. PayMongo keeps its original transaction fee, and the refund is taken from the
+ * merchant's upcoming payout balance — it fails if that balance is too low.
+ */
+const createRefund = async ({ paymentId, amount, notes }) => {
+  const secretKey = getSecretKey();
+
+  const res = await fetch(`${API_BASE}/refunds`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: authHeader(secretKey),
+    },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          amount: Math.round(amount * 100),
+          payment_id: paymentId,
+          reason: 'requested_by_customer',
+          notes,
+        },
+      },
+    }),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    const message = json?.errors?.[0]?.detail || 'PayMongo refund failed';
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
+
+  return { id: json.data.id, status: json.data.attributes?.status };
+};
+
+/**
  * Verifies a PayMongo webhook's "Paymongo-Signature" header and returns the parsed event.
  * `rawBody` must be the exact raw request body string (not a re-serialized/parsed object).
  */
@@ -119,4 +179,6 @@ const verifyWebhookEvent = ({ rawBody, signatureHeader }) => {
   return JSON.parse(rawBody);
 };
 
-module.exports = { createCheckoutSession, getCheckoutSession, verifyWebhookEvent };
+module.exports = {
+  createCheckoutSession, getCheckoutSession, expireCheckoutSession, createRefund, verifyWebhookEvent,
+};

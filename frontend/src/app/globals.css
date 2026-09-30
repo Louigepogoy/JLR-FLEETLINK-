@@ -266,6 +266,28 @@ select.input-field {
   }
 }
 
+/* Scroll reveal (components/ui/ScrollReveal.tsx): cards fade and slide up as they scroll into view.
+   Uses the standalone `translate` property so it never fights Tailwind or framer-motion transforms. */
+[data-sr='hidden'] {
+  opacity: 0;
+  translate: 0 24px;
+}
+[data-sr='shown'] {
+  opacity: 1;
+  translate: 0 0;
+  transition: opacity 0.6s ease-out, translate 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Reduced motion: a plain fade, no movement. */
+@media (prefers-reduced-motion: reduce) {
+  [data-sr='hidden'],
+  [data-sr='shown'] {
+    translate: none;
+  }
+  [data-sr='shown'] {
+    transition: opacity 0.4s ease-out;
+  }
+}
+
 @media print {
   body {
     background: white !important;

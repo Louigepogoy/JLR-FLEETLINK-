@@ -32,6 +32,20 @@ export function formatTime(time: string | null | undefined) {
   });
 }
 
+// A full timestamp (e.g. when a booking was made) in Philippine time, whatever the viewer's timezone:
+// "Sep 30, 2026, 9:08 PM".
+export function formatTimestamp(timestamp: string) {
+  return new Date(timestamp).toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 export function formatDateTime(date: string, time?: string | null) {
   if (!time) return formatDate(date);
   return `${formatDate(date)} at ${formatTime(time)}`;
@@ -95,6 +109,10 @@ export const vehicleProofSlots: {
 export const requiredProofCount = vehicleProofSlots.length;
 export const paymentStatuses = ['pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled'];
 export const bookingStatuses = ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled'];
+
+// Bookings are confirmed by the renter's payment, not by the owner, so show that instead of the raw status.
+export const bookingStatusLabel = (status: string) =>
+  ({ pending: 'Awaiting payment', approved: 'Confirmed' } as Record<string, string>)[status] || status;
 
 export const bookingStatusColors: Record<string, string> = {
   pending: 'bg-yellow-500/20 text-yellow-500',

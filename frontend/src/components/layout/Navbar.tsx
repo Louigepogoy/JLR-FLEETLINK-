@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Menu, X, Bell, BellOff, LogOut, User, LayoutDashboard, ChevronDown,
-} from 'lucide-react';
+import { Menu, X, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import NotificationBell from '@/components/layout/NotificationBell';
+import ProfileMenu from '@/components/layout/ProfileMenu';
 import { getDashboardPath } from '@/lib/utils';
-import api from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export default function Navbar() {
@@ -19,11 +18,6 @@ export default function Navbar() {
   const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; message: string; is_read: boolean; created_at: string }>>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -31,35 +25,10 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      api.get('/notifications').then((res) => {
-        setNotifications(res.data.data);
-        setUnreadCount(res.data.unreadCount);
-      }).catch(() => {});
-    }
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
-        setProfileOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
   const handleLogout = () => {
     logout();
     toast.success('Logged out successfully');
     router.push('/');
-  };
-
-  const markAllRead = async () => {
-    await api.patch('/notifications/read-all');
-    setUnreadCount(0);
-    setNotifications((n) => n.map((x) => ({ ...x, is_read: true })));
   };
 
   const navLinks = [
@@ -120,102 +89,8 @@ export default function Navbar() {
                   Dashboard
                 </Link>
 
-                <div className="relative">
-                  <button
-                    onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }}
-                    className="relative p-2 rounded-xl glass-card hover:bg-[var(--primary)]/10"
-                  >
-                    <Bell className="w-5 h-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 text-xs bg-red-500 text-white rounded-full flex items-center justify-center">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  <AnimatePresence>
-                    {notifOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="absolute right-0 mt-2 w-80 glass-card p-4 max-h-96 overflow-y-auto"
-                      >
-                        <div className="flex justify-between items-center mb-3">
-                          <h4 className="font-semibold">Notifications</h4>
-                          {unreadCount > 0 && (
-                            <button onClick={markAllRead} className="text-xs text-[var(--primary)]">
-                              Mark all read
-                            </button>
-                          )}
-                        </div>
-                        {notifications.length === 0 ? (
-                          <div className="flex flex-col items-center gap-2 py-6 text-center">
-                            <BellOff className="w-5 h-5 text-[var(--muted)]" />
-                            <p className="text-sm text-[var(--muted)]">No notifications</p>
-                          </div>
-                        ) : (
-                          notifications.slice(0, 5).map((n) => (
-                            <div key={n.id} className={`p-3 rounded-lg mb-2 ${!n.is_read ? 'bg-[var(--primary)]/10' : ''}`}>
-                              <p className="text-sm font-medium">{n.title}</p>
-                              <p className="text-xs text-[var(--muted)]">{n.message}</p>
-                            </div>
-                          ))
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                <div className="relative" ref={profileRef}>
-                  <button
-                    onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl glass-card hover:bg-[var(--primary)]/10"
-                  >
-                    <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold overflow-hidden shrink-0">
-                      {user?.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={user.avatar_url} alt={user.full_name} className="h-full w-full object-cover" />
-                      ) : (
-                        user?.full_name?.charAt(0) || 'U'
-                      )}
-                    </div>
-                    <span className="text-sm font-medium hidden lg:block">{user?.full_name}</span>
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-
-                  <AnimatePresence>
-                    {profileOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="absolute right-0 mt-2 w-56 glass-card p-2"
-                      >
-                        <div className="px-3 py-2 border-b border-[var(--card-border)]">
-                          <p className="font-medium text-sm">{user?.full_name}</p>
-                          <p className="text-xs text-[var(--muted)]">{user?.email}</p>
-                          <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] capitalize">
-                            {user?.role}
-                          </span>
-                        </div>
-                        <Link
-                          href="/profile"
-                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--primary)]/10 rounded-lg mt-1"
-                          onClick={() => setProfileOpen(false)}
-                        >
-                          <User className="w-4 h-4" /> Profile
-                        </Link>
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-red-500/10 text-red-500 rounded-lg w-full"
-                        >
-                          <LogOut className="w-4 h-4" /> Logout
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <NotificationBell buttonClassName="glass-card" />
+                <ProfileMenu showName buttonClassName="glass-card px-3 py-2" />
               </>
             )}
           </div>

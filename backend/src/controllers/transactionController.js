@@ -1,4 +1,19 @@
 const { query } = require('../config/db');
+const { PAYOUT_ELIGIBLE_SQL, sweepQuietly } = require('../services/inspectionService');
+
+// Rows that count toward an owner's earnings: successful payments, plus refund rows (their negative
+// owner_amount takes a partial refund back out). Fully refunded payments are marked 'refunded'.
+const COUNTED_EARNINGS_SQL = `((t.type = 'payment' AND t.status IN ('partially_paid', 'fully_paid')) OR t.type = 'refund')`;
+
+// Platform revenue: commission from payments that weren't fully refunded, minus partial refunds.
+const COUNTED_REVENUE_SQL = `((type = 'payment' AND status <> 'refunded') OR type = 'refund')`;
+
+// Transactions an admin may pay out now: unpaid, and the booking passed pickup inspection.
+const PAYABLE_SQL = `t.payout_status = 'pending' AND ${COUNTED_EARNINGS_SQL}
+  AND EXISTS (
+    SELECT 1 FROM bookings b LEFT JOIN booking_disputes d ON d.booking_id = b.id
+    WHERE b.id = t.booking_id AND ${PAYOUT_ELIGIBLE_SQL}
+  )`;
 
 const getMyTransactions = async (req, res, next) => {
   try {
@@ -40,25 +55,31 @@ const getMyTransactions = async (req, res, next) => {
 
 const getOwnerEarnings = async (req, res, next) => {
   try {
+    await sweepQuietly();
+    // pending_payout = eligible and waiting for the admin to send it; on_hold = still held by the
+    // platform until the renter accepts the vehicle at pickup (or while a dispute is open).
     const result = await query(
       `SELECT
-         COALESCE(SUM(owner_amount), 0) as total_earnings,
-         COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN owner_amount ELSE 0 END), 0) as monthly_earnings,
-         COALESCE(SUM(CASE WHEN payout_status = 'pending' THEN owner_amount ELSE 0 END), 0) as pending_payout,
-         COALESCE(SUM(CASE WHEN payout_status = 'paid' THEN owner_amount ELSE 0 END), 0) as paid_out,
-         COUNT(*) as total_transactions
-       FROM transactions
-       WHERE user_id = $1 AND type = 'payment' AND status IN ('partially_paid', 'fully_paid')`,
+         COALESCE(SUM(t.owner_amount), 0) as total_earnings,
+         COALESCE(SUM(CASE WHEN t.created_at >= NOW() - INTERVAL '30 days' THEN t.owner_amount ELSE 0 END), 0) as monthly_earnings,
+         COALESCE(SUM(CASE WHEN t.payout_status = 'pending' AND ${PAYOUT_ELIGIBLE_SQL} THEN t.owner_amount ELSE 0 END), 0) as pending_payout,
+         COALESCE(SUM(CASE WHEN t.payout_status = 'pending' AND NOT ${PAYOUT_ELIGIBLE_SQL} THEN t.owner_amount ELSE 0 END), 0) as on_hold,
+         COALESCE(SUM(CASE WHEN t.payout_status = 'paid' THEN t.owner_amount ELSE 0 END), 0) as paid_out,
+         COUNT(*) FILTER (WHERE t.type = 'payment') as total_transactions
+       FROM transactions t
+       LEFT JOIN bookings b ON t.booking_id = b.id
+       LEFT JOIN booking_disputes d ON d.booking_id = b.id
+       WHERE t.user_id = $1 AND ${COUNTED_EARNINGS_SQL}`,
       [req.user.id]
     );
 
     const monthly = await query(
-      `SELECT DATE_TRUNC('month', created_at) as month,
-              SUM(owner_amount) as earnings,
+      `SELECT DATE_TRUNC('month', t.created_at) as month,
+              SUM(t.owner_amount) as earnings,
               COUNT(*) as count
-       FROM transactions
-       WHERE user_id = $1 AND type = 'payment'
-       GROUP BY DATE_TRUNC('month', created_at)
+       FROM transactions t
+       WHERE t.user_id = $1 AND ${COUNTED_EARNINGS_SQL}
+       GROUP BY DATE_TRUNC('month', t.created_at)
        ORDER BY month DESC LIMIT 12`,
       [req.user.id]
     );
@@ -114,16 +135,17 @@ const savePayoutAccount = async (req, res, next) => {
  */
 const getPendingPayouts = async (req, res, next) => {
   try {
+    await sweepQuietly();
     const result = await query(
       `SELECT
          u.id as owner_id, u.full_name as owner_name, u.email as owner_email,
          opa.payout_method, opa.account_name, opa.account_number, opa.status as account_status,
          COALESCE(SUM(t.owner_amount), 0) as pending_amount,
-         COUNT(t.id) as pending_transactions
+         COUNT(t.id) FILTER (WHERE t.type = 'payment') as pending_transactions
        FROM transactions t
        JOIN users u ON t.user_id = u.id
        LEFT JOIN owner_payout_accounts opa ON opa.owner_id = u.id
-       WHERE t.type = 'payment' AND t.payout_status = 'pending'
+       WHERE ${PAYABLE_SQL}
        GROUP BY u.id, u.full_name, u.email, opa.payout_method, opa.account_name, opa.account_number, opa.status
        HAVING COALESCE(SUM(t.owner_amount), 0) > 0
        ORDER BY pending_amount DESC`
@@ -137,10 +159,11 @@ const getPendingPayouts = async (req, res, next) => {
 const markOwnerPayoutPaid = async (req, res, next) => {
   try {
     const { ownerId } = req.params;
+    // Only what passed pickup inspection — payments still held or under dispute stay pending.
     const result = await query(
-      `UPDATE transactions SET payout_status = 'paid', paid_out_at = NOW()
-       WHERE user_id = $1 AND type = 'payment' AND payout_status = 'pending'
-       RETURNING id, owner_amount`,
+      `UPDATE transactions t SET payout_status = 'paid', paid_out_at = NOW()
+       WHERE t.user_id = $1 AND ${PAYABLE_SQL}
+       RETURNING t.id, t.owner_amount`,
       [ownerId]
     );
 
@@ -159,7 +182,7 @@ const getAdminAnalytics = async (req, res, next) => {
           COALESCE(SUM(platform_amount), 0) as total_revenue,
           COALESCE(SUM(CASE WHEN created_at >= NOW() - INTERVAL '30 days' THEN platform_amount ELSE 0 END), 0) as monthly_revenue,
           COUNT(*) as total_transactions
-        FROM transactions WHERE type = 'payment'`),
+        FROM transactions WHERE ${COUNTED_REVENUE_SQL}`),
       query(`SELECT role, COUNT(*) as count FROM users GROUP BY role`),
       query(`SELECT status, COUNT(*) as count FROM bookings GROUP BY status`),
       query(`SELECT status, COUNT(*) as count FROM vehicles GROUP BY status`),
@@ -168,7 +191,7 @@ const getAdminAnalytics = async (req, res, next) => {
     const monthlyRevenue = await query(
       `SELECT DATE_TRUNC('month', created_at) as month,
               SUM(platform_amount) as revenue
-       FROM transactions WHERE type = 'payment'
+       FROM transactions WHERE ${COUNTED_REVENUE_SQL}
        GROUP BY DATE_TRUNC('month', created_at)
        ORDER BY month DESC LIMIT 12`
     );

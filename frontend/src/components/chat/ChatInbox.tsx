@@ -13,8 +13,8 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
-  apiErrorMessage, CHAT_IMAGE_MAX_BYTES, MAX_FORWARD_TARGETS, messagePreview, profilePath, REACTION_EMOJIS,
-  startConversation, startSupportConversation,
+  apiErrorMessage, CHAT_IMAGE_MAX_BYTES, CHAT_IMAGE_TYPES, CHAT_VIDEO_MAX_BYTES, CHAT_VIDEO_TYPES,
+  MAX_FORWARD_TARGETS, messagePreview, profilePath, REACTION_EMOJIS, startConversation, startSupportConversation,
   type ChatMessage, type ChatUser, type Conversation, type MessageReaction,
 } from '@/lib/chat';
 import { useAuthStore } from '@/store/authStore';
@@ -77,6 +77,15 @@ function MessageContent({ message, mine, unsent, otherName }: {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={message.image_url} alt="Sent photo" className="max-h-72 w-full max-w-xs object-cover" />
         </a>
+        {message.body && <p className="whitespace-pre-wrap break-words px-4 py-2">{message.body}</p>}
+      </div>
+    );
+  }
+
+  if (message.message_type === 'video' && message.image_url) {
+    return (
+      <div className={bubble}>
+        <video src={message.image_url} controls preload="metadata" className="max-h-72 w-full max-w-xs bg-black" />
         {message.body && <p className="whitespace-pre-wrap break-words px-4 py-2">{message.body}</p>}
       </div>
     );
@@ -266,7 +275,7 @@ function ChatThread({
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [draft, setDraft] = useState('');
-  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  const [media, setMedia] = useState<{ file: File; preview: string; kind: 'image' | 'video' } | null>(null);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
   const [sending, setSending] = useState(false);
@@ -337,8 +346,8 @@ function ChatThread({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
-  // Free the object URL used for the photo preview when it is replaced or the thread closes.
-  useEffect(() => () => { if (photo) URL.revokeObjectURL(photo.preview); }, [photo]);
+  // Free the object URL used for the photo/video preview when it is replaced or the thread closes.
+  useEffect(() => () => { if (media) URL.revokeObjectURL(media.preview); }, [media]);
 
   const isUnsent = (m: ChatMessage) => Boolean(m.deleted_at) || unsentIds.has(m.id);
 
@@ -357,35 +366,40 @@ function ChatThread({
     onActivity();
   };
 
-  const choosePhoto = (file?: File) => {
+  const chooseMedia = (file?: File) => {
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      toast.error('Only JPEG, PNG, and WebP photos can be sent');
+    const kind = CHAT_VIDEO_TYPES.includes(file.type) ? 'video' : CHAT_IMAGE_TYPES.includes(file.type) ? 'image' : null;
+    if (!kind) {
+      toast.error('Only JPEG, PNG, WebP photos or MP4, WebM, MOV videos can be sent');
       return;
     }
-    if (file.size > CHAT_IMAGE_MAX_BYTES) {
+    if (kind === 'image' && file.size > CHAT_IMAGE_MAX_BYTES) {
       toast.error('Photo is too large (max 5 MB)');
       return;
     }
-    setPhoto({ file, preview: URL.createObjectURL(file) });
+    if (kind === 'video' && file.size > CHAT_VIDEO_MAX_BYTES) {
+      toast.error('Video is too large (max 50 MB)');
+      return;
+    }
+    setMedia({ file, preview: URL.createObjectURL(file), kind });
   };
 
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const text = draft.trim();
-    if (sending || (!text && !photo)) return;
+    if (sending || (!text && !media)) return;
     setSending(true);
     try {
-      if (photo) {
+      if (media) {
         const data = new FormData();
-        data.append('chatImage', photo.file);
+        data.append('chatMedia', media.file);
         if (text) data.append('body', text);
         if (replyTo) data.append('replyToId', replyTo.id);
-        const res = await api.post(`/chat/conversations/${conversationId}/images`, data, {
+        const res = await api.post(`/chat/conversations/${conversationId}/media`, data, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         handleSent(res.data.data);
-        setPhoto(null);
+        setMedia(null);
       } else {
         const res = await api.post(`/chat/conversations/${conversationId}/messages`, {
           body: text, replyToId: replyTo?.id,
@@ -706,15 +720,19 @@ function ChatThread({
         </div>
       )}
 
-      {photo && (
+      {media && (
         <div className="flex items-center gap-3 border-t border-[var(--card-border)] px-3 pt-3">
           <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.preview} alt="Photo to send" className="h-16 w-16 rounded-lg object-cover" />
+            {media.kind === 'video' ? (
+              <video src={media.preview} muted className="h-16 w-16 rounded-lg bg-black object-cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={media.preview} alt="Photo to send" className="h-16 w-16 rounded-lg object-cover" />
+            )}
             <button
-              onClick={() => setPhoto(null)}
+              onClick={() => setMedia(null)}
               className="absolute -right-2 -top-2 rounded-full bg-black/70 p-0.5 text-white"
-              aria-label="Remove photo"
+              aria-label={media.kind === 'video' ? 'Remove video' : 'Remove photo'}
             >
               <X className="h-3 w-3" />
             </button>
@@ -727,16 +745,16 @@ function ChatThread({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={[...CHAT_IMAGE_TYPES, ...CHAT_VIDEO_TYPES].join(",")}
           className="hidden"
-          onChange={(e) => { choosePhoto(e.target.files?.[0]); e.target.value = ''; }}
+          onChange={(e) => { chooseMedia(e.target.files?.[0]); e.target.value = ''; }}
         />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="flex h-11 w-9 shrink-0 items-center justify-center rounded-xl text-[var(--primary)] hover:bg-[var(--primary)]/10"
-          aria-label="Send a photo"
-          title="Send a photo"
+          aria-label="Send a photo or video"
+          title="Send a photo or video"
         >
           <ImagePlus className="h-5 w-5" />
         </button>
@@ -755,7 +773,7 @@ function ChatThread({
           className="input-field max-h-32 min-h-[44px] flex-1 resize-none"
           rows={1}
           maxLength={2000}
-          placeholder={photo ? 'Add a caption...' : replyTo ? 'Write a reply...' : 'Type a message...'}
+          placeholder={media ? 'Add a caption...' : replyTo ? 'Write a reply...' : 'Type a message...'}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -768,7 +786,7 @@ function ChatThread({
         />
         <button
           type="submit"
-          disabled={sending || (!draft.trim() && !photo)}
+          disabled={sending || (!draft.trim() && !media)}
           className="btn-primary flex h-11 w-11 shrink-0 items-center justify-center !p-0 disabled:opacity-50"
           aria-label="Send message"
         >
@@ -918,7 +936,7 @@ export default function ChatInbox({ role }: { role: 'user' | 'admin' }) {
 
   const previewFor = (c: Conversation) => {
     if (!c.last_message) return 'No messages yet';
-    const icon = c.last_message === 'Message unsent' ? '' : c.last_message_type === 'image' ? '📷 ' : c.last_message_type === 'location' ? '📍 ' : '';
+    const icon = c.last_message === 'Message unsent' ? '' : c.last_message_type === 'image' ? '📷 ' : c.last_message_type === 'video' ? '🎥 ' : c.last_message_type === 'location' ? '📍 ' : '';
     return `${c.last_message_sender_id === user?.id ? 'You: ' : ''}${icon}${c.last_message}`;
   };
 

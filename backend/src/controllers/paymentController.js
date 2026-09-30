@@ -55,24 +55,69 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
       ]
     );
 
+    // Paying is what confirms a booking — owners don't approve them. A payment that lands just after
+    // an unpaid booking was cancelled revives it if its dates are still free; otherwise the money is
+    // recorded and an admin is asked to refund it.
+    let confirmsBooking = booking.status === 'pending';
+    let paidAfterCancel = false;
+    if (booking.status === 'cancelled' && parseFloat(booking.paid_amount) === 0) {
+      const conflict = await client.query(
+        `SELECT 1 FROM bookings WHERE vehicle_id = $1 AND id <> $2 AND status IN ('pending', 'approved', 'active')
+           AND start_date <= $4 AND end_date >= $3 LIMIT 1`,
+        [booking.vehicle_id, bookingId, booking.start_date, booking.end_date]
+      );
+      if (conflict.rows.length) paidAfterCancel = true;
+      else confirmsBooking = true;
+    }
     await client.query(
-      `UPDATE bookings SET paid_amount = $1, payment_status = $2, updated_at = NOW() WHERE id = $3`,
-      [newPaidAmount, paymentStatus, bookingId]
+      `UPDATE bookings SET paid_amount = $1, payment_status = $2, updated_at = NOW(),
+         status = CASE WHEN $4 THEN 'approved'::booking_status ELSE status END
+       WHERE id = $3`,
+      [newPaidAmount, paymentStatus, bookingId, confirmsBooking]
     );
 
     await client.query('COMMIT');
 
+    if (paidAfterCancel) {
+      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'Refund needed: payment for a cancelled booking',
+          `A renter paid ₱${amount.toFixed(2)} (ref ${referenceNumber}) for ${booking.title} after their unpaid booking was cancelled and the dates were taken. Please refund them.`,
+          'alert',
+          '/dashboard/admin/payments'
+        ).catch(() => {});
+      }
+      await createNotification(
+        booking.customer_id,
+        'Payment received for a cancelled booking',
+        `Your booking for ${booking.title} had already been cancelled and the dates are no longer available. Your ₱${amount.toFixed(2)} will be refunded.`,
+        'payment',
+        '/dashboard/bookings'
+      ).catch(() => {});
+      return {
+        payment: paymentInsert.rows[0], invoiceNumber, referenceNumber, paidAmount: newPaidAmount,
+        remainingBalance: parseFloat(booking.total_amount) - newPaidAmount, paymentStatus,
+        receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
+      };
+    }
+
     await createNotification(
       booking.owner_id,
-      'Payment Received',
-      `₱${ownerAmount.toFixed(2)} received for ${booking.title}`,
-      'payment'
+      confirmsBooking ? 'Booking Confirmed — Renter Paid' : 'Payment Received',
+      confirmsBooking
+        ? `The renter paid for ${booking.title}, so the booking is confirmed. JLR Fleetlink holds your ₱${ownerAmount.toFixed(2)} until they accept the vehicle — tap "Hand Over Vehicle" when you meet them.`
+        : `₱${ownerAmount.toFixed(2)} received for ${booking.title}. It is held until the renter accepts the vehicle at pickup.`,
+      confirmsBooking ? 'booking' : 'payment',
+      '/dashboard/booking-requests'
     );
     await createNotification(
       booking.customer_id,
-      'Payment Successful',
-      `₱${amount.toFixed(2)} paid. ${paymentStatus === 'fully_paid' ? 'Booking fully paid!' : `Remaining: ₱${(parseFloat(booking.total_amount) - newPaidAmount).toFixed(2)}`}`,
-      'payment'
+      confirmsBooking ? 'Payment Successful — Booking Confirmed' : 'Payment Successful',
+      `₱${amount.toFixed(2)} paid. ${paymentStatus === 'fully_paid' ? 'Booking fully paid!' : `Remaining: ₱${(parseFloat(booking.total_amount) - newPaidAmount).toFixed(2)}`}${confirmsBooking ? ` Your booking for ${booking.title} is confirmed — you'll inspect the vehicle at pickup before the owner is paid.` : ''}`,
+      'payment',
+      '/dashboard/bookings'
     );
 
     return {

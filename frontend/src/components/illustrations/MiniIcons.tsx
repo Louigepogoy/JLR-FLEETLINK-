@@ -219,6 +219,16 @@ export function FlagIcon({ className }: { className?: string }) {
   );
 }
 
+export function DisputeIcon({ className }: { className?: string }) {
+  return (
+    <Svg className={className}>
+      <path d="M12 2.5l8 3v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10v-6z" fill={RED} />
+      <path d="M12 7.5v5.5" stroke={SURFACE} strokeWidth={2.4} />
+      <circle cx="12" cy="16.5" r="1.3" fill={SURFACE} stroke="none" />
+    </Svg>
+  );
+}
+
 export function CardIcon({ className }: { className?: string }) {
   return (
     <Svg className={className}>

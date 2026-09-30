@@ -53,6 +53,10 @@ async function setup() {
     const bookingReviewsMigrationPath = path.join(__dirname, '../database/migrations/019_booking_reviews.sql');
     const chatActionsMigrationPath = path.join(__dirname, '../database/migrations/020_chat_reply_forward_delete.sql');
     const philippinesMigrationPath = path.join(__dirname, '../database/migrations/021_philippines_locations.sql');
+    const chatVideoMigrationPath = path.join(__dirname, '../database/migrations/022_chat_video.sql');
+    const pickupInspectionMigrationPath = path.join(__dirname, '../database/migrations/023_pickup_inspection.sql');
+    const vehiclesStayListedMigrationPath = path.join(__dirname, '../database/migrations/024_vehicles_stay_listed_when_booked.sql');
+    const disputeRefundTrackingMigrationPath = path.join(__dirname, '../database/migrations/025_dispute_refund_tracking.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -115,6 +119,14 @@ async function setup() {
       console.log('Chat reply/forward/delete migration applied.');
       await runSqlFile(philippinesMigrationPath);
       console.log('Philippines-wide locations migration applied.');
+      await runSqlFile(chatVideoMigrationPath);
+      console.log('Chat video messages migration applied.');
+      await runSqlFile(pickupInspectionMigrationPath);
+      console.log('Pickup inspection / escrow migration applied.');
+      await runSqlFile(vehiclesStayListedMigrationPath);
+      console.log('Vehicles stay listed when booked migration applied.');
+      await runSqlFile(disputeRefundTrackingMigrationPath);
+      console.log('Dispute refund tracking migration applied.');
     }
 
     await runSqlFile(seedPath);

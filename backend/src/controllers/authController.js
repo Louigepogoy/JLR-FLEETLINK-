@@ -122,10 +122,22 @@ const googleLogin = async (req, res, next) => {
       return res.status(503).json({ success: false, message: 'Google Sign-In is not configured.' });
     }
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (err) {
+      const clockIssue = /Token used too (early|late)/.test(err.message);
+      console.error('Google token verification failed:', err.message.split(':')[0]);
+      return res.status(401).json({
+        success: false,
+        message: clockIssue
+          ? "Google Sign-In failed: the server's clock is out of sync. Please sync the system date/time and try again."
+          : 'Invalid Google credential. Please try again.',
+      });
+    }
     const payload = ticket.getPayload();
     const { sub: googleId, email, name, picture } = payload;
 

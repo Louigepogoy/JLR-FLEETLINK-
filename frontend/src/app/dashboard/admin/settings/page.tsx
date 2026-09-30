@@ -5,16 +5,22 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, SettingsIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
+import { apiErrorMessage } from '@/lib/chat';
 
 export default function AdminSettingsPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [commission, setCommission] = useState(10);
+  const [inspectionMinutes, setInspectionMinutes] = useState(60);
+  const [savingInspection, setSavingInspection] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
-      api.get('/commission').then((res) => setCommission(parseFloat(res.data.data.commission_percentage))),
+      api.get('/commission').then((res) => {
+        setCommission(parseFloat(res.data.data.commission_percentage));
+        setInspectionMinutes(res.data.data.inspection_window_minutes ?? 60);
+      }),
       api.get('/commission/history').then((res) => setHistory(res.data.data)).catch(() => {}),
     ]).finally(() => setPageLoading(false));
   }, []);
@@ -30,6 +36,18 @@ export default function AdminSettingsPage() {
       toast.error('Failed to update commission');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveInspection = async () => {
+    setSavingInspection(true);
+    try {
+      await api.put('/commission/inspection-window', { minutes: inspectionMinutes });
+      toast.success(`Inspection time updated to ${inspectionMinutes} minutes`);
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to update inspection time'));
+    } finally {
+      setSavingInspection(false);
     }
   };
 
@@ -70,6 +88,26 @@ export default function AdminSettingsPage() {
         />
         <button onClick={handleSave} disabled={loading} className="btn-primary w-full">
           {loading ? 'Saving...' : 'Save Commission Rate'}
+        </button>
+      </div>
+
+      <div className="glass-card p-6 max-w-lg mb-8">
+        <h3 className="font-semibold mb-4">Pickup Inspection Time</h3>
+        <p className="text-sm text-[var(--muted)] mb-4">
+          After the owner taps &ldquo;Hand Over Vehicle&rdquo;, the renter has this long to accept the vehicle or report a
+          problem. If they don&apos;t respond, it&apos;s accepted automatically and the owner&apos;s payout is unlocked.
+        </p>
+        <div className="flex items-center gap-3 mb-4">
+          <input
+            type="number" min="5" max="1440" step="5"
+            className="input-field"
+            value={inspectionMinutes}
+            onChange={(e) => setInspectionMinutes(parseInt(e.target.value, 10) || 0)}
+          />
+          <span className="text-sm text-[var(--muted)]">minutes</span>
+        </div>
+        <button onClick={handleSaveInspection} disabled={savingInspection} className="btn-primary w-full">
+          {savingInspection ? 'Saving...' : 'Save Inspection Time'}
         </button>
       </div>
 

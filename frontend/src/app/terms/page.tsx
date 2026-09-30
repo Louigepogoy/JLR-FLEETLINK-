@@ -13,11 +13,11 @@ const sections = [
   },
   {
     title: '3. Bookings',
-    body: 'A booking request is not confirmed until it is approved by the vehicle owner. Pickup and return dates, times, and location are as agreed at booking. Late returns, damage, or violations of the vehicle owner\'s terms may result in additional charges billed directly by the owner.',
+    body: 'A booking is confirmed automatically as soon as the customer pays; vehicle owners do not approve bookings. Unpaid bookings are cancelled automatically after 30 minutes. Payments are held by JLR Fleetlink: when the owner hands over the vehicle, the customer has a set inspection time to accept it or report a problem with photo or video evidence. If the customer does not respond in time, the vehicle is accepted automatically and the owner\'s earnings are released for payout. Reported problems are reviewed by an admin, who may issue a full or partial refund. Pickup and return dates, times, and location are as agreed at booking. Late returns, damage, or violations of the vehicle owner\'s terms may result in additional charges billed directly by the owner.',
   },
   {
     title: '4. Cancellations',
-    body: 'Bookings may be cancelled from My Bookings before they are approved. Once a rental is active, cancellation terms are between the customer and the vehicle owner. Repeated no-shows or cancellations may affect your ability to book on the platform.',
+    body: 'Bookings may be cancelled from My Bookings before they are paid. Once a rental is active, cancellation terms are between the customer and the vehicle owner. Repeated no-shows or cancellations may affect your ability to book on the platform.',
   },
   {
     title: '5. Payments',

@@ -18,7 +18,7 @@ export type Conversation = {
 export type ChatMessage = {
   id: string;
   sender_id: string;
-  message_type: 'text' | 'image' | 'location';
+  message_type: 'text' | 'image' | 'video' | 'location';
   body: string | null;
   image_url: string | null;
   latitude: string | number | null;
@@ -42,6 +42,7 @@ export const MAX_FORWARD_TARGETS = 5;
 export const messagePreview = (m: { message_type: ChatMessage['message_type'] | null; body: string | null; deleted?: boolean | null }) => {
   if (m.deleted) return 'Message unsent';
   if (m.message_type === 'image') return m.body ? `📷 ${m.body}` : '📷 Photo';
+  if (m.message_type === 'video') return m.body ? `🎥 ${m.body}` : '🎥 Video';
   if (m.message_type === 'location') return '📍 Location';
   return m.body || '';
 };
@@ -53,6 +54,9 @@ export type ChatUser = { id: string; full_name: string; avatar_url: string | nul
 export const REACTION_EMOJIS = ['👍', '❤️', '😆', '😮', '😢', '😡'];
 
 export const CHAT_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const CHAT_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+export const CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export const CHAT_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 export const profilePath = (userId: string) => `/users/${userId}`;
 

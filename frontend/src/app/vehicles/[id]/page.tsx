@@ -20,6 +20,7 @@ import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines'
 import { PickupMap } from '@/components/maps';
 import type { ReviewSummary } from '@/lib/reviews';
 import ReviewList from '@/components/reviews/ReviewList';
+import { PAYMENT_WINDOW_MINUTES } from '@/lib/inspection';
 import { RatingBadge } from '@/components/reviews/StarRating';
 
 const MAX_RENTAL_DAYS = 30;
@@ -118,7 +119,9 @@ export default function VehicleDetailPage() {
       });
       setBooking(res.data.data);
       setStep(4);
-      toast.success('Booking created! Proceed to payment.');
+      // Owners don't approve bookings — paying confirms it — so go straight to payment.
+      setShowPayment(true);
+      toast.success('Booking created! Pay now to confirm it.');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; code?: string } } };
       if (error.response?.data?.code === 'VERIFICATION_REQUIRED') {
@@ -435,12 +438,17 @@ export default function VehicleDetailPage() {
                   )}
 
                   <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict || pickupInPast} className="btn-primary w-full">
-                    {bookingLoading ? 'Booking...' : 'Confirm Booking'}
+                    {bookingLoading ? 'Booking...' : 'Book & Pay'}
                   </button>
                 </>
               ) : (
                 <div>
-                  <h3 className="font-semibold mb-4 text-green-500">Booking Created</h3>
+                  <h3 className="font-semibold mb-1 text-green-500">Booking Created</h3>
+                  {booking.payment_status === 'pending' && (
+                    <p className="mb-4 text-sm text-amber-500">
+                      Pay within {PAYMENT_WINDOW_MINUTES} minutes to confirm it, or it will be cancelled automatically.
+                    </p>
+                  )}
                   <div className="space-y-2 text-sm mb-6">
                     <p className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-[var(--primary)]" />

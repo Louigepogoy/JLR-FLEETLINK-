@@ -4,9 +4,9 @@ const { query } = require('../config/db');
 const getCommission = async (req, res, next) => {
   try {
     const result = await query(
-      'SELECT commission_percentage, updated_at FROM platform_settings ORDER BY id DESC LIMIT 1'
+      'SELECT commission_percentage, inspection_window_minutes, updated_at FROM platform_settings ORDER BY id DESC LIMIT 1'
     );
-    res.json({ success: true, data: result.rows[0] || { commission_percentage: 10 } });
+    res.json({ success: true, data: result.rows[0] || { commission_percentage: 10, inspection_window_minutes: 60 } });
   } catch (error) {
     next(error);
   }
@@ -32,7 +32,7 @@ const updateCommission = async (req, res, next) => {
     );
 
     const result = await query(
-      'SELECT commission_percentage, updated_at FROM platform_settings ORDER BY id DESC LIMIT 1'
+      'SELECT commission_percentage, inspection_window_minutes, updated_at FROM platform_settings ORDER BY id DESC LIMIT 1'
     );
 
     res.json({
@@ -58,8 +58,39 @@ const getCommissionHistory = async (req, res, next) => {
   }
 };
 
+// How long a customer has to accept or reject a vehicle after the owner hands it over.
+const updateInspectionWindow = async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg, errors: errors.array() });
+    }
+
+    const result = await query(
+      `UPDATE platform_settings SET inspection_window_minutes = $1, updated_by = $2, updated_at = NOW()
+       RETURNING commission_percentage, inspection_window_minutes, updated_at`,
+      [req.body.minutes, req.user.id]
+    );
+
+    res.json({
+      success: true,
+      message: `Inspection time updated to ${req.body.minutes} minutes`,
+      data: result.rows[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const commissionValidation = [
   body('percentage').isFloat({ min: 0, max: 100 }),
 ];
 
-module.exports = { getCommission, updateCommission, getCommissionHistory, commissionValidation };
+const inspectionWindowValidation = [
+  body('minutes').isInt({ min: 5, max: 1440 }).withMessage('Inspection time must be 5 to 1440 minutes').toInt(),
+];
+
+module.exports = {
+  getCommission, updateCommission, getCommissionHistory, commissionValidation,
+  updateInspectionWindow, inspectionWindowValidation,
+};
