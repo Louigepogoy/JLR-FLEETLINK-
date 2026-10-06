@@ -8,7 +8,7 @@ const {
   handOverVehicle, acceptVehicle, rejectVehicle,
 } = require('../controllers/bookingController');
 
-router.post('/', authenticate, authorize('user', 'admin'), bookingValidation, createBooking);
+router.post('/', authenticate, authorize('user'), bookingValidation, createBooking);
 router.get('/my', authenticate, authorize('user', 'admin'), getMyBookings);
 router.get('/owner', authenticate, authorize('user', 'admin'), getOwnerBookings);
 router.get('/all', authenticate, authorize('admin'), getAllBookings);

@@ -6,6 +6,9 @@ import Stats from '@/components/home/Stats';
 import Features from '@/components/home/Features';
 import HowItWorks from '@/components/home/HowItWorks';
 import VehicleShowcase from '@/components/home/VehicleShowcase';
+import TrustFeatures from '@/components/home/TrustFeatures';
+import LegalSection from '@/components/home/LegalSection';
+import Testimonials from '@/components/home/Testimonials';
 
 export default function HomePage() {
   return (
@@ -18,6 +21,9 @@ export default function HomePage() {
         <VehicleShowcase />
         <Features />
         <HowItWorks />
+        <TrustFeatures />
+        <Testimonials />
+        <LegalSection />
       </main>
       <Footer />
     </>

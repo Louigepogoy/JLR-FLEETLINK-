@@ -2,6 +2,7 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
+const { passwordProblem } = require('../utils/passwordPolicy');
 
 const getAllUsers = async (req, res, next) => {
   try {
@@ -221,12 +222,11 @@ const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword || newPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Current password and a new password with at least 8 characters are required',
-      });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current password and a new password are required' });
     }
+    const problem = passwordProblem(newPassword);
+    if (problem) return res.status(400).json({ success: false, message: problem });
 
     const userResult = await query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
     const valid = await bcrypt.compare(currentPassword, userResult.rows[0]?.password_hash || '');

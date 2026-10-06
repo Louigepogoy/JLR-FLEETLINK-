@@ -57,6 +57,8 @@ async function setup() {
     const pickupInspectionMigrationPath = path.join(__dirname, '../database/migrations/023_pickup_inspection.sql');
     const vehiclesStayListedMigrationPath = path.join(__dirname, '../database/migrations/024_vehicles_stay_listed_when_booked.sql');
     const disputeRefundTrackingMigrationPath = path.join(__dirname, '../database/migrations/025_dispute_refund_tracking.sql');
+    const usernameVerificationMigrationPath = path.join(__dirname, '../database/migrations/026_username_email_verification.sql');
+    const usernameAnyLengthMigrationPath = path.join(__dirname, '../database/migrations/027_username_any_length.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -127,6 +129,10 @@ async function setup() {
       console.log('Vehicles stay listed when booked migration applied.');
       await runSqlFile(disputeRefundTrackingMigrationPath);
       console.log('Dispute refund tracking migration applied.');
+      await runSqlFile(usernameVerificationMigrationPath);
+      console.log('Username and email verification migration applied.');
+      await runSqlFile(usernameAnyLengthMigrationPath);
+      console.log('Username length migration applied.');
     }
 
     await runSqlFile(seedPath);

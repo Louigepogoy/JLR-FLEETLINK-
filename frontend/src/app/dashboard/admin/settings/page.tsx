@@ -6,6 +6,16 @@ import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, SettingsIcon } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
+import { formatCurrency, formatTimestamp } from '@/lib/utils';
+
+type CommissionEarnings = {
+  summary: { total_earned: string; this_month: string; payments_count: string };
+  records: {
+    id: string; created_at: string; invoice_number: string; type: 'payment' | 'refund'; status: string;
+    total_amount: string; commission_amount: string; commission_percentage: string | null;
+    vehicle_title: string | null; customer_name: string | null; owner_name: string | null;
+  }[];
+};
 
 export default function AdminSettingsPage() {
   const [pageLoading, setPageLoading] = useState(true);
@@ -13,6 +23,7 @@ export default function AdminSettingsPage() {
   const [inspectionMinutes, setInspectionMinutes] = useState(60);
   const [savingInspection, setSavingInspection] = useState(false);
   const [history, setHistory] = useState([]);
+  const [earnings, setEarnings] = useState<CommissionEarnings | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -22,6 +33,7 @@ export default function AdminSettingsPage() {
         setInspectionMinutes(res.data.data.inspection_window_minutes ?? 60);
       }),
       api.get('/commission/history').then((res) => setHistory(res.data.data)).catch(() => {}),
+      api.get('/commission/earnings').then((res) => setEarnings(res.data.data)).catch(() => {}),
     ]).finally(() => setPageLoading(false));
   }, []);
 
@@ -111,8 +123,77 @@ export default function AdminSettingsPage() {
         </button>
       </div>
 
+      <div className="glass-card p-6 mb-8">
+        <h3 className="font-semibold mb-1">Commission History</h3>
+        <p className="text-sm text-[var(--muted)] mb-4">
+          Commission the platform earned from each booking payment, as recorded in the database.
+        </p>
+        {earnings && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3 mb-6">
+              <div className="rounded-xl border border-[var(--card-border)] p-4">
+                <p className="text-xs text-[var(--muted)]">Total commission earned</p>
+                <p className="text-2xl font-bold gradient-text">{formatCurrency(Number(earnings.summary.total_earned))}</p>
+              </div>
+              <div className="rounded-xl border border-[var(--card-border)] p-4">
+                <p className="text-xs text-[var(--muted)]">This month</p>
+                <p className="text-2xl font-bold">{formatCurrency(Number(earnings.summary.this_month))}</p>
+              </div>
+              <div className="rounded-xl border border-[var(--card-border)] p-4">
+                <p className="text-xs text-[var(--muted)]">Paid booking payments</p>
+                <p className="text-2xl font-bold">{earnings.summary.payments_count}</p>
+              </div>
+            </div>
+            {earnings.records.length === 0 ? (
+              <p className="text-[var(--muted)] text-sm">No commission earned yet. It appears here as soon as a renter pays for a booking.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--card-border)] text-left">
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Invoice</th>
+                      <th className="p-3">Vehicle</th>
+                      <th className="p-3">Renter → Owner</th>
+                      <th className="p-3 text-right">Payment</th>
+                      <th className="p-3 text-right">Rate</th>
+                      <th className="p-3 text-right">Commission</th>
+                      <th className="p-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {earnings.records.map((r) => {
+                      const fullyRefunded = r.type === 'payment' && r.status === 'refunded';
+                      const status = r.type === 'refund'
+                        ? { label: 'Partial refund', cls: 'bg-amber-500/20 text-amber-600' }
+                        : fullyRefunded
+                          ? { label: 'Refunded', cls: 'bg-red-500/20 text-red-500' }
+                          : { label: 'Earned', cls: 'bg-green-500/20 text-green-600' };
+                      return (
+                        <tr key={r.id} className="border-b border-[var(--card-border)]">
+                          <td className="p-3 whitespace-nowrap">{formatTimestamp(r.created_at)}</td>
+                          <td className="p-3 font-mono text-xs">{r.invoice_number}</td>
+                          <td className="p-3">{r.vehicle_title || '—'}</td>
+                          <td className="p-3">{r.customer_name || '—'} → {r.owner_name || '—'}</td>
+                          <td className="p-3 text-right">{formatCurrency(Number(r.total_amount))}</td>
+                          <td className="p-3 text-right">{r.commission_percentage ? `${Number(r.commission_percentage)}%` : '—'}</td>
+                          <td className={`p-3 text-right font-semibold ${fullyRefunded ? 'line-through text-[var(--muted)]' : ''}`}>
+                            {formatCurrency(Number(r.commission_amount))}
+                          </td>
+                          <td className="p-3"><span className={`rounded-full px-2 py-0.5 text-xs ${status.cls}`}>{status.label}</span></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
       <div className="glass-card p-6">
-        <h3 className="font-semibold mb-4">Commission History</h3>
+        <h3 className="font-semibold mb-4">Commission Rate Changes</h3>
         <div className="space-y-2">
           {history.map((h: { id: number; percentage: string; set_by_name: string; created_at: string }) => (
             <div key={h.id} className="flex justify-between p-3 rounded-lg border border-[var(--card-border)]">
@@ -120,7 +201,9 @@ export default function AdminSettingsPage() {
               <span className="text-sm text-[var(--muted)]">{h.set_by_name || 'System'} · {new Date(h.created_at).toLocaleDateString()}</span>
             </div>
           ))}
-          {history.length === 0 && <p className="text-[var(--muted)] text-sm">No history yet</p>}
+          {history.length === 0 && (
+            <p className="text-[var(--muted)] text-sm">The rate hasn&apos;t been changed yet (currently {commission}%).</p>
+          )}
         </div>
       </div>
     </DashboardLayout>

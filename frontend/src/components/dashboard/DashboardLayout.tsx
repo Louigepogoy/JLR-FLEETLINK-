@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { LogOut, Menu, X } from 'lucide-react';
 import {
   BrowseCarIcon, CalendarCheckIcon, CardIcon, ChartIcon, CrownIcon, DisputeIcon, EarningsIcon, FlagIcon, HistoryIcon,
-  IconChip, MessagesIcon, MyVehicleIcon, OverviewIcon, ReceiptIcon, RequestsIcon, SettingsIcon, SupportIcon,
+  HomeIcon, IconChip, MessagesIcon, MyVehicleIcon, OverviewIcon, ReceiptIcon, RequestsIcon, SettingsIcon, SupportIcon,
   UsersIcon, VerifyIdIcon, WalletIcon, type MiniIcon,
 } from '@/components/illustrations/MiniIcons';
 import { useState } from 'react';
@@ -26,6 +26,7 @@ type NavItem = { href: string; label: string; icon: MiniIcon; showUnread?: boole
 
 const navByRole: Record<string, NavItem[]> = {
   user: [
+    { href: '/', label: 'Home', icon: HomeIcon },
     { href: '/dashboard', label: 'Overview', icon: OverviewIcon },
     { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
     { href: '/dashboard/bookings', label: 'My Bookings', icon: CalendarCheckIcon },
@@ -38,6 +39,7 @@ const navByRole: Record<string, NavItem[]> = {
     { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
   ],
   admin: [
+    { href: '/', label: 'Home', icon: HomeIcon },
     { href: '/dashboard/admin', label: 'Overview', icon: OverviewIcon },
     { href: '/dashboard/admin/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
     { href: '/dashboard/admin/approvals', label: 'Verifications', icon: VerifyIdIcon },

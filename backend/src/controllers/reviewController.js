@@ -144,6 +144,34 @@ const getUserReviews = async (req, res, next) => {
   }
 };
 
+// Home page "Reviews" section: the latest renter reviews of vehicles that include a written comment,
+// plus the platform-wide average vehicle rating. Public, like listings.
+const HOME_REVIEWS_LIMIT = 6;
+const getRecentReviews = async (req, res, next) => {
+  try {
+    const [summary, reviews] = await Promise.all([
+      query(
+        `SELECT ROUND(AVG(vehicle_rating)::numeric, 1) AS average, COUNT(*)::int AS count
+         FROM booking_reviews WHERE reviewer_role = 'customer'`
+      ),
+      query(
+        `SELECT r.id, r.vehicle_rating AS rating, r.comment, r.created_at,
+                v.id AS vehicle_id, v.title AS vehicle_title, v.city, v.province,
+                u.id AS reviewer_id, u.full_name AS reviewer_name, u.avatar_url AS reviewer_avatar_url
+         FROM booking_reviews r
+         JOIN users u ON u.id = r.reviewer_id
+         JOIN vehicles v ON v.id = r.vehicle_id
+         WHERE r.reviewer_role = 'customer' AND r.comment IS NOT NULL AND btrim(r.comment) <> ''
+         ORDER BY r.created_at DESC LIMIT $1`,
+        [HOME_REVIEWS_LIMIT]
+      ),
+    ]);
+    res.json({ success: true, data: { ...summarize(summary.rows[0]), reviews: reviews.rows } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const reviewValidation = [
   body('bookingId').matches(UUID_PATTERN).withMessage('Invalid booking').customSanitizer((v) => String(v).toLowerCase()),
   body('userRating').isInt({ min: 1, max: 5 }).withMessage('Please choose 1 to 5 stars').toInt(),
@@ -151,4 +179,6 @@ const reviewValidation = [
   body('comment').optional({ values: 'null' }).isString().isLength({ max: 1000 }).withMessage('Review is too long (max 1000 characters)'),
 ];
 
-module.exports = { getPendingReviews, createReview, getVehicleReviews, getUserReviews, reviewValidation };
+module.exports = {
+  getPendingReviews, createReview, getVehicleReviews, getUserReviews, getRecentReviews, reviewValidation,
+};

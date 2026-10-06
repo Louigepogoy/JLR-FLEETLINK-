@@ -7,7 +7,7 @@ const {
   reconcilePendingPayments,
 } = require('../controllers/paymongoController');
 
-router.post('/bookings/checkout', authenticate, authorize('user', 'admin'), createBookingPaymentCheckout);
+router.post('/bookings/checkout', authenticate, authorize('user'), createBookingPaymentCheckout);
 router.post('/subscriptions/checkout', authenticate, authorize('user', 'admin'), createSubscriptionCheckout);
 router.post('/reconcile', authenticate, authorize('user', 'admin'), reconcilePendingPayments);
 

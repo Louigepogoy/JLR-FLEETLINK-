@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldAlert, Settings2, User, Users } from 'lucide-react';
+import { BadgeCheck, Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldAlert, ShieldCheck, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -169,13 +169,15 @@ export default function VehicleDetailPage() {
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
   const images = Array.isArray(vehicle.images) ? vehicle.images as string[] : [];
   const isOwner = isAuthenticated && user?.id === vehicle.owner_id;
+  // Admins oversee the platform and can't book vehicles themselves.
+  const isAdmin = isAuthenticated && user?.role === 'admin';
 
   return (
     <>
       <Navbar />
       <main className="pt-24 pb-16 min-h-screen">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <BookingProgress currentStep={booking ? 4 : step} />
+          {!isAdmin && <BookingProgress currentStep={booking ? 4 : step} />}
 
           <div className="grid lg:grid-cols-2 gap-8">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-card overflow-hidden">
@@ -183,7 +185,17 @@ export default function VehicleDetailPage() {
               <div className="p-6">
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="px-3 py-1 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-semibold">Available in {formatPlace(city, province)}</span>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">Verified Listing</span>
+                  {vehicle.verification_status === 'approved' ? (
+                    <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-semibold">
+                      <BadgeCheck className="w-3.5 h-3.5" /> Approved by Admin
+                    </span>
+                  ) : vehicle.verification_status === 'rejected' ? (
+                    <span className="px-3 py-1 rounded-full bg-red-500/15 text-red-500 text-xs font-semibold">
+                      Rejected by Admin — hidden from Browse Vehicles
+                    </span>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full bg-slate-500/15 text-[var(--muted)] text-xs font-semibold">Pending Admin Review</span>
+                  )}
                 </div>
                 <h1 className="text-3xl font-bold mb-2">{String(vehicle.title)}</h1>
                 <p className="text-[var(--muted)] mb-1">{String(vehicle.brand)} {String(vehicle.model)} - {String(vehicle.year)}</p>
@@ -282,7 +294,19 @@ export default function VehicleDetailPage() {
                 )}
               </div>
 
-              {isOwner ? (
+              {isAdmin ? (
+                <div className="rounded-xl bg-[var(--primary)]/5 p-5 text-center">
+                  <ShieldCheck className="w-8 h-8 mx-auto mb-3 text-[var(--primary)]" />
+                  <p className="font-semibold mb-1">Admin view</p>
+                  <p className="text-sm text-[var(--muted)] mb-4">
+                    You&apos;re signed in as an administrator. Admins can view listings but can&apos;t book vehicles.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Link href="/dashboard/admin/approvals" className="btn-primary text-sm">Review Vehicle Verifications</Link>
+                    <Link href="/dashboard/admin/bookings" className="btn-outline text-sm">View All Bookings</Link>
+                  </div>
+                </div>
+              ) : isOwner ? (
                 <div className="rounded-xl bg-[var(--primary)]/5 p-5 text-center">
                   <Car className="w-8 h-8 mx-auto mb-3 text-[var(--primary)]" />
                   <p className="font-semibold mb-1">This is your own listing</p>

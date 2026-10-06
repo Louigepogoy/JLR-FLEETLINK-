@@ -18,4 +18,14 @@ const sendPasswordResetEmail = async (to, code) => {
   });
 };
 
-module.exports = { sendPasswordResetEmail };
+const sendVerificationEmail = async (to, username, code) => {
+  await transporter.sendMail({
+    from: `"JLR Fleetlink" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: 'Verify your JLR Fleetlink email',
+    text: `Hi ${username}, your JLR Fleetlink verification code is ${code}. It expires in 10 minutes. If you did not create an account, ignore this email.`,
+    html: `<p>Hi ${username},</p><p>Your JLR Fleetlink verification code is <strong style="font-size:20px;letter-spacing:2px">${code}</strong>.</p><p>It expires in 10 minutes. If you did not create an account, ignore this email.</p>`,
+  });
+};
+
+module.exports = { sendPasswordResetEmail, sendVerificationEmail };

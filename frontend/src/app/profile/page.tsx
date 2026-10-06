@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import api from '@/lib/api';
+import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import { useAuthStore } from '@/store/authStore';
 
 type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
@@ -77,6 +78,10 @@ export default function ProfilePage() {
   const handlePasswordSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!isStrongPassword(passwordForm.newPassword)) {
+      toast.error("Your new password doesn't meet all the requirements yet");
+      return;
+    }
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       toast.error('New passwords do not match');
       return;
@@ -189,6 +194,7 @@ export default function ProfilePage() {
                 value={passwordForm.newPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
               />
+              {passwordForm.newPassword && <PasswordChecklist password={passwordForm.newPassword} />}
               <input
                 className="input-field"
                 type="password"

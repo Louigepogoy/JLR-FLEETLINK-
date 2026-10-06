@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, LayoutDashboard } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -16,7 +16,10 @@ import toast from 'react-hot-toast';
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
+  // On the home page, the section currently under the navbar (e.g. "features"), so its link lights up.
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -32,10 +35,37 @@ export default function Navbar() {
   };
 
   const navLinks = [
+    { href: '/', label: 'Home' },
     { href: '/vehicles', label: 'Browse Vehicles' },
     { href: '/#features', label: 'Features' },
     { href: '/#testimonials', label: 'Reviews' },
   ];
+
+  // Home-page sections that have their own link; scrolling into one highlights it instead of Home.
+  const sectionIds = navLinks.filter((l) => l.href.startsWith('/#')).map((l) => l.href.slice(2));
+
+  useEffect(() => {
+    if (pathname !== '/') return;
+    const update = () => {
+      const line = 120; // just below the navbar
+      const current = sectionIds.find((id) => {
+        const rect = document.getElementById(id)?.getBoundingClientRect();
+        return rect && rect.top <= line && rect.bottom > line;
+      });
+      setActiveSection(current ?? null);
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => window.removeEventListener('scroll', update);
+    // sectionIds is derived from a constant list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  const isActive = (href: string) => {
+    if (href.startsWith('/#')) return pathname === '/' && activeSection === href.slice(2);
+    if (href === '/') return pathname === '/' && !activeSection;
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
 
   return (
     <motion.nav
@@ -60,9 +90,21 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm font-medium text-[var(--muted)] hover:text-[var(--primary)] transition-colors"
+                aria-current={isActive(link.href) ? 'page' : undefined}
+                className={`relative py-1 text-sm transition-colors ${
+                  isActive(link.href)
+                    ? 'gradient-text font-semibold'
+                    : 'font-medium text-[var(--muted)] hover:text-[var(--primary)]'
+                }`}
               >
                 {link.label}
+                {isActive(link.href) && (
+                  <motion.span
+                    layoutId="nav-active"
+                    className="absolute -bottom-1 left-0 h-0.5 w-full rounded-full gradient-bg"
+                    transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  />
+                )}
               </Link>
             ))}
           </div>
@@ -109,7 +151,15 @@ export default function Navbar() {
               className="md:hidden mt-4 glass-card p-4 space-y-3"
             >
               {navLinks.map((link) => (
-                <Link key={link.href} href={link.href} className="block py-2" onClick={() => setMobileOpen(false)}>
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  aria-current={isActive(link.href) ? 'page' : undefined}
+                  className={`block rounded-lg px-3 py-2 ${
+                    isActive(link.href) ? 'bg-[var(--primary)]/10 font-semibold text-[var(--primary)]' : ''
+                  }`}
+                  onClick={() => setMobileOpen(false)}
+                >
                   {link.label}
                 </Link>
               ))}

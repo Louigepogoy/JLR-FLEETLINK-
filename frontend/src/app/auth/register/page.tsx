@@ -5,11 +5,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import { useAuthStore } from '@/store/authStore';
 import { getDashboardPath } from '@/lib/utils';
 
@@ -18,18 +19,50 @@ export default function RegisterPage() {
   const { setAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Result of checking the typed email with the server (exists / doesn't exist / already registered).
+  const [emailCheck, setEmailCheck] = useState<{ email: string; status: string; message: string | null } | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  const BAD_EMAIL_STATUSES = ['not_found', 'invalid_domain', 'registered', 'invalid'];
+
+  const checkEmail = async (email: string) => {
+    const value = email.trim();
+    if (!value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return null;
+    if (emailCheck?.email === value) return emailCheck;
+    setCheckingEmail(true);
+    try {
+      const res = await api.post('/auth/check-email', { email: value });
+      const result = { email: value, ...res.data.data };
+      setEmailCheck(result);
+      return result;
+    } catch {
+      return null; // Couldn't check; the verification code still confirms the address.
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
 
   const [form, setForm] = useState({
-    fullName: '', email: '', phone: '', password: '',
+    username: '', email: '', phone: '', password: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const emailResult = await checkEmail(form.email);
+    if (emailResult && BAD_EMAIL_STATUSES.includes(emailResult.status)) {
+      toast.error(emailResult.message || 'Please check your email address');
+      return;
+    }
+    if (!isStrongPassword(form.password)) {
+      toast.error("Your password doesn't meet all the requirements yet");
+      return;
+    }
     setLoading(true);
     try {
       const res = await api.post('/auth/register', form);
-      toast.success(res.data.message || 'Account created! You can now log in.');
-      router.push('/auth/login');
+      toast.success(res.data.message || 'Check your email for a verification code');
+      // The account can't be used until the emailed code is entered.
+      router.push(`/auth/verify-email?email=${encodeURIComponent(res.data.data?.email || form.email)}`);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; errors?: Array<{ msg: string }> } } };
       toast.error(error.response?.data?.message || error.response?.data?.errors?.[0]?.msg || 'Registration failed');
@@ -78,14 +111,40 @@ export default function RegisterPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Full Name</label>
-            <input required className="input-field" value={form.fullName}
-              onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+            <label className="text-sm font-medium mb-1 block">Username</label>
+            <input
+              required
+              autoComplete="username"
+              className="input-field"
+              placeholder="e.g. juan_dc"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+            />
+            {form.username.includes('@') && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Usernames can&apos;t contain &quot;@&quot;.</p>
+            )}
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Email</label>
-            <input type="email" required className="input-field" value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input type="email" required autoComplete="email" placeholder="you@gmail.com" value={form.email}
+              className={`input-field ${emailCheck?.email === form.email.trim() && BAD_EMAIL_STATUSES.includes(emailCheck.status) ? 'ring-2 ring-red-500/60' : ''}`}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onBlur={(e) => checkEmail(e.currentTarget.value)} />
+            {checkingEmail ? (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking email…
+              </p>
+            ) : emailCheck?.email === form.email.trim() && BAD_EMAIL_STATUSES.includes(emailCheck.status) ? (
+              <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-500">
+                <XCircle className="h-3.5 w-3.5 shrink-0" /> {emailCheck.message}
+              </p>
+            ) : emailCheck?.email === form.email.trim() && emailCheck.status === 'exists' ? (
+              <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Email address found. We&apos;ll send a code to verify it&apos;s yours.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-[var(--muted)]">We&apos;ll send a code to this email to verify it&apos;s yours.</p>
+            )}
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Phone (09XXXXXXXXX)</label>
@@ -99,6 +158,7 @@ export default function RegisterPage() {
                 type={showPassword ? 'text' : 'password'}
                 required
                 minLength={8}
+                autoComplete="new-password"
                 className="input-field pr-12"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
@@ -111,6 +171,7 @@ export default function RegisterPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            <PasswordChecklist password={form.password} />
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary w-full">

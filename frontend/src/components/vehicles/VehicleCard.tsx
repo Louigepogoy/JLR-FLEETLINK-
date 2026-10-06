@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { MapPin, Users, Fuel, Settings2 } from 'lucide-react';
+import { BadgeCheck, MapPin, Users, Fuel, Settings2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { formatPlace } from '@/lib/philippines';
 import { RatingBadge } from '@/components/reviews/StarRating';
+import { useAuthStore } from '@/store/authStore';
 
 interface Vehicle {
   id: string;
@@ -27,6 +28,7 @@ interface Vehicle {
   images?: string[];
   status: string;
   on_maintenance?: boolean;
+  verification_status?: string;
   avg_rating?: number | string | null;
   rating_count?: number;
 }
@@ -34,6 +36,8 @@ interface Vehicle {
 export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; index?: number }) {
   // Falls back to the placeholder when the photo file is missing on the server instead of a broken image.
   const [imageFailed, setImageFailed] = useState(false);
+  // Admins can't book, so their card button just opens the listing.
+  const isAdmin = useAuthStore((s) => s.isAuthenticated && s.user?.role === 'admin');
   const image = imageFailed ? undefined : vehicle.images?.[0];
   const pickupText = formatPlace(vehicle.city || vehicle.location, vehicle.province);
 
@@ -62,13 +66,22 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
         <span className="absolute top-3 right-3 px-2 py-1 text-xs rounded-full glass-card capitalize">
           {vehicle.vehicle_type}
         </span>
+        {vehicle.verification_status === 'approved' ? (
+          <span className="absolute top-3 left-3 flex items-center gap-1 whitespace-nowrap px-2 py-1 text-xs rounded-full bg-emerald-600/90 text-white font-semibold shadow-sm">
+            <BadgeCheck className="w-3.5 h-3.5" /> Approved by Admin
+          </span>
+        ) : (
+          <span className="absolute top-3 left-3 whitespace-nowrap px-2 py-1 text-xs rounded-full bg-slate-700/80 text-white">
+            Pending Review
+          </span>
+        )}
         {vehicle.on_maintenance ? (
-          <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-amber-500/90 text-white font-semibold">
+          <span className="absolute bottom-3 left-3 whitespace-nowrap px-2 py-1 text-xs rounded-full bg-amber-500/90 text-white font-semibold">
             Under Maintenance
           </span>
         ) : (
-          <span className="absolute top-3 left-3 px-2 py-1 text-xs rounded-full bg-emerald-500/90 text-white">
-            Verified
+          <span className="absolute bottom-3 left-3 flex items-center gap-1 whitespace-nowrap px-2 py-1 text-xs rounded-full bg-white/90 text-emerald-700 font-semibold shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Available
           </span>
         )}
       </div>
@@ -95,7 +108,7 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
             <span className="text-xs text-[var(--muted)]">/day</span>
           </div>
           <Link href={`/vehicles/${vehicle.id}`} className="btn-primary shrink-0 whitespace-nowrap text-sm py-2 px-4">
-            Book Now
+            {isAdmin ? 'View Details' : 'Book Now'}
           </Link>
         </div>
       </div>

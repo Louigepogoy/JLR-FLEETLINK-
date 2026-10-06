@@ -148,7 +148,7 @@ const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
 const getPublicStats = async (req, res, next) => {
   try {
     const [vehicles, users, provinces] = await Promise.all([
-      query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available'"),
+      query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available' AND verification_status <> 'rejected'"),
       query("SELECT COUNT(*)::int AS count FROM users WHERE approval_status = 'approved' AND is_active = true"),
       query("SELECT COUNT(DISTINCT province)::int AS count FROM vehicles WHERE status <> 'inactive'"),
     ]);
@@ -181,7 +181,7 @@ const getVehicles = async (req, res, next) => {
         (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.vehicle_id = v.id) AS rating_count
       FROM vehicles v
       JOIN users u ON v.owner_id = u.id
-      WHERE 1=1
+      WHERE v.verification_status <> 'rejected'
     `;
     const params = [];
     let idx = 1;
@@ -241,10 +241,12 @@ const getVehicleById = async (req, res, next) => {
        WHERE v.id = $1`,
       [req.params.id]
     );
-    if (!result.rows[0]) {
+    const vehicle = result.rows[0];
+    const canSeeRejected = req.user && (req.user.role === 'admin' || req.user.id === vehicle?.owner_id);
+    if (!vehicle || (vehicle.verification_status === 'rejected' && !canSeeRejected)) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
     }
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: vehicle });
   } catch (error) {
     next(error);
   }
@@ -365,6 +367,12 @@ const updateVehicle = async (req, res, next) => {
     }
 
     updates.push('updated_at = NOW()');
+    // An owner fixing a rejected (or needs-more-info) listing sends it back to the admin for review;
+    // until it is approved again it stays hidden from Browse Vehicles if it was rejected.
+    if (req.user.role !== 'admin') {
+      updates.push(`verification_status = CASE WHEN verification_status IN ('rejected', 'needs_more_info')
+        THEN 'unreviewed' ELSE verification_status END`);
+    }
     values.push(req.params.id);
 
     const result = await query(
@@ -461,7 +469,10 @@ const recordVehicleVerification = async (req, res, next) => {
     await createNotification(
       vehicle.rows[0].owner_id,
       titles[action],
-      notes?.trim() || `Your listing "${vehicle.rows[0].title}" verification status is now: ${action.replace(/_/g, ' ')}.`,
+      (notes?.trim() || `Your listing "${vehicle.rows[0].title}" verification status is now: ${action.replace(/_/g, ' ')}.`)
+        + (action === 'rejected'
+          ? ' It is hidden from Browse Vehicles. Update the listing to send it back for review.'
+          : action === 'approved' ? ' It now shows an "Approved by Admin" badge.' : ''),
       'system',
       '/dashboard/vehicles'
     );

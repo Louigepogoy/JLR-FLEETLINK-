@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import api from '@/lib/api';
 import ThemeToggle from '@/components/ui/ThemeToggle';
 
@@ -130,7 +131,7 @@ export default function ForgotPasswordPage() {
                   className="input-field pr-12"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder="New password"
                 />
                 <button
                   type="button"
@@ -140,10 +141,11 @@ export default function ForgotPasswordPage() {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              <PasswordChecklist password={newPassword} />
             </div>
             <button
               type="submit"
-              disabled={loading || code.length !== 6 || newPassword.length < 8}
+              disabled={loading || code.length !== 6 || !isStrongPassword(newPassword)}
               className="btn-primary w-full"
             >
               {loading ? 'Resetting...' : 'Reset Password'}

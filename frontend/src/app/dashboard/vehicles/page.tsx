@@ -45,6 +45,8 @@ type OwnerVehicle = {
   proof_photos?: Record<string, string>;
   driver_available?: boolean;
   driver_fee_per_day?: number;
+  verification_status?: 'unreviewed' | 'approved' | 'rejected' | 'needs_more_info';
+  verification_notes?: string | null;
 };
 
 type OwnerSubscription = {
@@ -567,6 +569,22 @@ export default function MyVehiclesPage() {
               </div>
               <span className="h-fit shrink-0 text-xs px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600">{v.province || 'Philippines'}</span>
             </div>
+            {v.verification_status === 'approved' ? (
+              <p className="mt-3 inline-block rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-600">✓ Approved by Admin</p>
+            ) : v.verification_status === 'rejected' ? (
+              <div className="mt-3 rounded-lg bg-red-500/10 p-2 text-xs text-red-500">
+                <p className="font-semibold">Rejected by Admin — hidden from Browse Vehicles</p>
+                {v.verification_notes && <p className="mt-0.5">Reason: {v.verification_notes}</p>}
+                <p className="mt-0.5">Edit the listing to fix it and send it back for review.</p>
+              </div>
+            ) : v.verification_status === 'needs_more_info' ? (
+              <div className="mt-3 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-600">
+                <p className="font-semibold">Admin needs more information</p>
+                {v.verification_notes && <p className="mt-0.5">{v.verification_notes}</p>}
+              </div>
+            ) : (
+              <p className="mt-3 inline-block rounded-full bg-slate-500/15 px-2 py-1 text-xs text-[var(--muted)]">Pending admin review</p>
+            )}
             <p className="text-sm text-[var(--muted)] mt-3">{formatPlace(v.city || v.location, v.province, v.barangay)}</p>
             {v.pickup_address && <p className="text-xs text-[var(--muted)]">Pickup: {v.pickup_address}</p>}
             <p className="text-[var(--primary)] font-bold mt-2">{formatCurrency(v.price_per_day)}/day</p>

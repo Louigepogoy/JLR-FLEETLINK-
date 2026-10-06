@@ -3,11 +3,12 @@ const router = express.Router();
 const { authenticate, authorize } = require('../middleware/auth');
 const {
   getCommission, updateCommission, getCommissionHistory, commissionValidation,
-  updateInspectionWindow, inspectionWindowValidation,
+  updateInspectionWindow, inspectionWindowValidation, getCommissionEarnings,
 } = require('../controllers/commissionController');
 
 router.get('/', getCommission);
 router.get('/history', authenticate, authorize('admin'), getCommissionHistory);
+router.get('/earnings', authenticate, authorize('admin'), getCommissionEarnings);
 router.put('/', authenticate, authorize('admin'), commissionValidation, updateCommission);
 router.put('/inspection-window', authenticate, authorize('admin'), inspectionWindowValidation, updateInspectionWindow);
 

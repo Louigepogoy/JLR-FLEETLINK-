@@ -18,7 +18,7 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ identifier: '', password: '' });
 
   const handleApiError = (err: unknown, fallback: string) => {
     const error = err as { response?: { data?: { message?: string }; status?: number } };
@@ -41,6 +41,12 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${user.full_name}!`);
       router.push(getDashboardPath(user.role));
     } catch (err: unknown) {
+      const data = (err as { response?: { data?: { code?: string; message?: string; data?: { email?: string } } } }).response?.data;
+      if (data?.code === 'EMAIL_NOT_VERIFIED' && data.data?.email) {
+        toast.error(data.message || 'Please verify your email first');
+        router.push(`/auth/verify-email?email=${encodeURIComponent(data.data.email)}&resend=1`);
+        return;
+      }
       handleApiError(err, 'Login failed');
     } finally {
       setLoading(false);
@@ -88,14 +94,15 @@ export default function LoginPage() {
 
         <form onSubmit={handleCredentialsSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium mb-1 block">Email</label>
+            <label className="text-sm font-medium mb-1 block">Username or Email</label>
             <input
-              type="email"
+              type="text"
               required
+              autoComplete="username"
               className="input-field"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              placeholder="you@example.com"
+              value={form.identifier}
+              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+              placeholder="juan_dc or you@gmail.com"
             />
           </div>
           <div>

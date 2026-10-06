@@ -58,6 +58,41 @@ const getCommissionHistory = async (req, res, next) => {
   }
 };
 
+// Commission the platform actually earned: one row per booking payment (stored on `transactions` when
+// the payment is finalized), plus partial refunds, which take part of it back. Fully refunded payments
+// are listed but don't count toward the totals.
+const getCommissionEarnings = async (req, res, next) => {
+  try {
+    const counted = `((t.type = 'payment' AND t.status <> 'refunded') OR t.type = 'refund')`;
+    const [rows, summary] = await Promise.all([
+      query(
+        `SELECT t.id, t.created_at, t.invoice_number, t.type, t.status, t.total_amount,
+                t.commission_amount, t.commission_percentage,
+                v.title AS vehicle_title, c.full_name AS customer_name, o.full_name AS owner_name
+         FROM transactions t
+         LEFT JOIN bookings b ON t.booking_id = b.id
+         LEFT JOIN vehicles v ON b.vehicle_id = v.id
+         LEFT JOIN users c ON b.customer_id = c.id
+         LEFT JOIN users o ON t.user_id = o.id
+         WHERE t.type = 'payment' OR (t.type = 'refund' AND t.commission_amount <> 0)
+         ORDER BY t.created_at DESC
+         LIMIT 200`
+      ),
+      query(
+        `SELECT
+           COALESCE(SUM(t.commission_amount) FILTER (WHERE ${counted}), 0) AS total_earned,
+           COALESCE(SUM(t.commission_amount) FILTER (
+             WHERE ${counted} AND t.created_at >= DATE_TRUNC('month', NOW())), 0) AS this_month,
+           COUNT(*) FILTER (WHERE t.type = 'payment' AND t.status <> 'refunded') AS payments_count
+         FROM transactions t`
+      ),
+    ]);
+    res.json({ success: true, data: { summary: summary.rows[0], records: rows.rows } });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // How long a customer has to accept or reject a vehicle after the owner hands it over.
 const updateInspectionWindow = async (req, res, next) => {
   try {
@@ -92,5 +127,5 @@ const inspectionWindowValidation = [
 
 module.exports = {
   getCommission, updateCommission, getCommissionHistory, commissionValidation,
-  updateInspectionWindow, inspectionWindowValidation,
+  updateInspectionWindow, inspectionWindowValidation, getCommissionEarnings,
 };

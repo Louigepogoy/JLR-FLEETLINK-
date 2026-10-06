@@ -44,7 +44,7 @@ const createBooking = async (req, res, next) => {
     }
 
     const vehicleResult = await query(
-      "SELECT * FROM vehicles WHERE id = $1 AND status = 'available'",
+      "SELECT * FROM vehicles WHERE id = $1 AND status = 'available' AND verification_status <> 'rejected'",
       [vehicleId]
     );
     if (!vehicleResult.rows[0]) {

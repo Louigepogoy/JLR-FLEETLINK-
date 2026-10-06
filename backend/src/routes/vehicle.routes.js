@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate, authorize } = require('../middleware/auth');
 const { uploadVehicleImages } = require('../middleware/upload');
 const {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
@@ -14,7 +14,7 @@ router.get('/stats/summary', getPublicStats);
 router.get('/owner/my-vehicles', authenticate, authorize('user', 'admin'), getOwnerVehicles);
 router.get('/admin/pending-verifications', authenticate, authorize('admin'), getPendingVehicleVerifications);
 router.patch('/:id/verification', authenticate, authorize('admin'), recordVehicleVerification);
-router.get('/:id', getVehicleById);
+router.get('/:id', optionalAuthenticate, getVehicleById);
 router.post('/', authenticate, authorize('user', 'admin'), uploadVehicleImages, vehicleValidation, createVehicle);
 router.put('/:id', authenticate, authorize('user', 'admin'), uploadVehicleImages, updateVehicle);
 router.delete('/:id', authenticate, authorize('user', 'admin'), deleteVehicle);
