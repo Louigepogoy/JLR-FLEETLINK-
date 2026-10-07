@@ -1,16 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { getDashboardPath } from '@/lib/utils';
-import ThemeToggle from '@/components/ui/ThemeToggle';
+import { getDashboardPath, noSpaces } from '@/lib/utils';
+import AuthShell from '@/components/auth/AuthShell';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 
 export default function LoginPage() {
@@ -19,20 +17,25 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ identifier: '', password: '' });
+  // Wrong-password / locked-account message, kept on screen (it says how many attempts are left).
+  const [loginError, setLoginError] = useState<{ message: string; locked: boolean } | null>(null);
 
   const handleApiError = (err: unknown, fallback: string) => {
-    const error = err as { response?: { data?: { message?: string }; status?: number } };
+    const error = err as { response?: { data?: { message?: string; code?: string }; status?: number } };
     let msg = error.response?.data?.message || fallback;
     if (!error.response) {
       msg = 'Cannot reach server. Start backend (npm run dev) and check DATABASE_URL / Neon setup.';
     } else if (error.response.status === 503) {
       msg = error.response.data?.message || 'Database not ready. Run: cd backend && npm run db:setup';
+    } else if (error.response.status === 401 || error.response.status === 429) {
+      setLoginError({ message: msg, locked: error.response.data?.code === 'ACCOUNT_LOCKED' });
     }
     toast.error(msg);
   };
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoginError(null);
     setLoading(true);
     try {
       const res = await api.post('/auth/login', form);
@@ -69,29 +72,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative">
-      <div className="absolute top-4 right-4"><ThemeToggle /></div>
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-violet-500/20 blur-3xl" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-8 w-full max-w-md relative z-10"
-      >
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
-              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
-            </div>
-            <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
-          </Link>
-          <h1 className="text-2xl font-bold">Welcome Back</h1>
-          <p className="text-sm text-[var(--muted)]">Sign in to your account</p>
-        </div>
-
+    <AuthShell
+      title="Welcome Back"
+      subtitle="Sign in to your account"
+      panelTitle={<>Your Next Ride.<br />Just a Tap Away.</>}
+      panelText="Book cars, vans, and motorcycles from verified owners across the Philippines — or list your own and start earning."
+    >
         <form onSubmit={handleCredentialsSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium mb-1 block">Username or Email</label>
@@ -101,7 +87,7 @@ export default function LoginPage() {
               autoComplete="username"
               className="input-field"
               value={form.identifier}
-              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+              onChange={(e) => setForm({ ...form, identifier: noSpaces(e.target.value) })}
               placeholder="juan_dc or you@gmail.com"
             />
           </div>
@@ -118,7 +104,7 @@ export default function LoginPage() {
                 required
                 className="input-field pr-12"
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                onChange={(e) => setForm({ ...form, password: noSpaces(e.target.value) })}
                 placeholder="••••••••"
               />
               <button
@@ -130,6 +116,14 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          {loginError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400" role="alert">
+              {loginError.message}
+              {loginError.locked && (
+                <Link href="/auth/forgot-password" className="mt-1 block font-semibold underline">Reset your password</Link>
+              )}
+            </div>
+          )}
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? 'Signing in...' : 'Continue'}
           </button>
@@ -148,7 +142,6 @@ export default function LoginPage() {
             Create Account
           </Link>
         </p>
-      </motion.div>
-    </div>
+    </AuthShell>
   );
 }

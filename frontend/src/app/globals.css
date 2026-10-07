@@ -142,6 +142,18 @@
   font-weight: 700;
 }
 /* Dark basemap: invert the light OpenStreetMap tiles and rotate hues back so water stays blue. */
+/* Native dropdown lists (select options) ignore the page colors; without this, selects with white
+   text show white-on-white options in dark mode. */
+.dark {
+  color-scheme: dark;
+}
+
+.dark select option,
+.dark select optgroup {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
 .dark .ph-map:not(.ph-map--carto) .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.7);
 }
@@ -211,6 +223,17 @@ body {
 
 .input-field {
   @apply w-full px-4 py-3 rounded-xl border border-[var(--card-border)] bg-[var(--card)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] text-[var(--foreground)];
+}
+
+/* Sign-in / create-account card: inputs sit on a solid white panel, so give them a visible fill. */
+.auth-form .input-field {
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.dark .auth-form .input-field {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .skeleton {

@@ -1,10 +1,15 @@
+const fs = require('fs');
 const { body, param, validationResult } = require('express-validator');
 const { query, pool } = require('../config/db');
 const { generateInvoiceNumber } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { createRefund } = require('../services/paymongoService');
+const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
+const { autoPayoutOwner } = require('../services/payoutService');
 
 const RESOLUTIONS = ['refund_full', 'refund_partial', 'dismiss'];
+// Total photos/videos a dispute can hold (sent at rejection plus later uploads).
+const MAX_TOTAL_EVIDENCE = 10;
 
 const getDisputes = async (req, res, next) => {
   try {
@@ -109,6 +114,14 @@ const resolveDispute = async (req, res, next) => {
     if (d.status !== 'open') {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'This dispute has already been resolved' });
+    }
+    // No refund without proof: the admin must first get photo/video evidence from the renter.
+    if (action !== 'dismiss' && !(Array.isArray(d.evidence) && d.evidence.length)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'This dispute has no photo or video evidence. Request evidence from the renter before refunding.',
+      });
     }
 
     const paid = parseFloat(d.paid_amount);
@@ -228,6 +241,8 @@ const resolveDispute = async (req, res, next) => {
     }[disputeStatus];
     await createNotification(d.customer_id, 'Dispute resolved', customerMessage, 'booking', '/dashboard/bookings').catch(() => {});
     await createNotification(d.owner_id, 'Dispute resolved', ownerMessage, 'payment', '/dashboard/earnings').catch(() => {});
+    // Dismissed or partially refunded: the owner's remaining share is payable now, so send it.
+    if (disputeStatus !== 'refunded') await autoPayoutOwner(d.owner_id, 'dispute');
     if (manualRemaining > 0) {
       await createNotification(
         req.user.id,
@@ -247,6 +262,86 @@ const resolveDispute = async (req, res, next) => {
   }
 };
 
+/** Admin asks the renter of an open dispute to upload photo/video evidence (`note` says what to show). */
+const requestEvidence = async (req, res, next) => {
+  try {
+    const note = String(req.body.note || '').trim().slice(0, 1000) || null;
+    const result = await query(
+      `UPDATE booking_disputes d SET evidence_requested_at = NOW(), evidence_request_note = $2
+       FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id
+       WHERE d.booking_id = b.id AND d.id = $1 AND d.status = 'open'
+       RETURNING d.*, v.title`,
+      [req.params.id, note]
+    );
+    const d = result.rows[0];
+    if (!d) return res.status(400).json({ success: false, message: 'Only open disputes can ask for evidence' });
+
+    await createNotification(
+      d.customer_id,
+      'Evidence needed for your refund',
+      `An admin needs photos or videos of the problem with ${d.title} before deciding your refund.${note ? ` What to show: "${note}"` : ''} Upload them from My Bookings.`,
+      'alert',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    res.json({ success: true, data: d });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Renter adds photo/video evidence to their own open dispute (e.g. after the admin asked for it). */
+const addDisputeEvidence = async (req, res, next) => {
+  const files = req.files || [];
+  const removeUploads = () => Promise.all(files.map((f) => fs.promises.unlink(f.path).catch(() => {})));
+  try {
+    if (!files.length) {
+      return res.status(400).json({ success: false, message: 'Choose at least one photo or video' });
+    }
+    if (files.some((f) => !f.mimetype.startsWith('video/') && f.size > CHAT_IMAGE_MAX_BYTES)) {
+      await removeUploads();
+      return res.status(400).json({ success: false, message: 'Each photo must be 5 MB or smaller' });
+    }
+    const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const added = files.map((f) => ({
+      url: `${baseUrl}/uploads/${f.filename}`,
+      type: f.mimetype.startsWith('video/') ? 'video' : 'image',
+    }));
+
+    // Append atomically, only while the dispute is open, is this renter's, and stays within the cap.
+    const result = await query(
+      `UPDATE booking_disputes d SET evidence = d.evidence || $3::jsonb, evidence_requested_at = NULL
+       FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id
+       WHERE d.booking_id = b.id AND d.id = $1 AND d.customer_id = $2 AND d.status = 'open'
+         AND jsonb_array_length(d.evidence) + $4 <= $5
+       RETURNING d.*, v.title`,
+      [req.params.id, req.user.id, JSON.stringify(added), added.length, MAX_TOTAL_EVIDENCE]
+    );
+    const d = result.rows[0];
+    if (!d) {
+      await removeUploads();
+      return res.status(400).json({
+        success: false,
+        message: `You can only add evidence to your own open dispute, up to ${MAX_TOTAL_EVIDENCE} photos/videos in total`,
+      });
+    }
+
+    const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+    for (const admin of admins.rows) {
+      await createNotification(
+        admin.id,
+        'Renter sent dispute evidence',
+        `The renter added ${added.length} photo/video file(s) for the ${d.title} dispute. Review it and decide the refund.`,
+        'alert',
+        '/dashboard/admin/disputes'
+      ).catch(() => {});
+    }
+    res.json({ success: true, data: d });
+  } catch (error) {
+    await removeUploads();
+    next(error);
+  }
+};
+
 const resolveDisputeValidation = [
   param('id').isUUID().withMessage('Invalid dispute'),
   body('action').isIn(RESOLUTIONS).withMessage('Choose full refund, partial refund, or dismiss'),
@@ -256,4 +351,6 @@ const resolveDisputeValidation = [
   body('manual').optional().isBoolean().withMessage('Invalid manual flag').toBoolean(),
 ];
 
-module.exports = { getDisputes, resolveDispute, resolveDisputeValidation };
+module.exports = {
+  getDisputes, resolveDispute, resolveDisputeValidation, requestEvidence, addDisputeEvidence,
+};

@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { Mail, Phone, MapPin } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { getDashboardPath } from '@/lib/utils';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 export default function Footer() {
   const { user, isAuthenticated } = useAuthStore();
@@ -15,9 +15,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
-                <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
-              </div>
+              <BrandLogo />
               <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
             </div>
             <p className="text-sm text-[var(--muted)]">

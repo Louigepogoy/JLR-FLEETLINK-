@@ -5,19 +5,30 @@ const { calculateRentalPeriod } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const { getInspectionWindowMinutes, runInspectionSweep, sweepQuietly } = require('../services/inspectionService');
+const { autoPayoutOwner } = require('../services/payoutService');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
 
 // Renter and owner only see each other's phone (and the renter the owner's email) once the renter
 // has paid and the booking is confirmed, so contact details aren't handed out on unpaid bookings.
 const CONTACT_SHARED_SQL = `b.status IN ('approved', 'active', 'completed')`;
 
+// True when today (Philippine time) is the booking's pickup date — the only day the owner may hand
+// the vehicle over. Expects `b` = bookings.
+const IS_PICKUP_DAY_SQL = `(b.start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date)`;
+const PICKUP_LABEL_SQL = `TO_CHAR(b.start_date, 'FMMonth FMDD, YYYY')`;
+const notPickupDayMessage = (label) =>
+  `You can only hand over the vehicle on the pickup date the renter booked (${label}).`;
+
 // Pickup-inspection fields added to every booking list, seen from the server clock so a wrong
 // client clock can't break the countdown.
 const INSPECTION_SELECT = `
   GREATEST(0, EXTRACT(EPOCH FROM (b.inspection_deadline - NOW())))::int AS inspection_seconds_left,
   ${PAYMENT_SECONDS_LEFT_SQL} AS payment_seconds_left,
+  ${IS_PICKUP_DAY_SQL} AS is_pickup_day,
   d.id AS dispute_id, d.status AS dispute_status, d.reason AS dispute_reason,
-  d.refund_amount AS dispute_refund_amount, d.admin_notes AS dispute_admin_notes`;
+  d.refund_amount AS dispute_refund_amount, d.admin_notes AS dispute_admin_notes,
+  d.evidence AS dispute_evidence, d.evidence_requested_at AS dispute_evidence_requested_at,
+  d.evidence_request_note AS dispute_evidence_request_note`;
 
 const createBooking = async (req, res, next) => {
   try {
@@ -37,6 +48,12 @@ const createBooking = async (req, res, next) => {
     const { vehicleId, startDate, endDate, pickupTime, dropoffTime, notes, withDriver } = req.body;
     const pickup = pickupTime || '09:00';
     const dropoff = dropoffTime || '17:00';
+
+    // Dates are calendar days in the Philippines; a rental can't start before today there.
+    const todayPH = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+    if (String(startDate).slice(0, 10) < todayPH) {
+      return res.status(400).json({ success: false, message: 'The pickup date can\'t be in the past' });
+    }
 
     const period = calculateRentalPeriod(startDate, pickup, endDate, dropoff);
     if (!period) {
@@ -195,8 +212,8 @@ const updateBookingStatus = async (req, res, next) => {
     }
 
     const booking = await query(
-      `SELECT b.*, v.owner_id, v.title FROM bookings b
-       JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+       FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
       [req.params.id]
     );
 
@@ -224,6 +241,10 @@ const updateBookingStatus = async (req, res, next) => {
     }
     if (!(allowedTransitions[b.status] || []).includes(status)) {
       return res.status(400).json({ success: false, message: `A ${b.status} booking cannot be changed to ${status}` });
+    }
+
+    if (b.status === 'approved' && status === 'active' && !b.is_pickup_day && req.user.role !== 'admin') {
+      return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
     }
 
     // Once the vehicle is handed over, only the customer's inspection (or an admin resolving the
@@ -364,8 +385,8 @@ const getBookingById = async (req, res, next) => {
 const handOverVehicle = async (req, res, next) => {
   try {
     const booking = await query(
-      `SELECT b.*, v.owner_id, v.title FROM bookings b
-       JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+       FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
       [req.params.id]
     );
     const b = booking.rows[0];
@@ -380,6 +401,9 @@ const handOverVehicle = async (req, res, next) => {
         message: 'The customer has not paid yet. Use "Mark as Picked Up" for unpaid bookings.',
       });
     }
+    if (!b.is_pickup_day) {
+      return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
+    }
 
     const windowMinutes = await getInspectionWindowMinutes();
     const result = await query(
@@ -387,6 +411,7 @@ const handOverVehicle = async (req, res, next) => {
          inspection_deadline = NOW() + $2::int * INTERVAL '1 minute',
          inspection_reminder_sent = false, updated_at = NOW()
        WHERE id = $1 AND status = 'approved' AND handed_over_at IS NULL
+         AND start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date
        RETURNING *`,
       [b.id, windowMinutes]
     );
@@ -443,11 +468,13 @@ const acceptVehicle = async (req, res, next) => {
 
     await createNotification(
       b.owner_id,
-      'Vehicle accepted — payout unlocked',
-      `The renter accepted ${b.title}. Your earnings are now eligible for payout.`,
+      'Vehicle accepted',
+      `The renter accepted ${b.title}. Your earnings are being sent to your payout account.`,
       'payment',
       '/dashboard/earnings'
     );
+    // Accepting releases the held payment: send the owner's share right away.
+    await autoPayoutOwner(b.owner_id, 'accepted');
 
     res.json({ success: true, data: b });
   } catch (error) {
@@ -467,6 +494,10 @@ const rejectVehicle = async (req, res, next) => {
     if (reason.length < 5 || reason.length > 2000) {
       await removeUploads();
       return res.status(400).json({ success: false, message: 'Please describe the problem (5-2000 characters)' });
+    }
+    // A refund needs proof, so at least one photo or video of the problem is required.
+    if (!files.length) {
+      return res.status(400).json({ success: false, message: 'Attach at least one photo or video of the problem as proof' });
     }
     if (files.some((f) => !f.mimetype.startsWith('video/') && f.size > CHAT_IMAGE_MAX_BYTES)) {
       await removeUploads();

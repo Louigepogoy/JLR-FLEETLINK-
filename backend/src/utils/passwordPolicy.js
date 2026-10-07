@@ -9,6 +9,7 @@ const PASSWORD_RULES = [
 
 // Returns null when the password is strong enough, otherwise a sentence listing what's missing.
 const passwordProblem = (password) => {
+  if (/\s/.test(String(password || ''))) return 'Password can\'t contain spaces.';
   const missing = PASSWORD_RULES.filter((r) => !r.test(String(password || ''))).map((r) => r.message);
   return missing.length ? `Password must contain ${missing.join(', ')}.` : null;
 };

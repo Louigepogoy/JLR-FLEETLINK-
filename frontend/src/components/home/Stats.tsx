@@ -39,9 +39,9 @@ export default function Stats() {
   ];
 
   return (
-    <section className="py-16">
+    <section className="py-8 sm:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="glass-card p-8 grid grid-cols-1 sm:grid-cols-3 gap-8">
+        <div className="glass-card px-3 py-5 sm:p-8 grid grid-cols-3 gap-2 sm:gap-8">
           {items.map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -51,11 +51,11 @@ export default function Stats() {
               transition={{ delay: i * 0.1 }}
               className="text-center"
             >
-              <div className="text-3xl lg:text-4xl font-bold gradient-text">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold gradient-text">
                 <Counter target={stat.value} />
                 {stat.suffix}
               </div>
-              <p className="text-sm text-[var(--muted)] mt-1">{stat.label}</p>
+              <p className="text-[11px] leading-tight sm:text-sm text-[var(--muted)] mt-1">{stat.label}</p>
             </motion.div>
           ))}
         </div>

@@ -19,6 +19,9 @@ CREATE TABLE users (
   username VARCHAR(255),
   -- New email/password accounts must verify their email with a code before signing in.
   email_verified BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Sign-in lockout: 5 wrong passwords in a row lock the account until locked_until.
+  failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
   password_hash VARCHAR(255),
   full_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50),
@@ -228,6 +231,26 @@ CREATE TABLE owner_payout_accounts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Every owner payout, automatic or manual (migration 030). Paid transactions point at the payout
+-- that sent them via transactions.payout_id.
+CREATE TABLE owner_payouts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  payout_method VARCHAR(20),
+  account_name VARCHAR(255),
+  account_number VARCHAR(50),
+  source VARCHAR(20) NOT NULL
+    CHECK (source IN ('accepted', 'auto_accepted', 'dispute', 'account_added', 'manual', 'legacy')),
+  reference VARCHAR(40) NOT NULL UNIQUE,
+  paid_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_owner_payouts_created ON owner_payouts(created_at DESC);
+CREATE INDEX idx_owner_payouts_owner ON owner_payouts(owner_id, created_at DESC);
+
+ALTER TABLE transactions ADD COLUMN payout_id UUID REFERENCES owner_payouts(id) ON DELETE SET NULL;
+
 CREATE TABLE commissions (
   id SERIAL PRIMARY KEY,
   percentage DECIMAL(5,2) NOT NULL,
@@ -359,6 +382,9 @@ CREATE TABLE booking_disputes (
   -- How the refund was paid out, and the PayMongo refund ids / note on what was sent manually.
   refund_method VARCHAR(20) CHECK (refund_method IN ('paymongo', 'manual', 'partly_manual')),
   refund_reference TEXT,
+  -- Set when an admin asks the renter for (more) evidence; cleared when the renter uploads it.
+  evidence_requested_at TIMESTAMPTZ,
+  evidence_request_note TEXT,
   admin_notes TEXT,
   resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
   resolved_at TIMESTAMPTZ,
@@ -386,6 +412,51 @@ CREATE TABLE message_reactions (
   emoji VARCHAR(16) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (message_id, user_id)
+);
+
+-- Audit log of login attempts (success and failed) per email (migration 003)
+CREATE TABLE login_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  email VARCHAR(255) NOT NULL,
+  success BOOLEAN NOT NULL,
+  reason VARCHAR(50) NOT NULL,
+  ip_address VARCHAR(64),
+  user_agent TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_login_logs_email ON login_logs(email);
+CREATE INDEX idx_login_logs_created_at ON login_logs(created_at DESC);
+
+-- One-time login verification codes emailed to the user's address (migration 004)
+CREATE TABLE login_otps (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_login_otps_user_id ON login_otps(user_id);
+
+-- One-time codes emailed to reset a password (migration 005)
+CREATE TABLE password_reset_codes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_password_reset_codes_user_id ON password_reset_codes(user_id);
+
+-- When each user last opened a sidebar page or their notifications (migration 031); badges count
+-- only what is new since then.
+CREATE TABLE user_seen_markers (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  marker_key VARCHAR(100) NOT NULL,
+  seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, marker_key)
 );
 
 -- Prevent double booking: no overlapping approved/active bookings for same vehicle

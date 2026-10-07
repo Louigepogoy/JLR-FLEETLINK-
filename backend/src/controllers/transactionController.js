@@ -1,5 +1,6 @@
 const { query } = require('../config/db');
 const { PAYOUT_ELIGIBLE_SQL, sweepQuietly } = require('../services/inspectionService');
+const { autoPayoutOwner, recordPayout } = require('../services/payoutService');
 
 // Rows that count toward an owner's earnings: successful payments, plus refund rows (their negative
 // owner_amount takes a partial refund back out). Fully refunded payments are marked 'refunded'.
@@ -121,8 +122,10 @@ const savePayoutAccount = async (req, res, next) => {
        RETURNING *`,
       [req.user.id, payoutMethod, accountName, accountNumber]
     );
+    // Earnings that were waiting for an account are sent now.
+    const payout = await autoPayoutOwner(req.user.id, 'account_added');
 
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: result.rows[0], paidOut: payout.paid });
   } catch (error) {
     next(error);
   }
@@ -133,6 +136,26 @@ const savePayoutAccount = async (req, res, next) => {
  * separate approved business account we don't have, so this only tracks what's owed and to
  * where — the admin still sends the money manually (GCash/bank) before marking it paid below.
  */
+/** Every owner payout (automatic and manual), newest first, with the bookings each one covered. */
+const getPayoutHistory = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT p.*, u.full_name AS owner_name, u.email AS owner_email, a.full_name AS paid_by_name,
+              COALESCE(ARRAY_AGG(DISTINCT t.booking_id) FILTER (WHERE t.booking_id IS NOT NULL), '{}') AS booking_ids
+       FROM owner_payouts p
+       LEFT JOIN users u ON u.id = p.owner_id
+       LEFT JOIN users a ON a.id = p.paid_by
+       LEFT JOIN transactions t ON t.payout_id = p.id
+       GROUP BY p.id, u.full_name, u.email, a.full_name
+       ORDER BY p.created_at DESC
+       LIMIT 300`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getPendingPayouts = async (req, res, next) => {
   try {
     await sweepQuietly();
@@ -159,16 +182,10 @@ const getPendingPayouts = async (req, res, next) => {
 const markOwnerPayoutPaid = async (req, res, next) => {
   try {
     const { ownerId } = req.params;
-    // Only what passed pickup inspection — payments still held or under dispute stay pending.
-    const result = await query(
-      `UPDATE transactions t SET payout_status = 'paid', paid_out_at = NOW()
-       WHERE t.user_id = $1 AND ${PAYABLE_SQL}
-       RETURNING t.id, t.owner_amount`,
-      [ownerId]
-    );
-
-    const totalPaid = result.rows.reduce((sum, row) => sum + parseFloat(row.owner_amount), 0);
-    res.json({ success: true, data: { transactionsMarked: result.rows.length, totalPaid } });
+    // Only what passed pickup inspection — payments still held or under dispute stay pending. Recorded
+    // in the payout history like the automatic payouts.
+    const { paid, payout } = await recordPayout({ ownerId, source: 'manual', paidBy: req.user.id });
+    res.json({ success: true, data: { totalPaid: paid, reference: payout?.reference || null } });
   } catch (error) {
     next(error);
   }
@@ -213,5 +230,6 @@ const getAdminAnalytics = async (req, res, next) => {
 
 module.exports = {
   getMyTransactions, getOwnerEarnings, getAdminAnalytics,
-  getMyPayoutAccount, savePayoutAccount, getPendingPayouts, markOwnerPayoutPaid,
+  getMyPayoutAccount, savePayoutAccount, getPendingPayouts, getPayoutHistory, markOwnerPayoutPaid,
+  PAYABLE_SQL,
 };

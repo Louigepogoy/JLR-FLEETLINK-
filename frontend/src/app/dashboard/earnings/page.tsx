@@ -46,7 +46,9 @@ export default function EarningsPage() {
     try {
       const res = await api.put('/transactions/payout-account', payoutForm);
       setPayoutAccount(res.data.data);
-      toast.success('Payout account saved');
+      const paidOut = Number(res.data.paidOut || 0);
+      toast.success(paidOut > 0 ? `Payout account saved — ${formatCurrency(paidOut)} sent to it` : 'Payout account saved');
+      if (paidOut > 0) api.get('/transactions/earnings').then((r) => setData(r.data.data)).catch(() => {});
     } catch {
       toast.error('Failed to save payout account');
     } finally {
@@ -104,13 +106,12 @@ export default function EarningsPage() {
       <div className="glass-card p-6 mb-8">
         <h3 className="font-semibold mb-1">Payout Account</h3>
         <p className="text-sm text-[var(--muted)] mb-4">
-          Where should we send your earnings? An admin sends this manually and marks it paid — PayMongo does not
-          auto-transfer funds to your account.
+          Where should we send your earnings? Your share is sent here automatically — no need to request it.
         </p>
         <p className="text-sm text-[var(--muted)] mb-4">
           Renters pay JLR Fleetlink, not you. We hold each payment until the renter accepts your vehicle at pickup
-          (or their inspection time runs out), then it becomes ready for payout. Never accept cash directly from a
-          renter.
+          (or their inspection time runs out), then your share is sent to this account right away. Never accept cash
+          directly from a renter.
         </p>
         <form onSubmit={handleSavePayoutAccount} className="grid sm:grid-cols-3 gap-3">
           <select

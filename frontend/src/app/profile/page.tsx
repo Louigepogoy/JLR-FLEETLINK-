@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import api from '@/lib/api';
+import { noSpaces } from '@/lib/utils';
 import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import { useAuthStore } from '@/store/authStore';
 
@@ -165,7 +166,7 @@ export default function ProfilePage() {
               <div>
                 <label className="text-sm font-medium flex items-center gap-2"><Phone className="h-4 w-4" /> Phone Number</label>
                 <input className="input-field mt-1" placeholder="09XXXXXXXXX" value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                  onChange={(e) => setForm({ ...form, phone: noSpaces(e.target.value) })} />
               </div>
               <button type="submit" disabled={loading} className="btn-primary w-full">
                 {loading ? 'Saving...' : 'Save Profile'}
@@ -185,14 +186,14 @@ export default function ProfilePage() {
                 type="password"
                 placeholder="Current password"
                 value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: noSpaces(e.target.value) })}
               />
               <input
                 className="input-field"
                 type="password"
                 placeholder="New password"
                 value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: noSpaces(e.target.value) })}
               />
               {passwordForm.newPassword && <PasswordChecklist password={passwordForm.newPassword} />}
               <input
@@ -200,7 +201,7 @@ export default function ProfilePage() {
                 type="password"
                 placeholder="Confirm new password"
                 value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: noSpaces(e.target.value) })}
               />
               <button type="submit" disabled={passwordLoading} className="btn-primary w-full">
                 {passwordLoading ? 'Changing...' : 'Change Password'}

@@ -19,6 +19,7 @@ import BookingPartyCard from '@/components/booking/BookingPartyCard';
 import BookingStatusTabs, { matchesBookingTab, type BookingTab } from '@/components/booking/BookingStatusTabs';
 import type { InspectionFields } from '@/lib/inspection';
 import { fetchPendingReviews, REVIEWS_CHANGED_EVENT, type PendingReview } from '@/lib/reviews';
+import BookingId from '@/components/booking/BookingId';
 
 type CustomerBooking = InspectionFields & {
   id: string;
@@ -165,6 +166,7 @@ function MyBookingsContent() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">{b.title}</h3>
+                  <BookingId id={b.id} className="mt-1" />
                   <p className="text-sm text-[var(--muted)]">
                     {b.brand} {b.model}{b.plate_number ? ` · ${b.plate_number}` : ''}
                   </p>

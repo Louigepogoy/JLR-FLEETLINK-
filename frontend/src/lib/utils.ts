@@ -65,6 +65,9 @@ export function localDateString(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Passwords, usernames, emails, and phone numbers can't contain spaces, so typed spaces are dropped.
+export const noSpaces = (value: string) => value.replace(/\s/g, '');
+
 export function getDashboardPath(role: string) {
   return role === 'admin' ? '/dashboard/admin' : '/dashboard';
 }
@@ -109,6 +112,10 @@ export const vehicleProofSlots: {
 export const requiredProofCount = vehicleProofSlots.length;
 export const paymentStatuses = ['pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled'];
 export const bookingStatuses = ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled'];
+
+// Short, readable booking ID shown to renters, owners, and admins (e.g. BK-1A2B3C4D): the first
+// 8 characters of the booking UUID. Admins can search bookings by it.
+export const bookingCode = (id: string) => `BK-${id.slice(0, 8).toUpperCase()}`;
 
 // Bookings are confirmed by the renter's payment, not by the owner, so show that instead of the raw status.
 export const bookingStatusLabel = (status: string) =>

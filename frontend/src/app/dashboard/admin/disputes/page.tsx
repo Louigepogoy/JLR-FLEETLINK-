@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ShieldAlert } from 'lucide-react';
+import { Camera, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { DisputeIcon, IconChip } from '@/components/illustrations/MiniIcons';
@@ -10,6 +10,7 @@ import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
 import { disputeOutcomeLabel } from '@/lib/inspection';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import BookingId from '@/components/booking/BookingId';
 
 type Dispute = {
   id: string;
@@ -20,6 +21,8 @@ type Dispute = {
   refund_amount: string | null;
   refund_method: 'paymongo' | 'manual' | 'partly_manual' | null;
   refund_reference: string | null;
+  evidence_requested_at: string | null;
+  evidence_request_note: string | null;
   admin_notes: string | null;
   resolved_by_name: string | null;
   resolved_at: string | null;
@@ -63,8 +66,54 @@ const refundMethodLabel: Record<NonNullable<Dispute['refund_method']>, string> =
 
 const formatDateTime =(value: string) => new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
 
+/** Ask the renter to upload photo/video proof before deciding a refund. */
+function RequestEvidence({ dispute, onRequested }: { dispute: Dispute; onRequested: () => void }) {
+  const [note, setNote] = useState(dispute.evidence_request_note || '');
+  const [sending, setSending] = useState(false);
+
+  const send = async () => {
+    setSending(true);
+    try {
+      await api.post(`/disputes/${dispute.id}/request-evidence`, { note: note.trim() || undefined });
+      toast.success(`Asked ${dispute.customer_name} for evidence`);
+      onRequested();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Could not request evidence'));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+      <p className="flex items-center gap-2 font-semibold"><Camera className="h-4 w-4 text-amber-500" /> Request evidence from the renter</p>
+      {dispute.evidence_requested_at ? (
+        <p className="mt-1 text-sm text-amber-600 dark:text-amber-400">
+          Requested {formatDateTime(dispute.evidence_requested_at)} — waiting for the renter to upload. You can send a reminder.
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          The renter gets a notification and can upload photos or videos from My Bookings.
+        </p>
+      )}
+      <input
+        className="input-field mt-3 text-sm"
+        maxLength={1000}
+        placeholder="What should they show? e.g. close-up of the dent and the plate number (optional)"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <button onClick={send} disabled={sending} className="btn-outline mt-3 text-sm">
+        {sending ? 'Sending...' : dispute.evidence_requested_at ? 'Send Reminder' : 'Request Evidence'}
+      </button>
+    </div>
+  );
+}
+
 function ResolveForm({ dispute, onResolved }: { dispute: Dispute; onResolved: () => void }) {
-  const [action, setAction] = useState<Action>('refund_full');
+  // Refunds need proof; without any evidence only a dismissal is possible.
+  const hasEvidence = dispute.evidence.length > 0;
+  const [action, setAction] = useState<Action>(hasEvidence ? 'refund_full' : 'dismiss');
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -116,25 +165,34 @@ function ResolveForm({ dispute, onResolved }: { dispute: Dispute; onResolved: ()
   return (
     <div className="mt-4 rounded-xl border border-[var(--card-border)] p-4">
       <p className="mb-3 font-semibold">Decision</p>
+      {!hasEvidence && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+          No photo or video evidence yet — you can&apos;t refund without proof. Request evidence above, or dismiss.
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-3">
         {([
           ['refund_full', 'Full refund', 'Vehicle not as listed'],
           ['refund_partial', 'Partial refund', 'Minor issue, split the payment'],
           ['dismiss', 'Dismiss', 'No valid problem'],
-        ] as const).map(([value, label, hint]) => (
+        ] as const).map(([value, label, hint]) => {
+          const locked = value !== 'dismiss' && !hasEvidence;
+          return (
           <label
             key={value}
             className={cn(
-              'cursor-pointer rounded-lg border p-3 text-sm',
+              'rounded-lg border p-3 text-sm',
+              locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
               action === value ? 'border-[var(--primary)] bg-[var(--primary)]/10' : 'border-[var(--card-border)]'
             )}
           >
             <input type="radio" name={`action-${dispute.id}`} value={value} checked={action === value}
-              onChange={() => setAction(value)} className="sr-only" />
+              disabled={locked} onChange={() => setAction(value)} className="sr-only" />
             <span className="block font-medium">{label}</span>
             <span className="text-xs text-[var(--muted)]">{hint}</span>
           </label>
-        ))}
+          );
+        })}
       </div>
       {action === 'refund_partial' && (
         <input
@@ -209,6 +267,7 @@ export default function AdminDisputesPage() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold">{d.vehicle_title}</h3>
+                  <BookingId id={d.booking_id} className="mt-1" />
                   <p className="text-sm text-[var(--muted)]">
                     {d.brand} {d.model}{d.plate_number ? ` · ${d.plate_number}` : ''} · {formatDate(d.start_date)} — {formatDate(d.end_date)}
                   </p>
@@ -258,13 +317,16 @@ export default function AdminDisputesPage() {
                         <img src={e.url} alt="Evidence" className="h-24 w-24 rounded-lg object-cover" />
                       </a>
                     )))}
-                    {!d.evidence.length && <p className="text-sm text-[var(--muted)]">No photos or videos — reason only</p>}
+                    {!d.evidence.length && <p className="text-sm font-medium text-amber-600 dark:text-amber-400">No photos or videos yet — request evidence before refunding</p>}
                   </div>
                 </div>
               </div>
 
               {d.status === 'open' ? (
-                <ResolveForm dispute={d} onResolved={() => fetchDisputes()} />
+                <>
+                  <RequestEvidence dispute={d} onRequested={() => fetchDisputes()} />
+                  <ResolveForm key={`${d.id}-${d.evidence.length}`} dispute={d} onResolved={() => fetchDisputes()} />
+                </>
               ) : (
                 <div className="mt-4 text-sm text-[var(--muted)]">
                   {d.refund_amount && (

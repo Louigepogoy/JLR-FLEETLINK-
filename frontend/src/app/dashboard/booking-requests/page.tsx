@@ -20,6 +20,7 @@ import type { InspectionFields } from '@/lib/inspection';
 import {
   fetchPendingReviews, notifyReviewsChanged, REVIEWS_CHANGED_EVENT, type PendingReview,
 } from '@/lib/reviews';
+import BookingId from '@/components/booking/BookingId';
 
 type OwnerBooking = InspectionFields & {
   id: string;
@@ -142,6 +143,7 @@ export default function BookingRequestsPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold">{b.title}</h3>
+                  <BookingId id={b.id} className="mt-1" />
                   <p className="text-sm text-[var(--muted)]">
                     {b.brand} {b.model}{b.plate_number ? ` · ${b.plate_number}` : ''}
                   </p>
@@ -179,16 +181,31 @@ export default function BookingRequestsPage() {
               <PaymentDeadlineNotice secondsLeft={b.payment_seconds_left} onExpired={fetchBookings} />
             )}
             <OwnerInspectionStatus booking={b} onChanged={fetchBookings} />
+            {b.status === 'approved' && !b.handed_over_at && !b.is_pickup_day && (
+              <p className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <CalendarClock className="h-4 w-4 shrink-0" />
+                You can hand over the vehicle only on the pickup date: {formatDate(b.start_date)}{b.pickup_time ? ` at ${formatTime(b.pickup_time)}` : ''}.
+              </p>
+            )}
             {(b.status === 'active' || (b.status === 'approved' && !b.handed_over_at)) && (
               <div className="flex flex-wrap gap-3 mt-4">
                 {b.status === 'approved' && b.payment_status !== 'pending' && (
-                  <button onClick={() => handOver(b.id)} className="btn-primary text-sm py-2 flex items-center gap-2">
+                  <button
+                    onClick={() => handOver(b.id)}
+                    disabled={!b.is_pickup_day}
+                    title={b.is_pickup_day ? undefined : `Available on the pickup date: ${formatDate(b.start_date)}`}
+                    className="btn-primary text-sm py-2 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     <KeyRound className="h-4 w-4" /> Hand Over Vehicle
                   </button>
                 )}
                 {/* Unpaid bookings have nothing held in escrow, so they keep the direct flow. */}
                 {b.status === 'approved' && b.payment_status === 'pending' && (
-                  <button onClick={() => updateStatus(b.id, 'active')} className="btn-outline text-sm py-2 flex items-center gap-2">
+                  <button
+                    onClick={() => updateStatus(b.id, 'active')}
+                    disabled={!b.is_pickup_day}
+                    className="btn-outline text-sm py-2 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
                     <KeyRound className="h-4 w-4" /> Mark as Picked Up
                   </button>
                 )}

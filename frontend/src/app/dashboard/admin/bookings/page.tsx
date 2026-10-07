@@ -2,21 +2,36 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, CalendarClock, Clock } from 'lucide-react';
+import { Calendar, CalendarClock, Clock, Search } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import api from '@/lib/api';
 import { profilePath } from '@/lib/chat';
-import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
+import { bookingCode, bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
+import BookingId from '@/components/booking/BookingId';
+
+type AdminBooking = {
+  id: string; title: string; customer_id: string; customer_name: string; customer_email: string;
+  customer_phone: string | null; owner_id: string; owner_name: string; created_at: string;
+  start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string;
+  total_amount: number; paid_amount: number; status: string; payment_status: string;
+};
 
 export default function AdminBookingsPage() {
   const [loading, setLoading] = useState(true);
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     api.get('/bookings/all').then((res) => setBookings(res.data.data)).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? bookings.filter((b) => [bookingCode(b.id), b.id, b.title, b.customer_name, b.customer_email, b.owner_name]
+      .some((v) => v?.toLowerCase().includes(term)))
+    : bookings;
 
   if (loading) {
     return (
@@ -32,19 +47,24 @@ export default function AdminBookingsPage() {
   return (
     <DashboardLayout role="admin">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={CalendarCheckIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />All Bookings</h2>
-      {bookings.length === 0 ? (
+      <div className="relative mb-4 max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
+        <input
+          className="input-field pl-9"
+          placeholder="Search by booking ID (BK-...), vehicle, or customer"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      {filtered.length === 0 ? (
         <EmptyState icon={Calendar} title="No bookings found" />
       ) : (
       <div className="space-y-3">
-        {bookings.map((b: {
-          id: string; title: string; customer_id: string; customer_name: string; customer_email: string;
-          customer_phone: string | null; owner_id: string; owner_name: string; created_at: string;
-          start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string;
-          total_amount: number; paid_amount: number; status: string; payment_status: string;
-        }) => (
+        {filtered.map((b) => (
           <div key={b.id} className="glass-card p-4 flex flex-wrap justify-between gap-4">
             <div className="space-y-1">
               <p className="font-medium">{b.title}</p>
+              <BookingId id={b.id} />
               <p className="text-sm">
                 <span className="text-[var(--muted)]">Booked by: </span>
                 <Link href={profilePath(b.customer_id)} className="font-medium text-[var(--primary)] hover:underline">

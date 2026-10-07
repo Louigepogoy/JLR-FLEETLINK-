@@ -7,6 +7,7 @@ export const PASSWORD_RULES = [
   { label: 'A lowercase letter (a–z)', test: (p: string) => /[a-z]/.test(p) },
   { label: 'A number (0–9)', test: (p: string) => /\d/.test(p) },
   { label: 'A special character (!@#$%)', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  { label: 'No spaces', test: (p: string) => !/\s/.test(p) },
 ];
 
 export const isStrongPassword = (password: string) => PASSWORD_RULES.every((r) => r.test(password));

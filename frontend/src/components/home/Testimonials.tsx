@@ -22,10 +22,10 @@ export default function Testimonials() {
   }, []);
 
   return (
-    <section id="testimonials" className="py-20">
+    <section id="testimonials" className="py-12 sm:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12" data-reveal>
-          <h2 className="text-4xl font-bold mb-4">What Renters <span className="gradient-text">Say</span></h2>
+          <h2 className="text-2xl sm:text-4xl font-bold mb-3 sm:mb-4">What Renters <span className="gradient-text">Say</span></h2>
           <p className="text-[var(--muted)] max-w-2xl mx-auto">
             Real reviews from renters after completed trips — only people who actually rented a vehicle can leave one.
           </p>

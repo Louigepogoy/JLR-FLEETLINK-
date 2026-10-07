@@ -395,6 +395,21 @@ const deleteVehicle = async (req, res, next) => {
     if (vehicle.rows[0].owner_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
+    // Deleting a vehicle cascades to its bookings and their payment records. Keep the money trail:
+    // a vehicle that was ever booked with a payment can only be set to inactive, not deleted.
+    const paid = await query(
+      `SELECT 1 FROM bookings b
+       WHERE b.vehicle_id = $1
+         AND (b.paid_amount > 0 OR EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id))
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (paid.rows[0]) {
+      return res.status(409).json({
+        success: false,
+        message: 'This vehicle has bookings with payment records, so it can\'t be deleted. Set its status to Inactive to hide it instead.',
+      });
+    }
     await query('DELETE FROM vehicles WHERE id = $1', [req.params.id]);
     res.json({ success: true, message: 'Vehicle deleted' });
   } catch (error) {
@@ -585,7 +600,8 @@ const vehicleValidation = [
   body('vehicleType').trim().notEmpty().isIn(VEHICLE_TYPES).withMessage('Invalid vehicle type'),
   body('transmission').trim().notEmpty(),
   body('fuelType').trim().notEmpty(),
-  body('pricePerDay').isFloat({ min: 0 }),
+  // A ₱0 listing could never be paid for (checkout needs a positive amount), so bookings would be stuck.
+  body('pricePerDay').isFloat({ gt: 0 }).withMessage('Price per day must be more than ₱0'),
   body('province').trim().custom((value) => PROVINCE_BY_NAME.has(value))
     .withMessage('Please choose a valid Philippine province'),
   body('city').trim().isLength({ min: 1, max: 100 }).withMessage('Please enter the city or municipality'),

@@ -303,9 +303,14 @@ export default function MyVehiclesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this vehicle?')) return;
-    await api.delete(`/vehicles/${id}`);
-    toast.success('Vehicle deleted');
-    fetchVehicles();
+    try {
+      await api.delete(`/vehicles/${id}`);
+      toast.success('Vehicle deleted');
+      fetchVehicles();
+    } catch (err) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to delete vehicle');
+    }
   };
 
   if (loading) {

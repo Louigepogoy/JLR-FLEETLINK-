@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,6 +11,7 @@ import NotificationBell from '@/components/layout/NotificationBell';
 import ProfileMenu from '@/components/layout/ProfileMenu';
 import { getDashboardPath } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -79,9 +79,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
-              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
-            </div>
+            <BrandLogo />
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
 

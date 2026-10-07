@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -9,7 +8,9 @@ import { Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import api from '@/lib/api';
+import { noSpaces } from '@/lib/utils';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -74,9 +75,7 @@ export default function ForgotPasswordPage() {
       >
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
-              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
-            </div>
+            <BrandLogo />
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
           <h1 className="text-2xl font-bold">Reset Password</h1>
@@ -96,7 +95,7 @@ export default function ForgotPasswordPage() {
                 required
                 className="input-field"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(noSpaces(e.target.value))}
                 placeholder="you@example.com"
                 autoFocus
               />
@@ -130,7 +129,7 @@ export default function ForgotPasswordPage() {
                   minLength={8}
                   className="input-field pr-12"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => setNewPassword(noSpaces(e.target.value))}
                   placeholder="New password"
                 />
                 <button

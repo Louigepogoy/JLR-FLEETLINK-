@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, ShieldCheck, Timer, XCircle } from 'lucide-react';
+import { Camera, CheckCircle2, ShieldCheck, Timer, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/utils';
 import {
   disputeOutcomeLabel, formatCountdown, inspectionStage, useCountdown, type InspectionFields,
 } from '@/lib/inspection';
+import AddDisputeEvidence from './AddDisputeEvidence';
 import RejectVehicleModal from './RejectVehicleModal';
 
 type Props = {
@@ -63,7 +64,8 @@ export default function PickupInspectionPanel({ booking, onChanged }: Props) {
             <div>
               <p className="font-semibold">Inspect the vehicle now</p>
               <p className="text-sm text-[var(--muted)]">
-                Does it match the listing photos? Accept it, or reject it if something is wrong. If you don&apos;t respond, it&apos;s accepted automatically.
+                Does it match the listing photos? Accept it right away if it&apos;s fine — you don&apos;t have to wait for
+                the timer — or reject it if something is wrong. If you don&apos;t respond, it&apos;s accepted automatically.
               </p>
             </div>
           </div>
@@ -105,6 +107,28 @@ export default function PickupInspectionPanel({ booking, onChanged }: Props) {
         {booking.dispute_reason && <p className="mt-1 text-[var(--muted)]">&ldquo;{booking.dispute_reason}&rdquo;</p>}
         {stage === 'dispute_open' && (
           <p className="mt-1">Your payment is on hold. An admin will review your evidence and contact you.</p>
+        )}
+        {stage === 'dispute_open' && booking.dispute_evidence_requested_at && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
+            <Camera className="h-4 w-4 shrink-0 text-amber-500" />
+            <div>
+              <p className="font-semibold text-amber-600 dark:text-amber-400">The admin needs proof before refunding you</p>
+              {booking.dispute_evidence_request_note && <p className="mt-0.5">What to show: {booking.dispute_evidence_request_note}</p>}
+              <p className="mt-0.5 text-[var(--muted)]">Upload clear photos or videos of the problem below.</p>
+            </div>
+          </div>
+        )}
+        {(booking.dispute_evidence?.length ?? 0) > 0 && (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Evidence sent: {booking.dispute_evidence!.length} photo/video file{booking.dispute_evidence!.length > 1 ? 's' : ''}
+          </p>
+        )}
+        {stage === 'dispute_open' && booking.dispute_id && (
+          <AddDisputeEvidence
+            disputeId={booking.dispute_id}
+            existingCount={booking.dispute_evidence?.length ?? 0}
+            onAdded={onChanged}
+          />
         )}
         {refund > 0 && <p className="mt-1">Refund: <span className="font-semibold">{formatCurrency(refund)}</span></p>}
         {booking.dispute_admin_notes && <p className="mt-1">Admin note: {booking.dispute_admin_notes}</p>}

@@ -32,6 +32,7 @@ async function setup() {
     const cebuMigrationPath = path.join(__dirname, '../database/migration_cebu_vehicle_locations.sql');
     const ownerSubscriptionMigrationPath = path.join(__dirname, '../database/migration_owner_subscriptions.sql');
     const plateNumberMigrationPath = path.join(__dirname, '../database/migration_vehicle_plate_number.sql');
+    const reportsMigrationPath = path.join(__dirname, '../database/migration_reports.sql');
     const bookingTimesMigrationPath = path.join(__dirname, '../database/migrations/001_add_booking_times.sql');
     const proofPhotosMigrationPath = path.join(__dirname, '../database/migrations/002_vehicle_proof_photos.sql');
     const loginLogsMigrationPath = path.join(__dirname, '../database/migrations/003_login_logs.sql');
@@ -59,6 +60,10 @@ async function setup() {
     const disputeRefundTrackingMigrationPath = path.join(__dirname, '../database/migrations/025_dispute_refund_tracking.sql');
     const usernameVerificationMigrationPath = path.join(__dirname, '../database/migrations/026_username_email_verification.sql');
     const usernameAnyLengthMigrationPath = path.join(__dirname, '../database/migrations/027_username_any_length.sql');
+    const disputeEvidenceRequestMigrationPath = path.join(__dirname, '../database/migrations/028_dispute_evidence_request.sql');
+    const loginLockoutMigrationPath = path.join(__dirname, '../database/migrations/029_login_lockout.sql');
+    const payoutHistoryMigrationPath = path.join(__dirname, '../database/migrations/030_owner_payout_history.sql');
+    const seenMarkersMigrationPath = path.join(__dirname, '../database/migrations/031_seen_markers.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -79,6 +84,8 @@ async function setup() {
       console.log('Owner subscription migration applied.');
       await runSqlFile(plateNumberMigrationPath);
       console.log('Vehicle plate number migration applied.');
+      await runSqlFile(reportsMigrationPath);
+      console.log('User reports migration applied.');
       await runSqlFile(bookingTimesMigrationPath);
       console.log('Booking pickup/dropoff times migration applied.');
       await runSqlFile(proofPhotosMigrationPath);
@@ -132,6 +139,10 @@ async function setup() {
       await runSqlFile(usernameVerificationMigrationPath);
       console.log('Username and email verification migration applied.');
       await runSqlFile(usernameAnyLengthMigrationPath);
+      await runSqlFile(disputeEvidenceRequestMigrationPath);
+      await runSqlFile(loginLockoutMigrationPath);
+      await runSqlFile(payoutHistoryMigrationPath);
+      await runSqlFile(seenMarkersMigrationPath);
       console.log('Username length migration applied.');
     }
 

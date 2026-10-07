@@ -25,6 +25,7 @@ const paymongoRoutes = require('./routes/paymongo.routes');
 const chatRoutes = require('./routes/chat.routes');
 const reviewRoutes = require('./routes/review.routes');
 const disputeRoutes = require('./routes/dispute.routes');
+const badgeRoutes = require('./routes/badge.routes');
 const { handleWebhook: handlePaymongoWebhook } = require('./controllers/paymongoController');
 const { startInspectionScheduler } = require('./services/inspectionService');
 
@@ -87,6 +88,7 @@ app.use('/api/paymongo', paymongoRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/disputes', disputeRoutes);
+app.use('/api/badges', badgeRoutes);
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err.message?.includes('image')) {

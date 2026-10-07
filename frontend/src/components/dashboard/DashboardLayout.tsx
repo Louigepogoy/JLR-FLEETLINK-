@@ -19,6 +19,7 @@ import RatingPrompt from '@/components/reviews/RatingPrompt';
 import api from '@/lib/api';
 import { cn, getDashboardPath } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 const UNREAD_POLL_MS = 15000;
 
@@ -68,15 +69,26 @@ export default function DashboardLayout({
   const { user, isAuthenticated, hasHydrated, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  // Pending-item counts per sidebar path (e.g. booking requests waiting for handover).
+  const [badges, setBadges] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) return;
-    const loadUnread = () =>
+    const loadUnread = () => {
       api.get('/chat/unread-count').then((res) => setUnreadMessages(res.data.data.count)).catch(() => {});
+      api.get('/badges').then((res) => setBadges(res.data.data || {})).catch(() => {});
+    };
     loadUnread();
     const timer = setInterval(loadUnread, UNREAD_POLL_MS);
     return () => clearInterval(timer);
   }, [hasHydrated, isAuthenticated]);
+
+  // Opening a page with a badge marks it as seen, so its count clears until something new arrives.
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    if (!(navByRole[role] || []).some((item) => item.href === pathname && !item.showUnread)) return;
+    api.post('/badges/seen', { key: pathname }).catch(() => {});
+  }, [hasHydrated, isAuthenticated, pathname, role]);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -104,12 +116,15 @@ export default function DashboardLayout({
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="p-6 border-b border-[var(--card-border)]">
-          <Link href="/" className="text-xl font-bold gradient-text">JLR Fleetlink</Link>
+          <Link href="/" className="flex items-center gap-2.5"><BrandLogo className="h-9 w-9" /><span className="text-xl font-bold gradient-text">JLR Fleetlink</span></Link>
           <p className="text-xs text-[var(--muted)] mt-1">{role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}</p>
         </div>
         {/* pb-24 keeps the last menu items clear of the Logout button pinned to the bottom. */}
         <nav className="p-4 pb-24 space-y-1">
-          {navItems.map((item) => (
+          {navItems.map((item) => {
+            // The page being viewed right now never shows its badge — it's being seen.
+            const count = item.showUnread ? unreadMessages : item.href === pathname ? 0 : badges[item.href] || 0;
+            return (
             <Link
               key={item.href}
               href={item.href}
@@ -123,16 +138,17 @@ export default function DashboardLayout({
             >
               <IconChip icon={item.icon} className="h-8 w-8 rounded-lg" iconClassName="h-5 w-5" />
               {item.label}
-              {item.showUnread && unreadMessages > 0 && (
+              {count > 0 && (
                 <span className={cn(
                   'ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold',
-                  pathname === item.href ? 'bg-white text-[var(--primary)]' : 'gradient-bg text-white'
+                  pathname === item.href ? 'bg-white text-[var(--primary)]' : 'bg-red-500 text-white shadow-sm shadow-red-500/40'
                 )}>
-                  {unreadMessages > 99 ? '99+' : unreadMessages}
+                  {count > 99 ? '99+' : count}
                 </span>
               )}
             </Link>
-          ))}
+            );
+          })}
         </nav>
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[var(--card-border)]">
           <button

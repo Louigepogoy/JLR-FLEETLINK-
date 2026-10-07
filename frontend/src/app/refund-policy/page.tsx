@@ -21,7 +21,7 @@ const sections = [
   },
   {
     title: '5. Rejecting a Vehicle',
-    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. Adding photos or videos is optional but helps the review. Rejecting cancels the booking immediately, frees the dates, and keeps your payment on hold while an administrator reviews your report. Please return the keys to the owner.',
+    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately, frees the dates, and keeps your payment on hold while an administrator reviews your report. Please return the keys to the owner.',
   },
   {
     title: '6. How Disputes Are Decided',

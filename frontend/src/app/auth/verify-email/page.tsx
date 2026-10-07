@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -12,6 +11,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle';
 import { useAuthStore } from '@/store/authStore';
 import { getDashboardPath } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/chat';
+import BrandLogo from '@/components/ui/BrandLogo';
 
 const RESEND_SECONDS = 60;
 
@@ -82,9 +82,7 @@ function VerifyEmailContent() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-8 w-full max-w-md relative z-10">
         <div className="text-center mb-6">
           <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5">
-              <Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" />
-            </div>
+            <BrandLogo />
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
           <div className="illo-tile mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl">

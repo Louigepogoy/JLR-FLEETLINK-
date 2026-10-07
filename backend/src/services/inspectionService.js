@@ -1,6 +1,7 @@
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
 const { cancelUnpaidBookings } = require('./bookingExpiryService');
+const { autoPayoutOwner } = require('./payoutService');
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const REMINDER_MINUTES_LEFT = 10;
@@ -45,11 +46,12 @@ const runInspectionSweep = async () => {
     ).catch(() => {});
     await createNotification(
       b.owner_id,
-      'Vehicle accepted — payout unlocked',
-      `The renter's inspection time for ${b.title} ended with no issue reported. Your earnings are now eligible for payout.`,
+      'Vehicle accepted',
+      `The renter's inspection time for ${b.title} ended with no issue reported. Your earnings are being sent to your payout account.`,
       'payment',
       '/dashboard/earnings'
     ).catch(() => {});
+    await autoPayoutOwner(b.owner_id, 'auto_accepted');
   }
 
   const reminders = await query(

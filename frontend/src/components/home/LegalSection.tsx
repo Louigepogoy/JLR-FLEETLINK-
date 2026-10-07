@@ -34,23 +34,23 @@ const policies = [
 /** Home page section linking to the platform's legal policies. */
 export default function LegalSection() {
   return (
-    <section id="legal" className="py-16">
+    <section id="legal" className="py-12 sm:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-10" data-reveal>
-          <h2 className="text-3xl font-bold mb-3">Policies <span className="gradient-text">&amp; Legal</span></h2>
+        <div className="text-center mb-8 sm:mb-10" data-reveal>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3">Policies <span className="gradient-text">&amp; Legal</span></h2>
           <p className="text-[var(--muted)] max-w-2xl mx-auto">
             Clear rules protect everyone. Please read them before you book or list a vehicle.
           </p>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           {policies.map(({ icon: Icon, title, desc, href }) => (
-            <Link key={title} href={href} className="glass-card group flex flex-col p-5 transition-transform hover:-translate-y-1">
-              <IlloTile className="mb-4 h-16 w-16 transition-transform duration-300 group-hover:scale-105">
-                <Icon className="h-11 w-11" />
+            <Link key={title} href={href} className="glass-card group flex flex-col p-4 sm:p-5 transition-transform hover:-translate-y-1">
+              <IlloTile className="mb-3 sm:mb-4 h-12 w-12 sm:h-16 sm:w-16 transition-transform duration-300 group-hover:scale-105">
+                <Icon className="h-8 w-8 sm:h-11 sm:w-11" />
               </IlloTile>
-              <h3 className="font-semibold mb-1">{title}</h3>
-              <p className="mb-4 flex-1 text-sm text-[var(--muted)]">{desc}</p>
-              <span className="flex items-center gap-1 text-sm font-medium text-[var(--primary)]">
+              <h3 className="text-sm sm:text-base font-semibold mb-1 leading-snug">{title}</h3>
+              <p className="mb-3 sm:mb-4 flex-1 text-xs sm:text-sm text-[var(--muted)]">{desc}</p>
+              <span className="flex items-center gap-1 text-xs sm:text-sm font-medium text-[var(--primary)]">
                 Read more <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </span>
             </Link>

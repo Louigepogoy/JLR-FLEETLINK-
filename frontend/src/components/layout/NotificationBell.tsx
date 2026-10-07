@@ -36,6 +36,8 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // Badge on the bell: unread notifications that arrived since the list was last opened.
+  const [unseenCount, setUnseenCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
       api.get('/notifications').then((res) => {
         setNotifications(res.data.data);
         setUnreadCount(res.data.unreadCount);
+        setUnseenCount(res.data.unseenCount ?? res.data.unreadCount);
       }).catch(() => {});
     load();
     const timer = setInterval(load, POLL_MS);
@@ -61,6 +64,7 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
   const markAllRead = async () => {
     await api.patch('/notifications/read-all').catch(() => {});
     setUnreadCount(0);
+    setUnseenCount(0);
     setNotifications((list) => list.map((n) => ({ ...n, is_read: true })));
   };
 
@@ -77,14 +81,21 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          // Opening the list counts as seeing these notifications, so the badge clears.
+          if (!open && unseenCount > 0) {
+            setUnseenCount(0);
+            api.post('/badges/seen', { key: 'notifications' }).catch(() => {});
+          }
+          setOpen(!open);
+        }}
         className={cn('relative rounded-xl p-2 hover:bg-[var(--primary)]/10', buttonClassName)}
         aria-label={unreadCount ? `Notifications (${unreadCount} unread)` : 'Notifications'}
       >
         <Bell className="h-5 w-5" />
-        {unreadCount > 0 && (
+        {unseenCount > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {unseenCount > 9 ? '9+' : unseenCount}
           </span>
         )}
       </button>

@@ -6,14 +6,21 @@ const getNotifications = async (req, res, next) => {
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
       [req.user.id]
     );
+    // unseen: unread and newer than the last time the user opened the bell — that's the bell badge,
+    // so it clears as soon as the list has been looked at (items stay unread until clicked).
     const unread = await query(
-      'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
+      `SELECT COUNT(*) AS unread,
+              COUNT(*) FILTER (WHERE created_at > COALESCE(
+                (SELECT seen_at FROM user_seen_markers WHERE user_id = $1 AND marker_key = 'notifications'),
+                'epoch'::timestamptz)) AS unseen
+       FROM notifications WHERE user_id = $1 AND is_read = false`,
       [req.user.id]
     );
     res.json({
       success: true,
       data: result.rows,
-      unreadCount: parseInt(unread.rows[0].count),
+      unreadCount: parseInt(unread.rows[0].unread),
+      unseenCount: parseInt(unread.rows[0].unseen),
     });
   } catch (error) {
     next(error);

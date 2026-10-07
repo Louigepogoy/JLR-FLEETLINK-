@@ -1,18 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { CheckCircle2, Eye, EyeOff, Loader2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import ThemeToggle from '@/components/ui/ThemeToggle';
+import AuthShell from '@/components/auth/AuthShell';
 import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
 import { useAuthStore } from '@/store/authStore';
-import { getDashboardPath } from '@/lib/utils';
+import { getDashboardPath, noSpaces } from '@/lib/utils';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -88,27 +86,12 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative py-12">
-      <div className="absolute top-4 right-4"><ThemeToggle /></div>
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-violet-500/20 blur-3xl" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-8 w-full max-w-md relative z-10"
-      >
-        <div className="text-center mb-6">
-          <Link href="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="relative h-11 w-11 overflow-hidden rounded-xl bg-white border border-[var(--card-border)] shadow-sm p-1.5"><Image src="/logo.png" alt="JLR Fleetlink logo" fill className="object-contain" /></div>
-            <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
-          </Link>
-          <h1 className="text-2xl font-bold">Create Account</h1>
-          <p className="text-sm text-[var(--muted)]">Rent a ride or list your own — you can do both</p>
-        </div>
-
+    <AuthShell
+      title="Create Account"
+      subtitle="Rent a ride or list your own — you can do both"
+      panelTitle={<>More Than Rentals.<br />It&apos;s Your Journey.</>}
+      panelText="Join a community of renters and owners. Payments stay protected until pickup, and every account is verified by our team."
+    >
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium mb-1 block">Username</label>
@@ -118,7 +101,7 @@ export default function RegisterPage() {
               className="input-field"
               placeholder="e.g. juan_dc"
               value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              onChange={(e) => setForm({ ...form, username: noSpaces(e.target.value) })}
             />
             {form.username.includes('@') && (
               <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">Usernames can&apos;t contain &quot;@&quot;.</p>
@@ -128,7 +111,7 @@ export default function RegisterPage() {
             <label className="text-sm font-medium mb-1 block">Email</label>
             <input type="email" required autoComplete="email" placeholder="you@gmail.com" value={form.email}
               className={`input-field ${emailCheck?.email === form.email.trim() && BAD_EMAIL_STATUSES.includes(emailCheck.status) ? 'ring-2 ring-red-500/60' : ''}`}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={(e) => setForm({ ...form, email: noSpaces(e.target.value) })}
               onBlur={(e) => checkEmail(e.currentTarget.value)} />
             {checkingEmail ? (
               <p className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted)]">
@@ -149,7 +132,7 @@ export default function RegisterPage() {
           <div>
             <label className="text-sm font-medium mb-1 block">Phone (09XXXXXXXXX)</label>
             <input required pattern="09[0-9]{9}" className="input-field" placeholder="09171234567" value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              onChange={(e) => setForm({ ...form, phone: noSpaces(e.target.value) })} />
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Password</label>
@@ -161,7 +144,7 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 className="input-field pr-12"
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                onChange={(e) => setForm({ ...form, password: noSpaces(e.target.value) })}
               />
               <button
                 type="button"
@@ -190,7 +173,6 @@ export default function RegisterPage() {
           Already have an account?{' '}
           <Link href="/auth/login" className="text-[var(--primary)] font-medium hover:underline">Sign In</Link>
         </p>
-      </motion.div>
-    </div>
+    </AuthShell>
   );
 }

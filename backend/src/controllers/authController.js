@@ -18,10 +18,11 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const VERIFY_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 const registerValidation = [
-  // Any username is fine as long as it isn't empty; "@" is reserved so sign-in can tell a username
-  // from an email address.
+  // Any username is fine as long as it isn't empty and has no spaces; "@" is reserved so sign-in can
+  // tell a username from an email address.
   body('username').trim().notEmpty().withMessage('Enter a username')
     .not().contains('@').withMessage('Username can\'t contain "@"')
+    .not().matches(/\s/).withMessage('Username can\'t contain spaces')
     .isLength({ max: 255 }).withMessage('Username is too long'),
   body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
   body('password').custom(strongPassword),
@@ -241,6 +242,16 @@ const checkEmail = async (req, res, next) => {
   }
 };
 
+// Sign-in lockout (columns from migration 029).
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
+const lockedMessage = (lockedUntil) => {
+  // Capped so a small clock difference between the app and database servers can't show 16 of 15.
+  const minutes = Math.min(LOCKOUT_MINUTES, Math.max(1, Math.ceil((new Date(lockedUntil) - Date.now()) / 60000)));
+  return `Too many wrong passwords. Your account is locked — try again in ${minutes} minute${minutes === 1 ? '' : 's'}, or reset your password.`;
+};
+
 const login = async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -265,10 +276,41 @@ const login = async (req, res, next) => {
     }
 
     const user = result.rows[0];
+    // Locked after too many wrong passwords: refuse without even checking the password.
+    if (user.locked_until && new Date(user.locked_until) > new Date()) {
+      await recordLoginAttempt({ req, email: logEmail, success: false, reason: 'locked', userId: user.id });
+      return res.status(429).json({ success: false, code: 'ACCOUNT_LOCKED', message: lockedMessage(user.locked_until) });
+    }
+
     const valid = user.password_hash ? await bcrypt.compare(password, user.password_hash) : false;
     if (!valid) {
       await recordLoginAttempt({ req, email: logEmail, success: false, reason: 'invalid_password', userId: user.id });
-      return res.status(401).json({ success: false, message: 'Invalid username/email or password' });
+      // Count atomically; an expired lock starts a fresh count.
+      const counted = await query(
+        `UPDATE users SET
+           failed_login_attempts = CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW() THEN 1
+                                        ELSE failed_login_attempts + 1 END,
+           locked_until = CASE
+             WHEN (CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW() THEN 1
+                        ELSE failed_login_attempts + 1 END) >= $2
+             THEN NOW() + $3 * INTERVAL '1 minute' ELSE NULL END
+         WHERE id = $1
+         RETURNING failed_login_attempts, locked_until`,
+        [user.id, MAX_LOGIN_ATTEMPTS, LOCKOUT_MINUTES]
+      );
+      const { failed_login_attempts: failed, locked_until: lockedUntil } = counted.rows[0];
+      if (lockedUntil) {
+        return res.status(429).json({ success: false, code: 'ACCOUNT_LOCKED', message: lockedMessage(lockedUntil) });
+      }
+      const left = MAX_LOGIN_ATTEMPTS - failed;
+      return res.status(401).json({
+        success: false,
+        attemptsLeft: left,
+        message: `Invalid username/email or password. ${left} attempt${left === 1 ? '' : 's'} left before your account is locked for ${LOCKOUT_MINUTES} minutes.`,
+      });
+    }
+    if (user.failed_login_attempts || user.locked_until) {
+      await query('UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = $1', [user.id]);
     }
 
     if (!user.email_verified) {
@@ -446,7 +488,11 @@ const resetPassword = async (req, res, next) => {
     await query('UPDATE password_reset_codes SET used = true WHERE id = $1', [resetCode.id]);
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, user.id]);
+    // A new password also unlocks an account locked by too many wrong sign-ins.
+    await query(
+      'UPDATE users SET password_hash = $1, failed_login_attempts = 0, locked_until = NULL, updated_at = NOW() WHERE id = $2',
+      [passwordHash, user.id]
+    );
 
     res.json({ success: true, message: 'Password reset successful. You can now log in.' });
   } catch (error) {

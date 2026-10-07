@@ -1,7 +1,7 @@
 'use client';
 
 import { Printer, Download } from 'lucide-react';
-import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { bookingCode, formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 export type ReceiptData = {
   invoice_number: string;
@@ -19,6 +19,7 @@ export type ReceiptData = {
   reference_number?: string;
   card_last_four?: string;
   payment_metadata?: Record<string, unknown> | string;
+  booking_id?: string;
   vehicle_title: string;
   brand?: string;
   model?: string;
@@ -94,6 +95,7 @@ export default function BookingReceipt({ data }: { data: ReceiptData }) {
               <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">Transaction Details</p>
               <p><span className="text-gray-500">Date:</span> {formatDate(data.payment_date || data.created_at)}</p>
               <p><span className="text-gray-500">Status:</span> <span className="capitalize font-medium text-green-600">{data.status?.replace('_', ' ')}</span></p>
+              {data.booking_id && <p><span className="text-gray-500">Booking ID:</span> <span className="font-mono font-semibold">{bookingCode(data.booking_id)}</span></p>}
               <p className="font-mono text-xs mt-1 text-gray-500">Txn ID: {transactionId}</p>
             </div>
           </div>

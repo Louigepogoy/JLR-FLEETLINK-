@@ -16,6 +16,13 @@ import ProvinceSelect from '@/components/ui/ProvinceSelect';
 import { vehicleTypes } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 
+// Fades the hero picture into the page so it reads as a background, not a framed box: the left side
+// fades out behind the text and the right side runs to the edge of the window.
+const HERO_IMAGE_MASK = [
+  '[mask-image:linear-gradient(to_bottom,transparent,#000_20%,#000_90%,transparent),linear-gradient(to_right,transparent,#000_28%)]',
+  '[mask-composite:intersect] [-webkit-mask-composite:source-in]',
+].join(' ');
+
 export default function Hero() {
   const { isAuthenticated } = useAuthStore();
   const [search, setSearch] = useState({ province: '', type: '' });
@@ -28,13 +35,9 @@ export default function Hero() {
   }, [search.province, search.type]);
 
   return (
-    <section className="relative min-h-screen flex items-center pt-24 pb-14 overflow-hidden bg-white dark:bg-[#07111f]">
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute right-0 top-16 h-[520px] w-[520px] rounded-full bg-blue-600/10 blur-2xl" />
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-semibold mb-6 dark:bg-blue-500/10 dark:text-blue-200">
+    <section className="relative pt-24 pb-10 overflow-hidden bg-white dark:bg-[#07111f]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full text-center">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-700 text-sm font-semibold mb-4 dark:bg-blue-500/10 dark:text-blue-200">
           <Shield className="w-4 h-4" />
           Rentals across the Philippines — Luzon, Visayas & Mindanao
         </div>
@@ -43,7 +46,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="flex justify-center mb-14"
+          className="flex justify-center mb-6"
         >
           <div className="flex flex-col sm:flex-row sm:items-center w-full sm:w-auto gap-1 sm:gap-0 bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-blue-100 dark:border-white/10 rounded-2xl sm:rounded-full shadow-xl shadow-blue-900/10 p-2">
             <label className="flex items-center gap-3 px-5 py-3 rounded-xl sm:rounded-full cursor-pointer hover:bg-blue-50/70 dark:hover:bg-white/5 transition-colors">
@@ -98,55 +101,51 @@ export default function Hero() {
             </Link>
           </div>
         </motion.div>
+      </div>
 
-        <div className="grid lg:grid-cols-[0.7fr_1.3fr] gap-10 items-center">
+      {/* Text on the left, vehicles on the right on every screen size. The picture is a background
+          behind the whole row; its width sets the row height so nothing is cropped. */}
+      <div className="relative">
+        <motion.div
+          initial={{ opacity: 0, scale: 1.04 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.1, ease: 'easeOut' }}
+          className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-[64vw] lg:w-[68vw] lg:max-w-[1300px]"
+        >
+          <Image
+            src="/hero.jpg"
+            alt="Van, motorcycle, and car available to rent on JLR Fleetlink"
+            width={1644}
+            height={957}
+            priority
+            sizes="(min-width: 1024px) 68vw, 64vw"
+            className={`w-full h-auto dark:brightness-90 ${HERO_IMAGE_MASK}`}
+          />
+        </motion.div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full min-h-[40vw] lg:min-h-[min(39.5vw,756px)] flex items-center">
           <motion.div
             initial={{ opacity: 0, x: -40 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.7 }}
+            className="max-w-[48%] sm:max-w-[42%] lg:max-w-md"
           >
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight mb-6 text-[#061934] dark:text-white">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight mb-3 sm:mb-6 text-[#061934] dark:text-white">
               Do You Have
-              <span className="block text-blue-600">Something</span>
+              <span className="block text-blue-600 dark:text-blue-500">Something</span>
               To Rent?
             </h1>
 
-            <p className="text-lg text-[var(--muted)] mb-8 max-w-md">
+            <p className="max-w-[82%] lg:max-w-none text-[11px] leading-snug sm:text-base lg:text-lg text-[var(--muted)] mb-4 sm:mb-8">
               List your car, van, truck, or motorcycle and start earning from verified renters nationwide.
             </p>
 
             <Link
               href={isAuthenticated ? '/dashboard/vehicles' : '/auth/register'}
-              className="btn-primary inline-flex items-center gap-2 px-8 py-4 text-base"
+              className="btn-primary inline-flex items-center whitespace-nowrap gap-1.5 sm:gap-2 !px-4 !py-2.5 !text-xs sm:!px-8 sm:!py-4 sm:!text-base"
             >
               Rent Out Your Vehicle <ArrowRight className="w-4 h-4" />
             </Link>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="relative"
-          >
-            <motion.div
-              animate={{ y: [0, -16, 0], rotate: [0, 0.6, 0, -0.6, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <Image
-                src="/hero.jpg"
-                alt="Van, motorcycle, and car available to rent on JLR Fleetlink"
-                width={1644}
-                height={957}
-                priority
-                className="w-full h-auto"
-              />
-            </motion.div>
-            <motion.div
-              animate={{ scaleX: [1, 0.85, 1], opacity: [0.35, 0.15, 0.35] }}
-              transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-              className="absolute left-1/2 bottom-4 -translate-x-1/2 w-2/3 h-6 rounded-full bg-blue-900/30 blur-xl"
-            />
           </motion.div>
         </div>
       </div>

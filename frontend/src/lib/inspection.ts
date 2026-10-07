@@ -13,11 +13,17 @@ export type InspectionFields = {
   inspection_seconds_left?: number | null;
   // Seconds before an unpaid booking is cancelled (null once paid).
   payment_seconds_left?: number | null;
+  // True only on the booking's pickup date (Philippine time) — the one day the owner can hand it over.
+  is_pickup_day?: boolean;
   dispute_id?: string | null;
   dispute_status?: 'open' | 'refunded' | 'partially_refunded' | 'dismissed' | null;
   dispute_reason?: string | null;
   dispute_refund_amount?: number | string | null;
   dispute_admin_notes?: string | null;
+  dispute_evidence?: { url: string; type: 'image' | 'video' }[] | null;
+  // Set while an admin is waiting for the renter to upload (more) evidence.
+  dispute_evidence_requested_at?: string | null;
+  dispute_evidence_request_note?: string | null;
 };
 
 export type InspectionStage =
