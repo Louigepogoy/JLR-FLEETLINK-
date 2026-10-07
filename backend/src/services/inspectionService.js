@@ -6,6 +6,12 @@ const { autoPayoutOwner } = require('./payoutService');
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const REMINDER_MINUTES_LEFT = 10;
 const DEFAULT_WINDOW_MINUTES = 60;
+// A paid booking that still hasn't been handed over this many hours after its pickup time is handed
+// over automatically, so the renter's inspection window starts and the owner's payment isn't stuck.
+const AUTO_HANDOVER_HOURS = 3;
+
+// When a booking (`b`) is handed over automatically: its pickup date + time (Philippine time) + 3 hours.
+const AUTO_HANDOVER_AT_SQL = `(((b.start_date + COALESCE(b.pickup_time, '09:00'::time)) + ${AUTO_HANDOVER_HOURS} * INTERVAL '1 hour') AT TIME ZONE 'Asia/Manila')`;
 
 /**
  * SQL condition (expects `b` = bookings, `d` = LEFT JOINed booking_disputes) for when an owner's share
@@ -27,6 +33,35 @@ const getInspectionWindowMinutes = async () => {
  * interval and lazily from request handlers at the same time never notifies anyone twice.
  */
 const runInspectionSweep = async () => {
+  const windowMinutes = await getInspectionWindowMinutes();
+  const handedOver = await query(
+    `UPDATE bookings b
+     SET handed_over_at = NOW(), inspection_deadline = NOW() + $1::int * INTERVAL '1 minute',
+         inspection_reminder_sent = false, updated_at = NOW()
+     FROM vehicles v
+     WHERE b.vehicle_id = v.id
+       AND b.status = 'approved' AND b.handed_over_at IS NULL AND b.payment_status <> 'pending'
+       AND ${AUTO_HANDOVER_AT_SQL} <= NOW()
+     RETURNING b.id, b.customer_id, v.owner_id, v.title`,
+    [windowMinutes]
+  );
+  for (const b of handedOver.rows) {
+    await createNotification(
+      b.customer_id,
+      'Vehicle handed over automatically',
+      `${AUTO_HANDOVER_HOURS} hours have passed since your pickup time for ${b.title}, so it was marked as handed over. You have ${windowMinutes} minutes to accept it or report a problem — after that it is accepted automatically.`,
+      'alert',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    await createNotification(
+      b.owner_id,
+      'Vehicle handed over automatically',
+      `${b.title} was marked as handed over because ${AUTO_HANDOVER_HOURS} hours passed after the pickup time. The renter's inspection time has started.`,
+      'booking',
+      '/dashboard/booking-requests'
+    ).catch(() => {});
+  }
+
   const accepted = await query(
     `UPDATE bookings b
      SET status = 'active', inspection_result = 'auto_accepted', inspected_at = NOW(), updated_at = NOW()
@@ -90,5 +125,5 @@ const startInspectionScheduler = () => {
 };
 
 module.exports = {
-  PAYOUT_ELIGIBLE_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly, startInspectionScheduler,
+  PAYOUT_ELIGIBLE_SQL, AUTO_HANDOVER_HOURS, AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly, startInspectionScheduler,
 };

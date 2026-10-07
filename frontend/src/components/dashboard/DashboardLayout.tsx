@@ -23,6 +23,13 @@ import BrandLogo from '@/components/ui/BrandLogo';
 
 const UNREAD_POLL_MS = 15000;
 
+// Sidebar pages that show a pending-items badge (must match SEEN_KEYS in the backend badgeController).
+const BADGE_PATHS = new Set([
+  '/dashboard/admin/approvals', '/dashboard/admin/bookings', '/dashboard/admin/disputes',
+  '/dashboard/admin/reports', '/dashboard/admin/support', '/dashboard/admin/payouts',
+  '/dashboard/bookings', '/dashboard/booking-requests', '/dashboard/vehicles',
+]);
+
 type NavItem = { href: string; label: string; icon: MiniIcon; showUnread?: boolean };
 
 const navByRole: Record<string, NavItem[]> = {
@@ -35,6 +42,7 @@ const navByRole: Record<string, NavItem[]> = {
     { href: '/dashboard/vehicles', label: 'My Vehicles', icon: MyVehicleIcon },
     { href: '/dashboard/booking-requests', label: 'Booking Requests', icon: RequestsIcon },
     { href: '/dashboard/earnings', label: 'Earnings', icon: EarningsIcon },
+    { href: '/dashboard/vehicle-report', label: 'Vehicle Report', icon: ChartIcon },
     { href: '/dashboard/transactions', label: 'Transactions', icon: ReceiptIcon },
     { href: '/dashboard/subscription', label: 'Become a Provider', icon: CrownIcon },
     { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
@@ -86,9 +94,9 @@ export default function DashboardLayout({
   // Opening a page with a badge marks it as seen, so its count clears until something new arrives.
   useEffect(() => {
     if (!hasHydrated || !isAuthenticated) return;
-    if (!(navByRole[role] || []).some((item) => item.href === pathname && !item.showUnread)) return;
+    if (!BADGE_PATHS.has(pathname)) return;
     api.post('/badges/seen', { key: pathname }).catch(() => {});
-  }, [hasHydrated, isAuthenticated, pathname, role]);
+  }, [hasHydrated, isAuthenticated, pathname]);
 
   useEffect(() => {
     if (!hasHydrated) return;

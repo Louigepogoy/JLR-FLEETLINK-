@@ -78,27 +78,27 @@ export default function EarningsPage() {
     <DashboardLayout role="user">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={EarningsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Earnings Dashboard</h2>
       <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">Total Earnings</p>
-          <p className="text-3xl font-bold gradient-text">{formatCurrency(data.summary.total_earnings)}</p>
+          <p className="money-fit font-bold gradient-text">{formatCurrency(data.summary.total_earnings)}</p>
         </div>
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">This Month</p>
-          <p className="text-3xl font-bold">{formatCurrency(data.summary.monthly_earnings)}</p>
+          <p className="money-fit font-bold">{formatCurrency(data.summary.monthly_earnings)}</p>
         </div>
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">On Hold</p>
-          <p className="text-3xl font-bold text-[var(--muted)]">{formatCurrency(data.summary.on_hold || 0)}</p>
+          <p className="money-fit font-bold text-[var(--muted)]">{formatCurrency(data.summary.on_hold || 0)}</p>
           <p className="text-xs text-[var(--muted)] mt-1">Held until the renter accepts the vehicle</p>
         </div>
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">Pending Payout</p>
-          <p className="text-3xl font-bold text-amber-500">{formatCurrency(data.summary.pending_payout)}</p>
+          <p className="money-fit font-bold text-amber-500">{formatCurrency(data.summary.pending_payout)}</p>
           <p className="text-xs text-[var(--muted)] mt-1">Ready — not yet sent to you</p>
         </div>
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">Paid Out</p>
-          <p className="text-3xl font-bold text-green-500">{formatCurrency(data.summary.paid_out)}</p>
+          <p className="money-fit font-bold text-green-500">{formatCurrency(data.summary.paid_out)}</p>
           <p className="text-xs text-[var(--muted)] mt-1">Already sent to you</p>
         </div>
       </div>

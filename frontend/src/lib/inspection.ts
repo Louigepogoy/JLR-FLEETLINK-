@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 
 // Unpaid bookings are cancelled after this long (must match PAYMENT_WINDOW_MINUTES in the backend).
 export const PAYMENT_WINDOW_MINUTES = 30;
+// Hours after the pickup time before a paid booking is handed over automatically (must match
+// AUTO_HANDOVER_HOURS in the backend).
+export const AUTO_HANDOVER_HOURS = 3;
 
 // Pickup-inspection fields the booking list endpoints return alongside each booking.
 export type InspectionFields = {
@@ -15,6 +18,9 @@ export type InspectionFields = {
   payment_seconds_left?: number | null;
   // True only on the booking's pickup date (Philippine time) — the one day the owner can hand it over.
   is_pickup_day?: boolean;
+  // When a paid booking that still hasn't been handed over is handed over automatically
+  // (pickup date + time + AUTO_HANDOVER_HOURS).
+  auto_handover_at?: string | null;
   dispute_id?: string | null;
   dispute_status?: 'open' | 'refunded' | 'partially_refunded' | 'dismissed' | null;
   dispute_reason?: string | null;

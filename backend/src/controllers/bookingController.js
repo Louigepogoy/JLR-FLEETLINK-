@@ -4,7 +4,9 @@ const { query, pool } = require('../config/db');
 const { calculateRentalPeriod } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
-const { getInspectionWindowMinutes, runInspectionSweep, sweepQuietly } = require('../services/inspectionService');
+const {
+  AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly,
+} = require('../services/inspectionService');
 const { autoPayoutOwner } = require('../services/payoutService');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
 
@@ -25,6 +27,7 @@ const INSPECTION_SELECT = `
   GREATEST(0, EXTRACT(EPOCH FROM (b.inspection_deadline - NOW())))::int AS inspection_seconds_left,
   ${PAYMENT_SECONDS_LEFT_SQL} AS payment_seconds_left,
   ${IS_PICKUP_DAY_SQL} AS is_pickup_day,
+  ${AUTO_HANDOVER_AT_SQL} AS auto_handover_at,
   d.id AS dispute_id, d.status AS dispute_status, d.reason AS dispute_reason,
   d.refund_amount AS dispute_refund_amount, d.admin_notes AS dispute_admin_notes,
   d.evidence AS dispute_evidence, d.evidence_requested_at AS dispute_evidence_requested_at,

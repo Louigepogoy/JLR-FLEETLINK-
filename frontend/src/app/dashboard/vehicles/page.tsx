@@ -50,7 +50,7 @@ type OwnerVehicle = {
 };
 
 type OwnerSubscription = {
-  plan_id: 'basic' | 'pro' | 'premium';
+  plan_id: 'basic' | 'pro' | 'premium' | 'enterprise';
   plan_name: string;
   vehicle_limit: number;
   status: string;
@@ -359,7 +359,7 @@ export default function MyVehiclesPage() {
               <p className="font-semibold">{vehicles.length}/{vehicleLimit} vehicles used on {planName} plan</p>
               <p className="text-sm opacity-80">
                 {isAtVehicleLimit
-                  ? 'You reached your vehicle limit. Select Pro or Premium to publish more vehicles.'
+                  ? 'You reached your vehicle limit. Select Pro, Premium, or Enterprise to publish more vehicles.'
                   : 'You can still add vehicles under your current plan.'}
               </p>
             </div>

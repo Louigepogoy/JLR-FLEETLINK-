@@ -21,11 +21,17 @@ const sendValidationErrors = (req, res) => {
 const messagesPathFor = (role, conversationId) =>
   `${role === 'admin' ? '/dashboard/admin/messages' : '/dashboard/messages'}?c=${conversationId}`;
 
+// A support chat is any chat between an admin and a non-admin. All admins share them as one support
+// inbox: every admin can see and answer every support chat, not just the admin the user was paired with.
+// For an admin viewing one, the "other" person is always the user, and messages from any admin count
+// as the admin side (read receipts, unread counts).
+//
 // Every conversation row returned to the client has the same shape, seen from the current user's side.
 // Messages from before the user deleted the conversation (conversation_clears) don't count for them.
 const CONVERSATION_SELECT = `
   SELECT c.id, c.vehicle_id, c.last_message_at, c.created_at,
          o.id AS other_id, o.full_name AS other_name, o.avatar_url AS other_avatar_url, o.role AS other_role,
+         ((u1.role = 'admin') <> (u2.role = 'admin')) AS is_support,
          v.title AS vehicle_title,
          CASE
            WHEN lm.deleted_at IS NOT NULL THEN 'Message unsent'
@@ -36,10 +42,19 @@ const CONVERSATION_SELECT = `
          END AS last_message,
          lm.message_type AS last_message_type, lm.sender_id AS last_message_sender_id,
          (SELECT COUNT(*)::int FROM messages m
-           WHERE m.conversation_id = c.id AND m.sender_id <> $1 AND m.read_at IS NULL AND m.deleted_at IS NULL
+           WHERE m.conversation_id = c.id AND m.sender_id <> $1 AND (me.role <> 'admin' OR m.sender_id = o.id)
+             AND m.read_at IS NULL AND m.deleted_at IS NULL
              AND m.created_at > COALESCE(cc.cleared_at, '-infinity')) AS unread_count
   FROM conversations c
-  JOIN users o ON o.id = CASE WHEN c.user_one_id = $1 THEN c.user_two_id ELSE c.user_one_id END
+  JOIN users me ON me.id = $1
+  JOIN users u1 ON u1.id = c.user_one_id
+  JOIN users u2 ON u2.id = c.user_two_id
+  JOIN users o ON o.id = CASE
+    WHEN c.user_one_id = $1 THEN c.user_two_id
+    WHEN c.user_two_id = $1 THEN c.user_one_id
+    WHEN u1.role = 'admin' THEN c.user_two_id
+    ELSE c.user_one_id
+  END
   LEFT JOIN vehicles v ON v.id = c.vehicle_id
   LEFT JOIN conversation_clears cc ON cc.conversation_id = c.id AND cc.user_id = $1
   LEFT JOIN LATERAL (
@@ -48,15 +63,18 @@ const CONVERSATION_SELECT = `
       AND NOT EXISTS (SELECT 1 FROM message_hidden h WHERE h.message_id = m.id AND h.user_id = $1)
     ORDER BY m.created_at DESC LIMIT 1
   ) lm ON true
-  WHERE $1 IN (c.user_one_id, c.user_two_id)`;
+  WHERE ($1 IN (c.user_one_id, c.user_two_id)
+         OR (me.role = 'admin' AND (u1.role = 'admin') <> (u2.role = 'admin')))`;
 
 // A message with a preview of the message it replies to. Unsent messages have their content wiped.
 const MESSAGE_SELECT = `
   SELECT m.id, m.conversation_id, m.sender_id, m.message_type, m.body, m.image_url, m.latitude, m.longitude,
          m.read_at, m.created_at, m.deleted_at, m.forwarded, m.reply_to_id,
+         su.full_name AS sender_name, su.role AS sender_role,
          rm.sender_id AS reply_sender_id, rm.message_type AS reply_type, rm.body AS reply_body,
          (rm.deleted_at IS NOT NULL) AS reply_deleted
   FROM messages m
+  JOIN users su ON su.id = m.sender_id
   LEFT JOIN messages rm ON rm.id = m.reply_to_id`;
 
 // Messages of conversation $1 that user $2 can see (not before their clear, not removed for them).
@@ -72,13 +90,19 @@ const getConversationForUser = async (userId, conversationId) => {
 };
 
 const getMessageForUser = async (userId, messageId) => {
-  const result = await query(
-    `${MESSAGE_SELECT} JOIN conversations c ON c.id = m.conversation_id
-     WHERE m.id = $1 AND $2 IN (c.user_one_id, c.user_two_id)`,
-    [messageId, userId]
-  );
-  return result.rows[0] || null;
+  const result = await query(`${MESSAGE_SELECT} WHERE m.id = $1`, [messageId]);
+  const message = result.rows[0];
+  if (!message || !(await getConversationForUser(userId, message.conversation_id))) return null;
+  return message;
 };
+
+// SQL condition: the message was sent by the other side of the conversation, as seen by the viewer ($2,
+// with $3 = conversation.other_id). In a support chat viewed by an admin, the other side is only the
+// user, not fellow admins. Both forms reference $2 and $3 so callers can always pass the same params.
+const fromOtherSide = (conversation, viewerRole) =>
+  (viewerRole === 'admin' && conversation.is_support
+    ? '(sender_id = $3 AND sender_id <> $2)'
+    : '(sender_id <> $2 OR sender_id = $3)');
 
 const upsertConversation = async (userId, otherId, vehicleId = null) => {
   const result = await query(
@@ -117,12 +141,7 @@ const getConversations = async (req, res, next) => {
 const getUnreadCount = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT COUNT(*)::int AS count
-       FROM messages m
-       JOIN conversations c ON c.id = m.conversation_id
-       LEFT JOIN conversation_clears cc ON cc.conversation_id = c.id AND cc.user_id = $1
-       WHERE $1 IN (c.user_one_id, c.user_two_id) AND m.sender_id <> $1 AND m.read_at IS NULL
-         AND m.deleted_at IS NULL AND m.created_at > COALESCE(cc.cleared_at, '-infinity')`,
+      `SELECT COALESCE(SUM(unread_count), 0)::int AS count FROM (${CONVERSATION_SELECT}) visible`,
       [req.user.id]
     );
     res.json({ success: true, data: { count: result.rows[0].count } });
@@ -170,8 +189,16 @@ const startConversation = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'You cannot message yourself' });
     }
 
-    const other = await query('SELECT id FROM users WHERE id = $1 AND is_active = true', [userId]);
+    const other = await query('SELECT id, role FROM users WHERE id = $1 AND is_active = true', [userId]);
     if (!other.rows[0]) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // An admin messaging a user joins that user's existing support chat instead of opening a second one.
+    if (req.user.role === 'admin' && other.rows[0].role !== 'admin' && !vehicleId) {
+      const existingSupport = await findSupportConversation(userId);
+      if (existingSupport) {
+        return res.status(201).json({ success: true, data: await getConversationForUser(req.user.id, existingSupport) });
+      }
+    }
 
     const conversationId = await upsertConversation(req.user.id, userId, vehicleId || null);
     res.status(201).json({ success: true, data: await getConversationForUser(req.user.id, conversationId) });
@@ -180,23 +207,27 @@ const startConversation = async (req, res, next) => {
   }
 };
 
+// The user's most recent chat with an admin (their support chat), if any.
+const findSupportConversation = async (userId) => {
+  const existing = await query(
+    `SELECT c.id FROM conversations c
+     JOIN users a ON a.id = CASE WHEN c.user_one_id = $1 THEN c.user_two_id ELSE c.user_one_id END
+     WHERE $1 IN (c.user_one_id, c.user_two_id) AND a.role = 'admin' AND a.is_active = true
+     ORDER BY c.last_message_at DESC LIMIT 1`,
+    [userId]
+  );
+  return existing.rows[0]?.id || null;
+};
+
 // Opens a chat with the support team: reuses the user's most recent chat with an admin,
-// otherwise picks the longest-standing active admin.
+// otherwise picks the longest-standing active admin. Every admin sees and can answer it.
 const startSupportConversation = async (req, res, next) => {
   try {
     if (req.user.role === 'admin') {
       return res.status(400).json({ success: false, message: 'Admins cannot open a support chat' });
     }
 
-    const existing = await query(
-      `SELECT c.id FROM conversations c
-       JOIN users a ON a.id = CASE WHEN c.user_one_id = $1 THEN c.user_two_id ELSE c.user_one_id END
-       WHERE $1 IN (c.user_one_id, c.user_two_id) AND a.role = 'admin' AND a.is_active = true
-       ORDER BY c.last_message_at DESC LIMIT 1`,
-      [req.user.id]
-    );
-
-    let conversationId = existing.rows[0]?.id;
+    let conversationId = await findSupportConversation(req.user.id);
     if (!conversationId) {
       const admin = await query(
         "SELECT id FROM users WHERE role = 'admin' AND is_active = true ORDER BY created_at ASC LIMIT 1"
@@ -245,12 +276,13 @@ const getMessages = async (req, res, next) => {
       query('SELECT id FROM messages WHERE conversation_id = $1 AND deleted_at IS NOT NULL', [req.params.id]),
       query(
         `SELECT MAX(created_at) AS seen_until FROM messages
-         WHERE conversation_id = $1 AND sender_id = $2 AND read_at IS NOT NULL`,
-        [req.params.id, req.user.id]
+         WHERE conversation_id = $1 AND NOT (${fromOtherSide(conversation, req.user.role)}) AND read_at IS NOT NULL`,
+        [req.params.id, req.user.id, conversation.other_id]
       ),
       query(
-        'UPDATE messages SET read_at = NOW() WHERE conversation_id = $1 AND sender_id <> $2 AND read_at IS NULL',
-        [req.params.id, req.user.id]
+        `UPDATE messages SET read_at = NOW()
+         WHERE conversation_id = $1 AND ${fromOtherSide(conversation, req.user.role)} AND read_at IS NULL`,
+        [req.params.id, req.user.id, conversation.other_id]
       ),
     ]);
 
@@ -299,13 +331,18 @@ const createMessage = async (sender, conversation, fields) => {
   if (!pendingUnread.rows.length) {
     const text = { image: 'Sent you a photo', video: 'Sent you a video', location: 'Shared a location' }[fields.type] || fields.body;
     const preview = text.length > 80 ? `${text.slice(0, 77)}...` : text;
-    await createNotification(
-      conversation.other_id,
-      `New message from ${sender.full_name}`,
+    // A user writing to support reaches the whole admin team, not only the admin on the conversation.
+    const toSupportTeam = conversation.is_support && sender.role !== 'admin';
+    const recipients = toSupportTeam
+      ? (await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true")).rows.map((r) => r.id)
+      : [conversation.other_id];
+    await Promise.all(recipients.map((recipientId) => createNotification(
+      recipientId,
+      toSupportTeam ? `New support message from ${sender.full_name}` : `New message from ${sender.full_name}`,
       preview,
       'system',
-      messagesPathFor(conversation.other_role, conversation.id)
-    ).catch(() => {});
+      messagesPathFor(toSupportTeam ? 'admin' : conversation.other_role, conversation.id)
+    ).catch(() => {})));
   }
 
   const result = await query(`${MESSAGE_SELECT} WHERE m.id = $1`, [inserted.rows[0].id]);
@@ -460,8 +497,9 @@ const deleteConversation = async (req, res, next) => {
       [conversation.id, req.user.id]
     );
     await query(
-      'UPDATE messages SET read_at = NOW() WHERE conversation_id = $1 AND sender_id <> $2 AND read_at IS NULL',
-      [conversation.id, req.user.id]
+      `UPDATE messages SET read_at = NOW()
+       WHERE conversation_id = $1 AND ${fromOtherSide(conversation, req.user.role)} AND read_at IS NULL`,
+      [conversation.id, req.user.id, conversation.other_id]
     );
     res.json({ success: true, data: { id: conversation.id } });
   } catch (error) {

@@ -16,7 +16,7 @@ import OwnerInspectionStatus from '@/components/booking/OwnerInspectionStatus';
 import PaymentDeadlineNotice from '@/components/booking/PaymentDeadlineNotice';
 import BookingPartyCard from '@/components/booking/BookingPartyCard';
 import BookingStatusTabs, { matchesBookingTab, type BookingTab } from '@/components/booking/BookingStatusTabs';
-import type { InspectionFields } from '@/lib/inspection';
+import { AUTO_HANDOVER_HOURS, type InspectionFields } from '@/lib/inspection';
 import {
   fetchPendingReviews, notifyReviewsChanged, REVIEWS_CHANGED_EVENT, type PendingReview,
 } from '@/lib/reviews';
@@ -185,6 +185,12 @@ export default function BookingRequestsPage() {
               <p className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
                 <CalendarClock className="h-4 w-4 shrink-0" />
                 You can hand over the vehicle only on the pickup date: {formatDate(b.start_date)}{b.pickup_time ? ` at ${formatTime(b.pickup_time)}` : ''}.
+              </p>
+            )}
+            {needsHandover(b) && b.payment_status !== 'pending' && b.auto_handover_at && (
+              <p className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
+                <Clock className="h-3.5 w-3.5 shrink-0" />
+                If not handed over by {formatTimestamp(b.auto_handover_at)} ({AUTO_HANDOVER_HOURS} hours after pickup time), it is handed over automatically and the renter&apos;s inspection time starts.
               </p>
             )}
             {(b.status === 'active' || (b.status === 'approved' && !b.handed_over_at)) && (

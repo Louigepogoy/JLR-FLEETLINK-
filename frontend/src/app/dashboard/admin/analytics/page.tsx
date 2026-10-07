@@ -49,13 +49,13 @@ export default function AdminAnalyticsPage() {
     <DashboardLayout role="admin">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={ChartIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Revenue Analytics</h2>
       <div className="grid md:grid-cols-2 gap-6 mb-8">
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">Total Platform Revenue</p>
-          <p className="text-4xl font-bold gradient-text">{formatCurrency(data.revenue.total_revenue)}</p>
+          <p className="money-fit money-fit-lg font-bold gradient-text">{formatCurrency(data.revenue.total_revenue)}</p>
         </div>
-        <div className="glass-card p-6">
+        <div className="glass-card p-6 money-box">
           <p className="text-sm text-[var(--muted)]">Monthly Revenue</p>
-          <p className="text-4xl font-bold">{formatCurrency(data.revenue.monthly_revenue)}</p>
+          <p className="money-fit money-fit-lg font-bold">{formatCurrency(data.revenue.monthly_revenue)}</p>
         </div>
       </div>
       <div className="grid lg:grid-cols-2 gap-6">

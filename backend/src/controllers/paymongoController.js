@@ -1,7 +1,10 @@
 const { query } = require('../config/db');
 const { createCheckoutSession, getCheckoutSession, verifyWebhookEvent } = require('../services/paymongoService');
 const { finalizeBookingPayment } = require('./paymentController');
-const { PLANS, activateSubscription } = require('./subscriptionController');
+const {
+  PLANS, activateSubscription, isFirstPaidSubscription, priceForUser,
+  EXTRA_VEHICLE_SLOT_PRICE, MAX_EXTRA_SLOTS_PER_PURCHASE, getActivePaidSubscription, addExtraVehicleSlots,
+} = require('./subscriptionController');
 const { createNotification } = require('../utils/notifications');
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -58,11 +61,37 @@ const finalizeCheckoutSession = async (checkoutSession) => {
         plan,
         paymentMethod,
         paymentReference: referenceNumber,
+        price: parseFloat(intent.amount),
       });
       await createNotification(
         intent.user_id,
         'Subscription Activated',
-        `Your ${plan.name} subscription is now active.`,
+        intent.payload.discountPercent
+          ? `Your ${plan.name} subscription is now active — you got ${intent.payload.discountPercent}% off your first subscription.`
+          : `Your ${plan.name} subscription is now active.`,
+        'system',
+        '/dashboard/subscription'
+      );
+    }
+  } else if (intent.purpose === 'vehicle_slots') {
+    const quantity = Number(intent.payload.quantity);
+    const updated = await addExtraVehicleSlots({ userId: intent.user_id, quantity });
+    if (updated) {
+      await createNotification(
+        intent.user_id,
+        'Extra Vehicle Slots Added',
+        `${quantity} extra vehicle slot${quantity === 1 ? '' : 's'} added. You can now publish up to ${updated.vehicle_limit} vehicles.`,
+        'system',
+        '/dashboard/subscription'
+      );
+    } else {
+      // Paid, but the paid plan was no longer active (e.g. it expired during checkout). Flag for a manual refund.
+      // eslint-disable-next-line no-console
+      console.error(`Extra slot payment ${intent.external_id} has no active paid subscription to apply to`);
+      await createNotification(
+        intent.user_id,
+        'Extra Vehicle Slots Pending',
+        'We received your payment for extra vehicle slots, but your subscription is no longer active. Please contact support.',
         'system',
         '/dashboard/subscription'
       );
@@ -140,11 +169,15 @@ const createSubscriptionCheckout = async (req, res, next) => {
     }
 
     const externalId = `subscription-${planId}-${req.user.id}-${Date.now()}`;
+    // 20% off a user's first paid subscription; full price after that.
+    const { price, discountPercent } = priceForUser(plan, await isFirstPaidSubscription(req.user.id));
 
     const session = await createCheckoutSession({
       referenceNumber: externalId,
-      amount: plan.price,
-      description: `${plan.name} subscription - JLR Fleetlink`,
+      amount: price,
+      description: discountPercent
+        ? `${plan.name} subscription - JLR Fleetlink (${discountPercent}% off first subscription)`
+        : `${plan.name} subscription - JLR Fleetlink`,
       payerEmail: req.user.email,
       successUrl: `${FRONTEND_URL}/dashboard/subscription?payment=success`,
       cancelUrl: `${FRONTEND_URL}/dashboard/subscription?payment=failed`,
@@ -153,7 +186,52 @@ const createSubscriptionCheckout = async (req, res, next) => {
     await query(
       `INSERT INTO payment_intents (external_id, gateway_session_id, purpose, user_id, amount, payload, checkout_url)
        VALUES ($1, $2, 'subscription', $3, $4, $5, $6)`,
-      [externalId, session.id, req.user.id, plan.price, JSON.stringify({ planId }), session.checkoutUrl]
+      [externalId, session.id, req.user.id, price, JSON.stringify({ planId, discountPercent }), session.checkoutUrl]
+    );
+
+    res.status(201).json({ success: true, data: { checkoutUrl: session.checkoutUrl } });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
+const createExtraSlotsCheckout = async (req, res, next) => {
+  try {
+    const quantity = Number(req.body.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_EXTRA_SLOTS_PER_PURCHASE) {
+      return res.status(400).json({
+        success: false,
+        message: `Choose between 1 and ${MAX_EXTRA_SLOTS_PER_PURCHASE} extra vehicle slots`,
+      });
+    }
+
+    const subscription = await getActivePaidSubscription(req.user.id);
+    if (!subscription) {
+      return res.status(400).json({
+        success: false,
+        message: 'Extra vehicle slots are available on an active Pro, Premium, or Enterprise plan only',
+      });
+    }
+
+    const amount = quantity * EXTRA_VEHICLE_SLOT_PRICE;
+    const externalId = `vehicle-slots-${req.user.id}-${Date.now()}`;
+
+    const session = await createCheckoutSession({
+      referenceNumber: externalId,
+      amount,
+      description: `${quantity} extra vehicle slot${quantity === 1 ? '' : 's'} - JLR Fleetlink ${subscription.plan_name}`,
+      payerEmail: req.user.email,
+      successUrl: `${FRONTEND_URL}/dashboard/subscription?payment=success`,
+      cancelUrl: `${FRONTEND_URL}/dashboard/subscription?payment=failed`,
+    });
+
+    await query(
+      `INSERT INTO payment_intents (external_id, gateway_session_id, purpose, user_id, amount, payload, checkout_url)
+       VALUES ($1, $2, 'vehicle_slots', $3, $4, $5, $6)`,
+      [externalId, session.id, req.user.id, amount, JSON.stringify({ quantity, subscriptionId: subscription.id }), session.checkoutUrl]
     );
 
     res.status(201).json({ success: true, data: { checkoutUrl: session.checkoutUrl } });
@@ -227,6 +305,7 @@ const reconcilePendingPayments = async (req, res, next) => {
 module.exports = {
   createBookingPaymentCheckout,
   createSubscriptionCheckout,
+  createExtraSlotsCheckout,
   handleWebhook,
   reconcilePendingPayments,
   finalizeCheckoutSession,

@@ -351,10 +351,16 @@ function ChatThread({
 
   const isUnsent = (m: ChatMessage) => Boolean(m.deleted_at) || unsentIds.has(m.id);
 
+  // An admin viewing a support chat: replies from fellow admins sit on "our" side of the thread.
+  const adminSupportView = Boolean(conversation?.is_support && conversation.other_role !== 'admin');
+  const isOwnSide = (m: ChatMessage) => m.sender_id === meId || (adminSupportView && m.sender_role === 'admin');
+  // Name shown for a sender who is neither me nor the person in the header (e.g. another admin).
+  const senderName = (m: ChatMessage) => m.sender_name || conversation?.other_name || '';
+
   // e.g. "You replied to Maria", "Maria replied to you", "You replied to yourself".
   const replyLabel = (m: ChatMessage) => {
     const otherName = conversation?.other_name || '';
-    const replier = m.sender_id === meId ? 'You' : otherName;
+    const replier = m.sender_id === meId ? 'You' : senderName(m);
     const target = m.reply_sender_id === m.sender_id
       ? (m.sender_id === meId ? 'yourself' : 'themselves')
       : (m.reply_sender_id === meId ? 'you' : otherName);
@@ -537,7 +543,7 @@ function ChatThread({
     );
   }
 
-  const lastMine = [...messages].reverse().find((m) => m.sender_id === meId && !isUnsent(m));
+  const lastMine = [...messages].reverse().find((m) => isOwnSide(m) && !isUnsent(m));
   const lastMineSeen = Boolean(lastMine && seenUntil && lastMine.created_at <= seenUntil);
   const actionButton = 'shrink-0 rounded-full p-1 text-[var(--muted)] hover:bg-[var(--primary)]/10';
   const menuItem = 'flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--primary)]/10';
@@ -556,7 +562,7 @@ function ChatThread({
             <Link href={profilePath(conversation.other_id)} className="truncate hover:underline" title="View profile">
               {conversation.other_name}
             </Link>
-            {conversation.other_role === 'admin' && <SupportBadge />}
+            {(conversation.other_role === 'admin' || conversation.is_support) && <SupportBadge />}
           </p>
           {conversation.vehicle_id && conversation.vehicle_title && (
             <Link href={`/vehicles/${conversation.vehicle_id}`} className="flex items-center gap-1 text-xs text-[var(--primary)] hover:underline">
@@ -590,12 +596,19 @@ function ChatThread({
           </p>
         ) : (
           messages.map((m) => {
-            const mine = m.sender_id === meId;
+            // `mine` = my side of the thread (layout); only my own messages can be unsent.
+            const mine = isOwnSide(m);
+            const ownMessage = m.sender_id === meId;
+            // Label messages from someone other than me or the person in the header, e.g. another admin.
+            const showSender = !ownMessage && m.sender_id !== conversation.other_id;
             const unsent = isUnsent(m);
             const messageReactions = unsent ? [] : reactions.filter((r) => r.message_id === m.id);
             const menuOpen = openMenu?.id === m.id;
             return (
               <div key={m.id} className={cn('group flex flex-col gap-1', mine ? 'items-end' : 'items-start')}>
+                {showSender && (
+                  <span className="px-1 text-[10px] font-semibold text-[var(--muted)]">{senderName(m)}</span>
+                )}
                 {m.forwarded && !unsent && (
                   <span className="flex items-center gap-1 px-1 text-[10px] text-[var(--muted)]">
                     <Forward className="h-3 w-3" /> Forwarded
@@ -620,7 +633,7 @@ function ChatThread({
                   id={`msg-${m.id}`}
                   className={cn('relative flex max-w-full items-center gap-1 rounded-2xl transition-shadow', mine && 'flex-row-reverse')}
                 >
-                  <MessageContent message={m} mine={mine} unsent={unsent} otherName={conversation.other_name} />
+                  <MessageContent message={m} mine={ownMessage} unsent={unsent} otherName={senderName(m)} />
                   <div className={cn(
                     'flex items-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100',
                     menuOpen && 'lg:opacity-100',
@@ -687,7 +700,7 @@ function ChatThread({
                           {m.message_type === 'text' && (
                             <button onClick={() => copyText(m)} className={menuItem}><Copy className="h-4 w-4" /> Copy text</button>
                           )}
-                          {mine && (
+                          {ownMessage && (
                             <button onClick={() => unsend(m)} className={cn(menuItem, 'text-red-500')}><Undo2 className="h-4 w-4" /> Unsend for everyone</button>
                           )}
                         </>
@@ -711,7 +724,7 @@ function ChatThread({
         <div className="flex items-center gap-3 border-t border-[var(--card-border)] bg-[var(--primary)]/5 px-4 py-2">
           <CornerUpLeft className="h-4 w-4 shrink-0 text-[var(--primary)]" />
           <div className="min-w-0 flex-1 text-xs">
-            <p className="font-semibold">Replying to {replyTo.sender_id === meId ? 'yourself' : conversation.other_name}</p>
+            <p className="font-semibold">Replying to {replyTo.sender_id === meId ? 'yourself' : senderName(replyTo)}</p>
             <p className="truncate text-[var(--muted)]">{messagePreview(replyTo)}</p>
           </div>
           <button onClick={() => setReplyTo(null)} className="rounded-full p-1 hover:bg-[var(--primary)]/10" aria-label="Cancel reply">
@@ -995,7 +1008,7 @@ export default function ChatInbox({ role }: { role: 'user' | 'admin' }) {
                   <div className="flex items-center justify-between gap-2">
                     <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
                       <span className="truncate">{c.other_name}</span>
-                      {c.other_role === 'admin' && <SupportBadge />}
+                      {(c.other_role === 'admin' || c.is_support) && <SupportBadge />}
                     </p>
                     <span className="shrink-0 text-[10px] text-[var(--muted)]">{formatChatTime(c.last_message_at)}</span>
                   </div>

@@ -324,3 +324,20 @@ select.input-field {
     border-radius: 0 !important;
   }
 }
+
+/* Big money amounts that always fit their box: put .money-box on the card (it becomes a size
+   container) and .money-fit on the amount. The font shrinks with the card's width instead of
+   overflowing, up to --money-max (text-3xl by default; .money-fit-lg allows text-4xl). */
+.money-box {
+  container-type: inline-size;
+  min-width: 0;
+}
+.money-fit {
+  font-size: clamp(1rem, 10.5cqi, var(--money-max, 1.875rem));
+  line-height: 1.2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.money-fit-lg {
+  --money-max: 2.25rem;
+}

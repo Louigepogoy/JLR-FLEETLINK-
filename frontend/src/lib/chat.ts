@@ -9,6 +9,8 @@ export type Conversation = {
   other_name: string;
   other_avatar_url: string | null;
   other_role: 'user' | 'admin';
+  // Chat between an admin and a user. Every admin shares these as one support inbox.
+  is_support: boolean;
   last_message: string | null;
   last_message_type: ChatMessage['message_type'] | null;
   last_message_sender_id: string | null;
@@ -18,6 +20,9 @@ export type Conversation = {
 export type ChatMessage = {
   id: string;
   sender_id: string;
+  // Who sent it; in support chats this can be any admin, not only the one on the conversation.
+  sender_name: string;
+  sender_role: 'user' | 'admin';
   message_type: 'text' | 'image' | 'video' | 'location';
   body: string | null;
   image_url: string | null;

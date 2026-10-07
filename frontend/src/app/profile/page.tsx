@@ -46,6 +46,23 @@ export default function ProfilePage() {
       .finally(() => setVerificationChecking(false));
   }, [isAuthenticated]);
 
+  // The page renders nothing until auth hydrates, so the browser's own #hash jump misses; scroll manually.
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated || verificationChecking) return;
+    if (window.location.hash !== '#verification') return;
+    const card = document.getElementById('verification');
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Briefly outline the card so it's obvious where to go.
+    const highlight = ['ring-2', 'ring-amber-500', 'shadow-lg', 'shadow-amber-500/20'];
+    card.classList.add(...highlight);
+    const timer = setTimeout(() => card.classList.remove(...highlight), 2500);
+    return () => {
+      clearTimeout(timer);
+      card.classList.remove(...highlight);
+    };
+  }, [hasHydrated, isAuthenticated, verificationChecking]);
+
   if (!hasHydrated || !isAuthenticated) return null;
 
   const handleAvatarChange = (file?: File) => {
@@ -208,7 +225,8 @@ export default function ProfilePage() {
               </button>
             </form>
 
-            <div className="glass-card p-8 space-y-4 h-fit lg:col-span-2">
+            {/* Target of /profile#verification (the floating "not verified" reminder links here). */}
+            <div id="verification" className="glass-card p-8 space-y-4 h-fit lg:col-span-2 scroll-mt-24 transition-shadow duration-500">
               <div className="flex items-center gap-4">
                 <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
                   verificationStatus === 'approved' ? 'bg-green-500/15 text-green-500' :

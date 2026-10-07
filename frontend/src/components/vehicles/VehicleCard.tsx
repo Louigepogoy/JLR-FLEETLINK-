@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BadgeCheck, MapPin, Users, Fuel, Settings2 } from 'lucide-react';
+import { BadgeCheck, LocateFixed, MapPin, Users, Fuel, Settings2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { formatPlace } from '@/lib/philippines';
 import { RatingBadge } from '@/components/reviews/StarRating';
@@ -31,7 +31,11 @@ interface Vehicle {
   verification_status?: string;
   avg_rating?: number | string | null;
   rating_count?: number;
+  // Straight-line km from the renter, set only when Browse Vehicles is sorted by "Near me".
+  distance_km?: number | null;
 }
+
+const formatDistance = (km: number) => (km < 10 ? `${km.toFixed(1)} km away` : `${Math.round(km)} km away`);
 
 export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; index?: number }) {
   // Falls back to the placeholder when the photo file is missing on the server instead of a broken image.
@@ -90,6 +94,11 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
         <h3 className="font-semibold text-lg mb-1">{vehicle.title}</h3>
         <p className="text-sm text-[var(--muted)] mb-1">{vehicle.brand} {vehicle.model} - {vehicle.year}</p>
         <RatingBadge average={vehicle.avg_rating} count={vehicle.rating_count} className="mb-3 flex" />
+        {vehicle.distance_km != null && (
+          <p className="mb-3 inline-flex items-center gap-1 rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--primary)]">
+            <LocateFixed className="h-3.5 w-3.5" /> {formatDistance(Number(vehicle.distance_km))}
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-3 text-xs text-[var(--muted)] mb-4">
           <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{pickupText}</span>

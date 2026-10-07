@@ -1,6 +1,7 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
+const { ACTIVE_SUBSCRIPTION_SQL } = require('./subscriptionController');
 
 const VEHICLE_TYPES = [
   'Sedan', 'SUV', 'Hatchback', 'Pickup', 'Van', 'Truck',
@@ -30,6 +31,7 @@ const VEHICLE_LIMIT_BY_PLAN = {
   basic: 5,
   pro: 10,
   premium: 20,
+  enterprise: 50,
 };
 
 const locationError = (message) => {
@@ -76,7 +78,7 @@ const getOwnerVehicleLimit = async (ownerId) => {
   const subscription = await query(
     `SELECT plan_id, vehicle_limit
      FROM owner_subscriptions
-     WHERE owner_id = $1 AND status = 'active'
+     WHERE owner_id = $1 AND ${ACTIVE_SUBSCRIPTION_SQL}
      ORDER BY created_at DESC LIMIT 1`,
     [ownerId]
   );
@@ -96,7 +98,9 @@ const enforceOwnerVehicleLimit = async (ownerId) => {
   const currentCount = Number(countRows[0]?.count || 0);
   if (currentCount >= plan.limit) {
     const error = new Error(
-      `Your ${plan.planId} plan allows up to ${plan.limit} vehicles. Please select a higher subscription plan to add more vehicles.`
+      plan.planId !== 'basic'
+        ? `Your ${plan.planId} plan allows up to ${plan.limit} vehicles. Buy extra vehicle slots (₱500 each) on the Subscription page to add more.`
+        : `Your ${plan.planId} plan allows up to ${plan.limit} vehicles. Please select a higher subscription plan to add more vehicles.`
     );
     error.status = 403;
     error.upgradeRequired = true;
@@ -171,8 +175,29 @@ const getPublicStats = async (req, res, next) => {
 const getVehicles = async (req, res, next) => {
   try {
     const { search, type, minPrice, maxPrice, location, province, status = 'available' } = req.query;
+    const params = [];
+    let idx = 1;
+
+    // Optional "near me": the renter's location (nearLat/nearLng). When given, each vehicle gets a
+    // straight-line distance_km to its pickup pin and the list is sorted nearest first. Not stored.
+    const nearLat = Number(req.query.nearLat);
+    const nearLng = Number(req.query.nearLng);
+    const useDistance = req.query.nearLat !== undefined && req.query.nearLng !== undefined
+      && Number.isFinite(nearLat) && Number.isFinite(nearLng)
+      && Math.abs(nearLat) <= 90 && Math.abs(nearLng) <= 180;
+    let distanceSelect = 'NULL::float AS distance_km';
+    if (useDistance) {
+      // Haversine formula, Earth radius 6371 km. NULL when the vehicle has no pickup pin.
+      distanceSelect = `ROUND((6371 * 2 * ASIN(SQRT(
+          POWER(SIN(RADIANS(v.latitude::float - $1) / 2), 2)
+          + COS(RADIANS($1)) * COS(RADIANS(v.latitude::float)) * POWER(SIN(RADIANS(v.longitude::float - $2) / 2), 2)
+        )))::numeric, 1)::float AS distance_km`;
+      params.push(nearLat, nearLng);
+      idx = 3;
+    }
+
     let sql = `
-      SELECT v.*, u.full_name as owner_name,
+      SELECT v.*, u.full_name as owner_name, ${distanceSelect},
         EXISTS (
           SELECT 1 FROM vehicle_maintenance_dates vmd
           WHERE vmd.vehicle_id = v.id AND CURRENT_DATE BETWEEN vmd.start_date AND vmd.end_date
@@ -183,8 +208,6 @@ const getVehicles = async (req, res, next) => {
       JOIN users u ON v.owner_id = u.id
       WHERE v.verification_status <> 'rejected'
     `;
-    const params = [];
-    let idx = 1;
 
     if (status) {
       sql += ` AND v.status = $${idx++}`;
@@ -217,7 +240,7 @@ const getVehicles = async (req, res, next) => {
       params.push(maxPrice);
     }
 
-    sql += ' ORDER BY v.created_at DESC';
+    sql += useDistance ? ' ORDER BY distance_km ASC NULLS LAST, v.created_at DESC' : ' ORDER BY v.created_at DESC';
     const result = await query(sql, params);
     res.json({ success: true, data: result.rows });
   } catch (error) {

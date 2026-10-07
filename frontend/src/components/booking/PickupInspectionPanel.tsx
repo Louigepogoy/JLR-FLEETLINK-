@@ -5,9 +5,9 @@ import { Camera, CheckCircle2, ShieldCheck, Timer, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatTimestamp } from '@/lib/utils';
 import {
-  disputeOutcomeLabel, formatCountdown, inspectionStage, useCountdown, type InspectionFields,
+  AUTO_HANDOVER_HOURS, disputeOutcomeLabel, formatCountdown, inspectionStage, useCountdown, type InspectionFields,
 } from '@/lib/inspection';
 import AddDisputeEvidence from './AddDisputeEvidence';
 import RejectVehicleModal from './RejectVehicleModal';
@@ -50,6 +50,12 @@ export default function PickupInspectionPanel({ booking, onChanged }: Props) {
           <span className="font-semibold">Your payment is held safely by JLR Fleetlink.</span> The owner is only paid after
           you check the vehicle at pickup. When the owner hands it over, you&apos;ll get time to accept it or report a
           problem. Don&apos;t pay the owner in cash.
+          {booking.auto_handover_at && (
+            <span className="mt-1 block text-xs text-[var(--muted)]">
+              Please pick it up on time: if it isn&apos;t handed over by {formatTimestamp(booking.auto_handover_at)} ({AUTO_HANDOVER_HOURS} hours
+              after your pickup time), it is marked as handed over automatically and your inspection time starts.
+            </span>
+          )}
         </p>
       </div>
     );

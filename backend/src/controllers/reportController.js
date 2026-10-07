@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { createNotification } = require('../utils/notifications');
+const { createNotification, notifyAdmins } = require('../utils/notifications');
 
 const getReportContext = async (bookingId) => {
   const result = await query(
@@ -47,16 +47,17 @@ const createReport = async (req, res, next) => {
       [bookingId, reporterId, reportedUserId, reason.trim(), description.trim()]
     );
 
-    const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
-    await Promise.all(admins.rows.map((admin) =>
-      createNotification(
-        admin.id,
-        'New User Report',
-        `A new report was submitted for booking ${booking.title}.`,
-        'alert',
-        '/dashboard/admin/reports'
-      )
-    ));
+    const reporter = req.user.full_name || req.user.email;
+    const side = isCustomerReportingOwner ? 'the renter' : 'the owner';
+    const against = isCustomerReportingOwner ? 'the owner' : 'the renter';
+    await notifyAdmins(
+      'New User Report',
+      `${reporter} (${side}) reported ${against} of ${booking.title}: ${reason.trim()}`,
+      'alert',
+      '/dashboard/admin/reports',
+      `New report from ${reporter} (${side}) against ${against} of ${booking.title}\n\n`
+        + `Reason: ${reason.trim()}\n\n${description.trim()}`
+    );
 
     res.status(201).json({ success: true, data: result.rows[0] });
   } catch (error) {
@@ -113,6 +114,18 @@ const updateReportStatus = async (req, res, next) => {
 
     if (!result.rows[0]) {
       return res.status(404).json({ success: false, message: 'Report not found' });
+    }
+
+    // Let the person who filed the report know an admin acted on it.
+    if (status !== 'pending') {
+      const statusText = { reviewed: 'is being reviewed', resolved: 'was resolved', dismissed: 'was dismissed' }[status];
+      const note = adminNotes?.trim() ? ` Note: ${adminNotes.trim()}` : '';
+      await createNotification(
+        result.rows[0].reporter_id,
+        'Report Update',
+        `Your report "${result.rows[0].reason}" ${statusText} by an administrator.${note}`,
+        'system'
+      ).catch(() => {});
     }
 
     res.json({ success: true, data: result.rows[0] });

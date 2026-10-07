@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Filter, MapPin, SearchX, LayoutGrid, Map as MapIcon } from 'lucide-react';
+import { Search, Filter, MapPin, SearchX, LayoutGrid, Map as MapIcon, LocateFixed, Loader2, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import VehicleCard from '@/components/vehicles/VehicleCard';
@@ -16,8 +17,15 @@ import { cn, vehicleTypes } from '@/lib/utils';
 
 type Filters = { search: string; type: string; province: string; location: string; minPrice: string; maxPrice: string };
 
-const toParams = (filters: Filters) => {
+// The renter's current location for "nearest first". Only sent with the search, never saved.
+type Near = { lat: number; lng: number } | null;
+
+const toParams = (filters: Filters, near: Near) => {
   const params: Record<string, string> = { status: 'available' };
+  if (near) {
+    params.nearLat = String(near.lat);
+    params.nearLng = String(near.lng);
+  }
   if (filters.search) params.search = filters.search;
   if (filters.type) params.type = filters.type;
   if (filters.province) params.province = filters.province;
@@ -43,12 +51,15 @@ function VehiclesContent() {
 
   // Whether the last applied search was narrowed to a place (the map then zooms to its pins).
   const [placeFiltered, setPlaceFiltered] = useState(Boolean(filters.province || filters.location));
+  const [near, setNear] = useState<Near>(null);
+  // Starts true: the page asks for the location automatically on load.
+  const [locating, setLocating] = useState(true);
 
-  const fetchVehicles = async () => {
+  const fetchVehicles = async (nearOverride: Near = near) => {
     setLoading(true);
     setPlaceFiltered(Boolean(filters.province || filters.location));
     try {
-      const res = await api.get('/vehicles', { params: toParams(filters) });
+      const res = await api.get('/vehicles', { params: toParams(filters, nearOverride) });
       setVehicles(res.data.data);
     } catch {
       setVehicles([]);
@@ -57,14 +68,53 @@ function VehiclesContent() {
     }
   };
 
+  // Asks the browser for the renter's location; on success lists vehicles nearest first with their distance.
+  // `silent` (the automatic request on page load) skips error toasts: the normal list just stays.
+  const locate = (silent: boolean) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setNear(current);
+        setLocating(false);
+        fetchVehicles(current);
+      },
+      (err) => {
+        setLocating(false);
+        if (silent) return;
+        toast.error(err.code === err.PERMISSION_DENIED
+          ? 'Location permission was denied. Allow it in your browser to see vehicles near you.'
+          : 'Could not get your location. Please try again.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  };
+
+  // The manual "Sort by distance" button, shown if the automatic request was blocked or sorting was turned off.
+  const requestLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Your browser does not support location');
+      return;
+    }
+    setLocating(true);
+    locate(false);
+  };
+
   useEffect(() => {
-    api.get('/vehicles', { params: toParams(filters) })
+    // Show the normal list right away, then re-sort nearest first once the location arrives.
+    api.get('/vehicles', { params: toParams(filters, null) })
       .then((res) => setVehicles(res.data.data))
       .catch(() => setVehicles([]))
       .finally(() => setLoading(false));
+    if (navigator.geolocation) locate(true);
+    else Promise.resolve().then(() => setLocating(false));
     // Initial load only uses URL-provided filters. The button applies later edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const clearNear = () => {
+    setNear(null);
+    fetchVehicles(null);
+  };
 
   return (
     <>
@@ -112,16 +162,38 @@ function VehiclesContent() {
                 value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
               <input className="input-field" type="number" min="0" placeholder="Max ₱"
                 value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
-              <button onClick={fetchVehicles} className="btn-primary flex items-center justify-center gap-2 !px-3 md:col-span-4 lg:col-span-1">
+              <button onClick={() => fetchVehicles()} className="btn-primary flex items-center justify-center gap-2 !px-3 md:col-span-4 lg:col-span-1">
                 <Filter className="w-4 h-4" /> Filter
               </button>
             </div>
           </div>
 
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <p className="text-sm text-[var(--muted)]">
-              {loading ? 'Searching...' : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} found${filters.province ? ` in ${filters.province}` : ' across the Philippines'}`}
-            </p>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-[var(--muted)]">
+                {loading ? 'Searching...' : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} found${filters.province ? ` in ${filters.province}` : ' across the Philippines'}`}
+              </p>
+              {near ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary)]/10 py-1 pl-3 pr-1 text-xs font-semibold text-[var(--primary)]">
+                  <LocateFixed className="h-3.5 w-3.5" /> Nearest to you first
+                  <button onClick={clearNear} className="rounded-full p-0.5 hover:bg-[var(--primary)]/15" aria-label="Stop sorting by distance">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ) : locating ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--primary)]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Finding vehicles near you...
+                </span>
+              ) : (
+                // Only shown if the automatic location request was blocked/failed, or the user turned sorting off.
+                <button
+                  onClick={requestLocation}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--primary)] px-3 py-1 text-xs font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/10"
+                >
+                  <LocateFixed className="h-3.5 w-3.5" /> Sort by distance
+                </button>
+              )}
+            </div>
             <div className="flex rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-1" role="tablist" aria-label="View">
               {([['list', LayoutGrid, 'List'], ['map', MapIcon, 'Map']] as const).map(([key, Icon, label]) => (
                 <button

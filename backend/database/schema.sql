@@ -177,7 +177,7 @@ CREATE TABLE payment_intents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_id VARCHAR(120) UNIQUE NOT NULL,
   gateway_session_id VARCHAR(100),
-  purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription')),
+  purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription', 'vehicle_slots')),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL,
   payload JSONB NOT NULL,
@@ -267,6 +267,8 @@ CREATE TABLE owner_subscriptions (
   price DECIMAL(12,2) NOT NULL DEFAULT 0,
   billing_cycle VARCHAR(50) NOT NULL,
   vehicle_limit INTEGER NOT NULL,
+  -- Extra slots bought on top of the plan (paid plans only, ₱500 each); already included in vehicle_limit.
+  extra_vehicle_slots INTEGER NOT NULL DEFAULT 0,
   photo_limit INTEGER NOT NULL DEFAULT 5,
   payment_method VARCHAR(50) NOT NULL,
   payment_reference VARCHAR(100),
@@ -276,7 +278,7 @@ CREATE TABLE owner_subscriptions (
   status VARCHAR(50) NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT owner_subscription_plan_check CHECK (plan_id IN ('basic', 'pro', 'premium')),
+  CONSTRAINT owner_subscription_plan_check CHECK (plan_id IN ('basic', 'pro', 'premium', 'enterprise')),
   CONSTRAINT owner_subscription_payment_check CHECK (payment_method IN ('trial', 'gcash', 'card')),
   CONSTRAINT owner_subscription_status_check CHECK (status IN ('active', 'cancelled', 'expired'))
 );

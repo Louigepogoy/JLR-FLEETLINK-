@@ -13,8 +13,8 @@ function StatCard({ icon, label, value }: { icon: MiniIcon; label: string; value
   return (
     <div className="glass-card flex items-center gap-4 p-6">
       <IconChip icon={icon} className="h-14 w-14 rounded-2xl" iconClassName="h-9 w-9" />
-      <div className="min-w-0">
-        <p className="text-2xl font-bold leading-tight xl:text-3xl">{value}</p>
+      <div className="money-box flex-1">
+        <p className="money-fit font-bold">{value}</p>
         <p className="text-sm text-[var(--muted)]">{label}</p>
       </div>
     </div>

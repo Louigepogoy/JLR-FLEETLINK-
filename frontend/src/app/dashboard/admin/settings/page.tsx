@@ -131,13 +131,13 @@ export default function AdminSettingsPage() {
         {earnings && (
           <>
             <div className="grid gap-4 sm:grid-cols-3 mb-6">
-              <div className="rounded-xl border border-[var(--card-border)] p-4">
+              <div className="rounded-xl border border-[var(--card-border)] p-4 money-box">
                 <p className="text-xs text-[var(--muted)]">Total commission earned</p>
-                <p className="text-2xl font-bold gradient-text">{formatCurrency(Number(earnings.summary.total_earned))}</p>
+                <p className="money-fit font-bold gradient-text" style={{ '--money-max': '1.5rem' } as React.CSSProperties}>{formatCurrency(Number(earnings.summary.total_earned))}</p>
               </div>
-              <div className="rounded-xl border border-[var(--card-border)] p-4">
+              <div className="rounded-xl border border-[var(--card-border)] p-4 money-box">
                 <p className="text-xs text-[var(--muted)]">This month</p>
-                <p className="text-2xl font-bold">{formatCurrency(Number(earnings.summary.this_month))}</p>
+                <p className="money-fit font-bold" style={{ '--money-max': '1.5rem' } as React.CSSProperties}>{formatCurrency(Number(earnings.summary.this_month))}</p>
               </div>
               <div className="rounded-xl border border-[var(--card-border)] p-4">
                 <p className="text-xs text-[var(--muted)]">Paid booking payments</p>

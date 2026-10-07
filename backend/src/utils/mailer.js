@@ -28,4 +28,15 @@ const sendVerificationEmail = async (to, username, code) => {
   });
 };
 
-module.exports = { sendPasswordResetEmail, sendVerificationEmail };
+// Plain-text alert to the admin team (new support ticket, new report, ...). User-written text goes in
+// the plain-text body only, so nothing a user typed is ever rendered as HTML.
+const sendAdminAlertEmail = async (to, subject, text) => {
+  await transporter.sendMail({
+    from: `"JLR Fleetlink" <${process.env.EMAIL_USER}>`,
+    to,
+    subject: `[JLR Fleetlink Admin] ${subject}`,
+    text,
+  });
+};
+
+module.exports = { sendPasswordResetEmail, sendVerificationEmail, sendAdminAlertEmail };

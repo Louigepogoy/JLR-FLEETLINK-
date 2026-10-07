@@ -64,6 +64,8 @@ async function setup() {
     const loginLockoutMigrationPath = path.join(__dirname, '../database/migrations/029_login_lockout.sql');
     const payoutHistoryMigrationPath = path.join(__dirname, '../database/migrations/030_owner_payout_history.sql');
     const seenMarkersMigrationPath = path.join(__dirname, '../database/migrations/031_seen_markers.sql');
+    const extraVehicleSlotsMigrationPath = path.join(__dirname, '../database/migrations/032_extra_vehicle_slots.sql');
+    const enterprisePlanMigrationPath = path.join(__dirname, '../database/migrations/033_enterprise_plan.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -144,6 +146,10 @@ async function setup() {
       await runSqlFile(payoutHistoryMigrationPath);
       await runSqlFile(seenMarkersMigrationPath);
       console.log('Username length migration applied.');
+      await runSqlFile(extraVehicleSlotsMigrationPath);
+      console.log('Extra vehicle slots migration applied.');
+      await runSqlFile(enterprisePlanMigrationPath);
+      console.log('Enterprise plan migration applied.');
     }
 
     await runSqlFile(seedPath);

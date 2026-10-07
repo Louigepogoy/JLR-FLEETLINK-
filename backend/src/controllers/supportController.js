@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { createNotification } = require('../utils/notifications');
+const { createNotification, notifyAdmins } = require('../utils/notifications');
 
 const createTicket = async (req, res, next) => {
   try {
@@ -14,6 +14,15 @@ const createTicket = async (req, res, next) => {
       `INSERT INTO support_tickets (user_id, subject, message)
        VALUES ($1, $2, $3) RETURNING *`,
       [req.user.id, subject.trim(), message.trim()]
+    );
+
+    const sender = req.user.full_name || req.user.email;
+    await notifyAdmins(
+      'New Support Ticket',
+      `${sender} needs help: "${subject.trim()}"`,
+      'alert',
+      '/dashboard/admin/support',
+      `New support ticket from ${sender} (${req.user.email})\n\nSubject: ${subject.trim()}\n\n${message.trim()}`
     );
 
     res.status(201).json({ success: true, data: result.rows[0] });
