@@ -66,6 +66,12 @@ async function setup() {
     const seenMarkersMigrationPath = path.join(__dirname, '../database/migrations/031_seen_markers.sql');
     const extraVehicleSlotsMigrationPath = path.join(__dirname, '../database/migrations/032_extra_vehicle_slots.sql');
     const enterprisePlanMigrationPath = path.join(__dirname, '../database/migrations/033_enterprise_plan.sql');
+    const accountTypesMigrationPath = path.join(__dirname, '../database/migrations/034_account_types.sql');
+    const lateReturnFeeMigrationPath = path.join(__dirname, '../database/migrations/035_late_return_fee.sql');
+    const ownerCustomerViewsMigrationPath = path.join(__dirname, '../database/migrations/036_owner_customer_views.sql');
+    const ownerDocumentsMigrationPath = path.join(__dirname, '../database/migrations/037_owner_verification_documents.sql');
+    const cashPaymentsMigrationPath = path.join(__dirname, '../database/migrations/038_cash_payments.sql');
+    const rentalAgreementMigrationPath = path.join(__dirname, '../database/migrations/039_rental_agreement.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -150,6 +156,18 @@ async function setup() {
       console.log('Extra vehicle slots migration applied.');
       await runSqlFile(enterprisePlanMigrationPath);
       console.log('Enterprise plan migration applied.');
+      await runSqlFile(accountTypesMigrationPath);
+      console.log('Customer/owner account types migration applied.');
+      await runSqlFile(lateReturnFeeMigrationPath);
+      console.log('Late return fee migration applied.');
+      await runSqlFile(ownerCustomerViewsMigrationPath);
+      console.log('Owner/customer views migration applied.');
+      await runSqlFile(ownerDocumentsMigrationPath);
+      console.log('Owner verification documents migration applied.');
+      await runSqlFile(cashPaymentsMigrationPath);
+      console.log('Cash payments migration applied.');
+      await runSqlFile(rentalAgreementMigrationPath);
+      console.log('Rental agreement migration applied.');
     }
 
     await runSqlFile(seedPath);

@@ -1,5 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
+const { canList } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { ACTIVE_SUBSCRIPTION_SQL } = require('./subscriptionController');
 
@@ -15,6 +16,19 @@ const PROOF_FIELD_MAP = {
   proofInterior: 'interior',
   proofOwner: 'ownerWithVehicle',
   proofExtra: 'additionalProof',
+  proofOr: 'officialReceipt',
+  proofCr: 'certificateOfRegistration',
+};
+
+// OR/CR are registration documents: only the vehicle's owner and admins may see them.
+const PRIVATE_PROOF_KEYS = ['officialReceipt', 'certificateOfRegistration'];
+
+const hidePrivateProofs = (vehicle, viewer) => {
+  if (!vehicle?.proof_photos) return vehicle;
+  if (viewer && (viewer.role === 'admin' || viewer.id === vehicle.owner_id)) return vehicle;
+  const proof = { ...vehicle.proof_photos };
+  PRIVATE_PROOF_KEYS.forEach((key) => delete proof[key]);
+  return { ...vehicle, proof_photos: proof };
 };
 
 const PUBLIC_GALLERY_KEYS = ['front', 'back', 'side', 'interior'];
@@ -139,9 +153,11 @@ const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
       interior: 'Interior',
       ownerWithVehicle: 'You with vehicle',
       additionalProof: 'Extra proof',
+      officialReceipt: 'OR (Official Receipt)',
+      certificateOfRegistration: 'CR (Certificate of Registration)',
     };
     const error = new Error(
-      `All 6 vehicle proof photos are required. Missing: ${missing.map((k) => labels[k]).join(', ')}`
+      `All vehicle photos and the OR/CR are required. Missing: ${missing.map((k) => labels[k]).join(', ')}`
     );
     error.status = 400;
     error.statusCode = 400;
@@ -242,7 +258,8 @@ const getVehicles = async (req, res, next) => {
 
     sql += useDistance ? ' ORDER BY distance_km ASC NULLS LAST, v.created_at DESC' : ' ORDER BY v.created_at DESC';
     const result = await query(sql, params);
-    res.json({ success: true, data: result.rows });
+    // Public listing: never expose OR/CR documents.
+    res.json({ success: true, data: result.rows.map((v) => hidePrivateProofs(v, null)) });
   } catch (error) {
     next(error);
   }
@@ -269,7 +286,7 @@ const getVehicleById = async (req, res, next) => {
     if (!vehicle || (vehicle.verification_status === 'rejected' && !canSeeRejected)) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
     }
-    res.json({ success: true, data: vehicle });
+    res.json({ success: true, data: hidePrivateProofs(vehicle, req.user) });
   } catch (error) {
     next(error);
   }
@@ -280,6 +297,14 @@ const createVehicle = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    if (!canList(req.user)) {
+      return res.status(403).json({
+        success: false,
+        code: 'OWNER_ACCOUNT_REQUIRED',
+        message: 'Customer accounts can\'t list vehicles. Sign up for a separate Owner account to rent out your vehicle.',
+      });
     }
 
     if (req.user.approval_status !== 'approved') {

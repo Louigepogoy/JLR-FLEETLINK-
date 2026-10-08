@@ -2,7 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, CalendarClock, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
+import Link from 'next/link';
+import { AlarmClock, Calendar, CalendarClock, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
@@ -10,7 +11,7 @@ import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
+import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp, onlineDue } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
 import PickupInspectionPanel from '@/components/booking/PickupInspectionPanel';
@@ -32,6 +33,12 @@ type CustomerBooking = InspectionFields & {
   dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
+  // Late return: started hours past the agreed drop-off and the fee for them (included in total_amount).
+  late_hours?: number;
+  late_fee?: number | string;
+  // Cash bookings: cash still to pay the owner at pickup.
+  payment_option?: 'online' | 'cash';
+  cash_due?: number | string;
   with_driver?: boolean;
   driver_fee?: number;
   status: string;
@@ -192,6 +199,17 @@ function MyBookingsContent() {
               <div className="text-right">
                 <p className="text-xl font-bold">{formatCurrency(b.total_amount)}</p>
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
+                {Number(b.cash_due) > 0 && (
+                  <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    Cash at pickup: {formatCurrency(Number(b.cash_due))}
+                  </p>
+                )}
+                {Number(b.late_fee) > 0 && (
+                  <p className="mt-1 flex items-center justify-end gap-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    <AlarmClock className="h-4 w-4" />
+                    Late return: {b.late_hours}h · {formatCurrency(Number(b.late_fee))}
+                  </p>
+                )}
                 <div className="flex gap-2 mt-2 justify-end">
                   <span className={`text-xs px-2 py-1 rounded-full capitalize ${bookingStatusColors[b.status]}`}>{bookingStatusLabel(b.status)}</span>
                   <span className="text-xs px-2 py-1 rounded-full bg-[var(--primary)]/20 capitalize">{b.payment_status?.replace('_', ' ')}</span>
@@ -228,12 +246,27 @@ function MyBookingsContent() {
               <button className="btn-outline text-sm flex items-center gap-2" onClick={() => messageOwner(b)}>
                 <MessageCircle className="h-4 w-4" /> Message Owner
               </button>
-              {b.payment_status !== 'fully_paid' && ['approved', 'active', 'pending'].includes(b.status) && (
+              {['approved', 'active', 'completed'].includes(b.status) && (
+                <Link href={`/dashboard/bookings/${b.id}/documents`} className="btn-outline text-sm flex items-center gap-2">
+                  <FileText className="h-4 w-4" /> Documents
+                </Link>
+              )}
+              {onlineDue(b) > 0 && ['approved', 'active', 'pending'].includes(b.status) && (
                 <button
                   className="btn-primary text-sm"
                   onClick={() => { setSelected(b as unknown as Record<string, unknown>); setShowPayment(true); }}
                 >
-                  Make Payment
+                  {Number(b.cash_due) > 0 ? 'Pay Reservation Fee' : 'Make Payment'}
+                </button>
+              )}
+              {/* A completed trip still owes money only when the vehicle came back late. */}
+              {b.status === 'completed' && Number(b.total_amount) - Number(b.paid_amount || 0) > 0 && (
+                <button
+                  className="btn-primary text-sm flex items-center gap-2"
+                  onClick={() => { setSelected(b as unknown as Record<string, unknown>); setShowPayment(true); }}
+                >
+                  <AlarmClock className="h-4 w-4" />
+                  Pay Late Fee · {formatCurrency(Number(b.total_amount) - Number(b.paid_amount || 0))}
                 </button>
               )}
               {(b.paid_amount || 0) > 0 && (
@@ -277,7 +310,8 @@ function MyBookingsContent() {
 
       {selected && (
         <PaymentModal
-          booking={{ id: String(selected.id), total_amount: Number(selected.total_amount), paid_amount: Number(selected.paid_amount || 0), title: String(selected.title) }}
+          // Only the online part: cash due at pickup is paid to the owner, not here.
+          booking={{ id: String(selected.id), total_amount: Number(selected.total_amount) - Number(selected.cash_due || 0), paid_amount: Number(selected.paid_amount || 0), title: String(selected.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
         />

@@ -10,7 +10,14 @@ export interface User {
   role: 'user' | 'admin';
   avatar_url?: string;
   approval_status?: 'unverified' | 'pending' | 'approved' | 'rejected';
+  // 'customer' books vehicles, 'owner' lists them; accounts from before the split do both.
+  account_type?: 'customer' | 'owner' | 'both';
 }
+
+export const canRent = (user?: Pick<User, 'account_type'> | null) =>
+  ['customer', 'both'].includes(user?.account_type || 'both');
+export const canList = (user?: Pick<User, 'account_type'> | null) =>
+  ['owner', 'both'].includes(user?.account_type || 'both');
 
 interface AuthState {
   user: User | null;

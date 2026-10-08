@@ -12,7 +12,7 @@ const payoutReference = () => {
 
 /**
  * Pays out everything an owner is currently owed and records it in owner_payouts (the admin's payout
- * history). `source` says what triggered it: 'accepted', 'auto_accepted', 'dispute', 'account_added',
+ * history). `source` says what triggered it: 'accepted', 'auto_accepted', 'dispute', 'account_added', 'late_fee',
  * or 'manual' (admin, with `paidBy`). Returns { paid, payout } — paid is 0 when nothing was owed.
  *
  * The payable transactions are claimed with one UPDATE inside a transaction, so two triggers at the

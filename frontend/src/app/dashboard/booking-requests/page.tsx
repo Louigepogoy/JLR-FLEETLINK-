@@ -8,7 +8,8 @@ import { IconChip, RequestsIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
 import ReportModal from '@/components/reports/ReportModal';
 import api from '@/lib/api';
-import { Calendar, CalendarClock, CheckCircle2, Clock, KeyRound, MessageCircle, Star } from 'lucide-react';
+import Link from 'next/link';
+import { AlarmClock, Calendar, CalendarClock, CheckCircle2, Clock, FileText, KeyRound, MessageCircle, Star } from 'lucide-react';
 import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
@@ -41,6 +42,12 @@ type OwnerBooking = InspectionFields & {
   dropoff_time?: string;
   total_amount: number;
   paid_amount: number;
+  // Late return: started hours past the agreed drop-off and the fee for them (included in total_amount).
+  late_hours?: number;
+  late_fee?: number | string;
+  // Cash bookings: cash to collect from the renter at pickup.
+  payment_option?: 'online' | 'cash';
+  cash_due?: number | string;
   with_driver?: boolean;
   driver_fee?: number;
   status: string;
@@ -84,10 +91,13 @@ export default function BookingRequestsPage() {
 
   const needsHandover = (b: OwnerBooking) => b.status === 'approved' && !b.handed_over_at;
 
-  const handOver = async (id: string) => {
-    if (!confirm('Hand over the vehicle now? Only do this when the renter is with you and has the keys — their inspection timer starts right away.')) return;
+  const handOver = async (id: string, cashDue = 0) => {
+    const message = cashDue > 0
+      ? `Did you receive ${formatCurrency(cashDue)} cash from the renter? Only confirm once you have the money and the renter has the keys — their inspection timer starts right away.`
+      : 'Hand over the vehicle now? Only do this when the renter is with you and has the keys — their inspection timer starts right away.';
+    if (!confirm(message)) return;
     try {
-      await api.post(`/bookings/${id}/handover`);
+      await api.post(`/bookings/${id}/handover`, cashDue > 0 ? { cashReceived: true } : {});
       toast.success('Vehicle handed over. The renter can now inspect it.');
       fetchBookings();
     } catch (err) {
@@ -95,11 +105,29 @@ export default function BookingRequestsPage() {
     }
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    if (status === 'completed' && !confirm('Mark this rental as completed? Only do this once the vehicle has been returned.')) return;
+  const recordCash = async (b: OwnerBooking) => {
+    const balance = Number(b.total_amount) - Number(b.paid_amount || 0);
+    if (!confirm(`Record ${formatCurrency(balance)} as paid in cash by the renter?`)) return;
     try {
-      await api.patch(`/bookings/${id}/status`, { status });
-      toast.success(statusMessages[status] || `Booking ${status}`);
+      await api.post(`/bookings/${b.id}/cash-payment`);
+      toast.success('Cash payment recorded');
+      fetchBookings();
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to record the cash payment'));
+    }
+  };
+
+  const updateStatus = async (id: string, status: string) => {
+    if (status === 'completed' && !confirm(
+      'Mark this rental as returned? Do this as soon as the vehicle is back. If it is past the agreed return time, '
+      + 'the renter is charged a late fee of (daily price ÷ 24) for every started hour late.'
+    )) return;
+    try {
+      const res = await api.patch(`/bookings/${id}/status`, { status });
+      const lateFee = Number(res.data.data?.late_fee || 0);
+      toast.success(lateFee > 0
+        ? `Rental completed. Returned late: ${res.data.data.late_hours}h, late fee ${formatCurrency(lateFee)} charged to the renter.`
+        : statusMessages[status] || `Booking ${status}`);
       fetchBookings();
       // Completing a rental unlocks ratings, so let the rating prompt pop up right away.
       if (status === 'completed') notifyReviewsChanged();
@@ -165,6 +193,18 @@ export default function BookingRequestsPage() {
               <div className="text-right">
                 <p className="font-bold text-lg">{formatCurrency(b.total_amount)}</p>
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
+                {Number(b.cash_due) > 0 && (
+                  <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    Collect cash at pickup: {formatCurrency(Number(b.cash_due))}
+                  </p>
+                )}
+                {Number(b.late_fee) > 0 && (
+                  <p className="mt-1 flex items-center justify-end gap-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                    <AlarmClock className="h-4 w-4" />
+                    Late fee: {b.late_hours}h · {formatCurrency(Number(b.late_fee))}
+                    {Number(b.total_amount) - Number(b.paid_amount || 0) > 0 ? ' (unpaid)' : ' (paid)'}
+                  </p>
+                )}
                 <span className={`text-xs capitalize px-2 py-1 rounded-full mt-1 inline-block ${bookingStatusColors[b.status]}`}>{bookingStatusLabel(b.status)}</span>
               </div>
             </div>
@@ -193,16 +233,31 @@ export default function BookingRequestsPage() {
                 If not handed over by {formatTimestamp(b.auto_handover_at)} ({AUTO_HANDOVER_HOURS} hours after pickup time), it is handed over automatically and the renter&apos;s inspection time starts.
               </p>
             )}
+            {['approved', 'active', 'completed'].includes(b.status) && (
+              <div className="mt-4">
+                <Link href={`/dashboard/bookings/${b.id}/documents`} className="btn-outline text-sm py-2 inline-flex items-center gap-2">
+                  <FileText className="h-4 w-4" /> Agreement, Billing &amp; Trip Documents
+                </Link>
+              </div>
+            )}
+            {b.status === 'completed' && b.payment_option === 'cash' && Number(b.total_amount) - Number(b.paid_amount || 0) > 0 && (
+              <div className="mt-4">
+                <button onClick={() => recordCash(b)} className="btn-outline text-sm py-2">
+                  Late fee paid in cash? Record {formatCurrency(Number(b.total_amount) - Number(b.paid_amount || 0))}
+                </button>
+              </div>
+            )}
             {(b.status === 'active' || (b.status === 'approved' && !b.handed_over_at)) && (
               <div className="flex flex-wrap gap-3 mt-4">
                 {b.status === 'approved' && b.payment_status !== 'pending' && (
                   <button
-                    onClick={() => handOver(b.id)}
+                    onClick={() => handOver(b.id, Number(b.cash_due || 0))}
                     disabled={!b.is_pickup_day}
                     title={b.is_pickup_day ? undefined : `Available on the pickup date: ${formatDate(b.start_date)}`}
                     className="btn-primary text-sm py-2 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <KeyRound className="h-4 w-4" /> Hand Over Vehicle
+                    <KeyRound className="h-4 w-4" />
+                    {Number(b.cash_due) > 0 ? `Cash Received (${formatCurrency(Number(b.cash_due))}) & Hand Over` : 'Hand Over Vehicle'}
                   </button>
                 )}
                 {/* Unpaid bookings have nothing held in escrow, so they keep the direct flow. */}

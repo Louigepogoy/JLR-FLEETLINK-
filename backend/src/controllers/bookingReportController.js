@@ -16,7 +16,9 @@ const STATUS_COUNTS_SQL = `
   COUNT(*) FILTER (WHERE b.status IN ('cancelled', 'rejected'))::int AS cancelled,
   COUNT(DISTINCT b.vehicle_id) FILTER (WHERE b.status IN ${RENTED_STATUSES})::int AS vehicles_rented,
   COALESCE(SUM(b.total_amount) FILTER (WHERE b.status IN ${RENTED_STATUSES}), 0)::float AS total_amount,
-  COALESCE(SUM(${DAYS_SQL}) FILTER (WHERE b.status IN ${RENTED_STATUSES}), 0)::int AS rental_days`;
+  COALESCE(SUM(${DAYS_SQL}) FILTER (WHERE b.status IN ${RENTED_STATUSES}), 0)::int AS rental_days,
+  -- Cash paid at pickup (cash bookings), recorded by the owner.
+  COALESCE(SUM(b.cash_collected), 0)::float AS cash_collected`;
 
 /**
  * Booking report for the signed-in user, from both sides:

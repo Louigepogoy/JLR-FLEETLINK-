@@ -41,6 +41,8 @@ const runInspectionSweep = async () => {
      FROM vehicles v
      WHERE b.vehicle_id = v.id
        AND b.status = 'approved' AND b.handed_over_at IS NULL AND b.payment_status <> 'pending'
+       -- Cash bookings wait for the owner to confirm the cash at handover; never hand them over automatically.
+       AND b.cash_due = 0
        AND ${AUTO_HANDOVER_AT_SQL} <= NOW()
      RETURNING b.id, b.customer_id, v.owner_id, v.title`,
     [windowMinutes]

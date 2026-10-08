@@ -1,7 +1,7 @@
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { query, pool } = require('../config/db');
-const { calculateRentalPeriod } = require('../utils/helpers');
+const { calculateRentalPeriod, canRent, cashReservationAmount } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const {
@@ -16,7 +16,12 @@ const CONTACT_SHARED_SQL = `b.status IN ('approved', 'active', 'completed')`;
 
 // True when today (Philippine time) is the booking's pickup date — the only day the owner may hand
 // the vehicle over. Expects `b` = bookings.
+// Bump when the agreement wording changes (the frontend shows the same version in lib/rentalAgreement.ts).
+const RENTAL_AGREEMENT_VERSION = '2026-10';
+
 const IS_PICKUP_DAY_SQL = `(b.start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date)`;
+// Started hours between the agreed return (end date + drop-off time, Philippine time) and now; 0 if on time.
+const LATE_HOURS_SQL = `GREATEST(0, CEIL(EXTRACT(EPOCH FROM (NOW() - ((b.end_date + COALESCE(b.dropoff_time, '17:00'::time)) AT TIME ZONE 'Asia/Manila'))) / 3600))::int`;
 const PICKUP_LABEL_SQL = `TO_CHAR(b.start_date, 'FMMonth FMDD, YYYY')`;
 const notPickupDayMessage = (label) =>
   `You can only hand over the vehicle on the pickup date the renter booked (${label}).`;
@@ -38,6 +43,14 @@ const createBooking = async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    if (!canRent(req.user)) {
+      return res.status(403).json({
+        success: false,
+        code: 'CUSTOMER_ACCOUNT_REQUIRED',
+        message: 'Owner accounts can\'t book vehicles. Sign up for a separate Customer account to rent.',
+      });
     }
 
     if (req.user.approval_status !== 'approved') {
@@ -107,13 +120,35 @@ const createBooking = async (req, res, next) => {
     const driverFee = wantsDriver ? days * parseFloat(vehicle.driver_fee_per_day) : 0;
     const totalAmount = days * parseFloat(vehicle.price_per_day) + driverFee;
 
+    // The renter accepts the rental agreement by typing their full name; it's stored with the booking.
+    const signatureName = String(req.body.signatureName || '').trim().slice(0, 255);
+    if (req.body.agreeToTerms !== true || signatureName.length < 2) {
+      return res.status(400).json({
+        success: false,
+        code: 'AGREEMENT_REQUIRED',
+        message: 'Please read and accept the Rental Agreement, and type your full name to sign it.',
+      });
+    }
+
+    // Cash: the renter pays a reservation fee online now (it covers the platform commission) and the
+    // rest in cash to the owner at pickup.
+    const paymentOption = req.body.paymentOption === 'cash' ? 'cash' : 'online';
+    let cashDue = 0;
+    if (paymentOption === 'cash') {
+      const settings = await query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+      const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+      cashDue = Math.round((totalAmount - cashReservationAmount(totalAmount, commissionPct)) * 100) / 100;
+    }
+
     // The owner never approves bookings: a booking stays 'pending' (awaiting payment) until the renter
     // pays, and the payment itself confirms it (see finalizeBookingPayment). The renter's protection is
     // the pickup inspection — they accept or reject the vehicle when the owner hands it over.
     const result = await query(
-      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, pickup_time, dropoff_time, total_amount, with_driver, driver_fee, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff, totalAmount, wantsDriver, driverFee, notes || null]
+      `INSERT INTO bookings (customer_id, vehicle_id, start_date, end_date, pickup_time, dropoff_time, total_amount, with_driver, driver_fee, notes,
+         payment_option, cash_due, agreement_signed_name, agreement_signed_at, agreement_version, agreement_ip)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), $14, $15) RETURNING *`,
+      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff, totalAmount, wantsDriver, driverFee, notes || null,
+        paymentOption, cashDue, signatureName, RENTAL_AGREEMENT_VERSION, String(req.ip || '').slice(0, 64)]
     );
 
     const booking = result.rows[0];
@@ -215,7 +250,8 @@ const updateBookingStatus = async (req, res, next) => {
     }
 
     const booking = await query(
-      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+      `SELECT b.*, v.owner_id, v.title, v.price_per_day, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label,
+              ${LATE_HOURS_SQL} AS late_hours_now
        FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
       [req.params.id]
     );
@@ -269,18 +305,38 @@ const updateBookingStatus = async (req, res, next) => {
       });
     }
 
+    // Returned after the agreed drop-off time: the renter owes (daily price / 24) per started hour late.
+    // Only when the vehicle was actually out with the renter (active), not for unpaid/skipped bookings.
+    const lateHours = status === 'completed' && b.status === 'active' ? Number(b.late_hours_now) || 0 : 0;
+    const lateFee = Math.round(lateHours * (Number(b.price_per_day) / 24) * 100) / 100;
+
     // Unpaid bookings (and admin overrides) skip the inspection, so treat them as accepted so any
     // later payment stays eligible for payout.
     const result = await query(
       `UPDATE bookings SET status = $1::booking_status, updated_at = NOW(),
+         late_hours = late_hours + $3,
+         late_fee = late_fee + $4,
+         total_amount = total_amount + $4,
+         payment_status = CASE WHEN $4 > 0 AND paid_amount > 0 THEN 'partially_paid'::payment_status ELSE payment_status END,
          completed_at = CASE WHEN $1::booking_status = 'completed' THEN NOW() ELSE completed_at END,
          inspection_result = CASE WHEN $1::booking_status IN ('active', 'completed')
            THEN COALESCE(inspection_result, 'accepted') ELSE inspection_result END,
          inspected_at = CASE WHEN $1::booking_status IN ('active', 'completed') AND inspection_result IS NULL
            THEN NOW() ELSE inspected_at END
        WHERE id = $2 RETURNING *`,
-      [status, req.params.id]
+      [status, req.params.id, lateHours, lateFee]
     );
+
+    if (lateFee > 0) {
+      const hoursText = `${lateHours} hour${lateHours === 1 ? '' : 's'}`;
+      await createNotification(
+        b.customer_id,
+        'Late return fee',
+        `${b.title} was returned ${hoursText} after the agreed time. A late fee of ₱${lateFee.toFixed(2)} (₱${(Number(b.price_per_day) / 24).toFixed(2)}/hour) was added. Please pay it in My Bookings.`,
+        'payment',
+        '/dashboard/bookings'
+      );
+    }
 
     if (status === 'completed') {
       await createNotification(
@@ -385,6 +441,39 @@ const getBookingById = async (req, res, next) => {
 
 // Owner hands the keys over in person. Starts the customer's inspection window; the payment stays
 // held by the platform until the customer accepts (or the window runs out).
+// Cash bookings: the owner records a balance still owed after the trip (a late fee) as paid in cash.
+const recordCashPayment = async (req, res, next) => {
+  try {
+    const booking = await query(
+      `SELECT b.*, v.owner_id, v.title FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+      [req.params.id]
+    );
+    const b = booking.rows[0];
+    if (!b) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (b.owner_id !== req.user.id) return res.status(403).json({ success: false, message: 'Access denied' });
+    const balance = Math.round((parseFloat(b.total_amount) - parseFloat(b.paid_amount)) * 100) / 100;
+    if (b.payment_option !== 'cash' || b.status !== 'completed' || balance <= 0) {
+      return res.status(400).json({ success: false, message: 'There is no cash balance to record for this booking' });
+    }
+    const result = await query(
+      `UPDATE bookings SET paid_amount = total_amount, cash_collected = cash_collected + $2,
+         cash_collected_at = NOW(), payment_status = 'fully_paid', updated_at = NOW()
+       WHERE id = $1 AND paid_amount < total_amount RETURNING *`,
+      [b.id, balance]
+    );
+    await createNotification(
+      b.customer_id,
+      'Cash payment recorded',
+      `The owner recorded your ₱${balance.toFixed(2)} cash payment for ${b.title}. Your booking is fully paid.`,
+      'payment',
+      '/dashboard/bookings'
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const handOverVehicle = async (req, res, next) => {
   try {
     const booking = await query(
@@ -407,12 +496,27 @@ const handOverVehicle = async (req, res, next) => {
     if (!b.is_pickup_day) {
       return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
     }
+    const cashDue = parseFloat(b.cash_due) || 0;
+    if (cashDue > 0 && req.body?.cashReceived !== true) {
+      return res.status(400).json({
+        success: false,
+        code: 'CASH_NOT_CONFIRMED',
+        message: `Collect the ₱${cashDue.toFixed(2)} cash from the renter, then confirm it when handing over.`,
+      });
+    }
 
     const windowMinutes = await getInspectionWindowMinutes();
     const result = await query(
       `UPDATE bookings SET handed_over_at = NOW(),
          inspection_deadline = NOW() + $2::int * INTERVAL '1 minute',
-         inspection_reminder_sent = false, updated_at = NOW()
+         inspection_reminder_sent = false, updated_at = NOW(),
+         -- Cash bookings: the owner confirmed receiving the cash, so it now counts as paid.
+         paid_amount = paid_amount + cash_due,
+         cash_collected = cash_collected + cash_due,
+         cash_collected_at = CASE WHEN cash_due > 0 THEN NOW() ELSE cash_collected_at END,
+         payment_status = CASE WHEN cash_due > 0 AND paid_amount + cash_due >= total_amount
+           THEN 'fully_paid'::payment_status ELSE payment_status END,
+         cash_due = 0
        WHERE id = $1 AND status = 'approved' AND handed_over_at IS NULL
          AND start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date
        RETURNING *`,
@@ -570,10 +674,13 @@ const bookingValidation = [
   body('endDate').isISO8601(),
   body('pickupTime').optional().matches(/^\d{2}:\d{2}(:\d{2})?$/),
   body('dropoffTime').optional().matches(/^\d{2}:\d{2}(:\d{2})?$/),
+  body('paymentOption').optional().isIn(['online', 'cash']),
+  body('agreeToTerms').optional().isBoolean(),
+  body('signatureName').optional().isString().isLength({ max: 255 }),
 ];
 
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment,
 };

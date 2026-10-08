@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarCheck, Car, KeyRound, Trophy } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
+import { canList, canRent, useAuthStore } from '@/store/authStore';
 import { ChartIcon, IconChip } from '@/components/illustrations/MiniIcons';
 import api from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
@@ -20,6 +21,8 @@ type Summary = {
   total_amount: number;
   rental_days: number;
   vehicles_listed?: number;
+  // Cash paid at pickup on cash bookings.
+  cash_collected?: number;
 };
 
 type OwnerVehicle = {
@@ -109,7 +112,11 @@ const monthLabel = (month: string) =>
 export default function VehicleReportPage() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<Report | null>(null);
-  const [tab, setTab] = useState<Tab>('owner');
+  const user = useAuthStore((s) => s.user);
+  // Customer accounts only have rentals, owner accounts only have vehicles.
+  const tabs = ([['owner', 'My Vehicles'], ['renter', 'My Rentals']] as const)
+    .filter(([key]) => (key === 'owner' ? canList(user) : canRent(user)));
+  const [tab, setTab] = useState<Tab>(canList(user) ? 'owner' : 'renter');
 
   useEffect(() => {
     api.get('/bookings/report')
@@ -117,10 +124,12 @@ export default function VehicleReportPage() {
         const data: Report = res.data.data;
         setReport(data);
         // Someone who only rents (no listed vehicles) lands on their renter report.
-        if (!data.owner.summary.vehicles_listed && data.renter.summary.total_bookings) setTab('renter');
+        if (canRent(user) && !data.owner.summary.vehicles_listed && data.renter.summary.total_bookings) setTab('renter');
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Load once; the account type doesn't change while the page is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading) {
@@ -151,10 +160,11 @@ export default function VehicleReportPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h2 className="flex items-center gap-3 text-2xl font-bold">
           <IconChip icon={ChartIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />
-          Vehicle Report
+          {canList(user) ? 'Vehicle Report' : 'Rental Report'}
         </h2>
+        {tabs.length > 1 && (
         <div className="inline-flex rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-1 text-sm">
-          {([['owner', 'My Vehicles'], ['renter', 'My Rentals']] as const).map(([key, label]) => (
+          {tabs.map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -168,11 +178,12 @@ export default function VehicleReportPage() {
             </button>
           ))}
         </div>
+        )}
       </div>
 
       {tab === 'owner' ? (
         <>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <StatTile label="Total bookings received" value={owner.summary.total_bookings} hint="All bookings on your vehicles" />
             <StatTile label="Times rented" value={owner.summary.rented} hint="Approved, ongoing and completed" />
             <StatTile
@@ -181,6 +192,7 @@ export default function VehicleReportPage() {
               hint="Of your listed vehicles"
             />
             <StatTile label="Booking value" value={formatCurrency(owner.summary.total_amount)} hint={`${owner.summary.rental_days} rental days`} />
+            <StatTile label="Cash collected" value={formatCurrency(owner.summary.cash_collected || 0)} hint="Paid to you at pickup" />
           </div>
 
           <div className="grid lg:grid-cols-[1fr_320px] gap-4 mb-6">

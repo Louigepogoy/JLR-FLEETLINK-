@@ -18,7 +18,11 @@ type PayoutAccount = {
 export default function EarningsPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
-    summary: { total_earnings: 0, monthly_earnings: 0, on_hold: 0, pending_payout: 0, paid_out: 0 },
+    summary: {
+      total_earnings: 0, monthly_earnings: 0, on_hold: 0, pending_payout: 0, paid_out: 0,
+      // Cash bookings: paid to the owner in person, so outside the payouts above.
+      cash_collected: 0, cash_collected_month: 0, cash_to_collect: 0,
+    },
     monthlyBreakdown: [],
   });
   const [payoutAccount, setPayoutAccount] = useState<PayoutAccount>(null);
@@ -103,6 +107,25 @@ export default function EarningsPage() {
         </div>
       </div>
 
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)] mb-3">Cash Payments</h3>
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="glass-card p-6 money-box">
+          <p className="text-sm text-[var(--muted)]">Cash Collected</p>
+          <p className="money-fit font-bold">{formatCurrency(data.summary.cash_collected || 0)}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">Received from renters at pickup</p>
+        </div>
+        <div className="glass-card p-6 money-box">
+          <p className="text-sm text-[var(--muted)]">Cash This Month</p>
+          <p className="money-fit font-bold">{formatCurrency(data.summary.cash_collected_month || 0)}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">Last 30 days</p>
+        </div>
+        <div className="glass-card p-6 money-box">
+          <p className="text-sm text-[var(--muted)]">Cash to Collect</p>
+          <p className="money-fit font-bold text-amber-500">{formatCurrency(data.summary.cash_to_collect || 0)}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">On confirmed bookings — collect at pickup</p>
+        </div>
+      </div>
+
       <div className="glass-card p-6 mb-8">
         <h3 className="font-semibold mb-1">Payout Account</h3>
         <p className="text-sm text-[var(--muted)] mb-4">
@@ -110,8 +133,9 @@ export default function EarningsPage() {
         </p>
         <p className="text-sm text-[var(--muted)] mb-4">
           Renters pay JLR Fleetlink, not you. We hold each payment until the renter accepts your vehicle at pickup
-          (or their inspection time runs out), then your share is sent to this account right away. Never accept cash
-          directly from a renter.
+          (or their inspection time runs out), then your share is sent to this account right away. For cash bookings, the renter pays a
+          reservation fee online and the rest in cash to you at pickup — only accept it at the handover and confirm it in
+          Booking Requests. Never accept cash for a booking made outside JLR Fleetlink.
         </p>
         <form onSubmit={handleSavePayoutAccount} className="grid sm:grid-cols-3 gap-3">
           <select

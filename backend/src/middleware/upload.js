@@ -30,6 +30,9 @@ const uploadRegistrationDocs = multer({
 }).fields([
   { name: 'licenseImage', maxCount: 1 },
   { name: 'selfieImage', maxCount: 1 },
+  { name: 'businessProof', maxCount: 1 },
+  { name: 'ownerOr', maxCount: 1 },
+  { name: 'ownerCr', maxCount: 1 },
 ]);
 
 const uploadVehicleImages = multer({
@@ -44,6 +47,8 @@ const uploadVehicleImages = multer({
   { name: 'proofInterior', maxCount: 1 },
   { name: 'proofOwner', maxCount: 1 },
   { name: 'proofExtra', maxCount: 1 },
+  { name: 'proofOr', maxCount: 1 },
+  { name: 'proofCr', maxCount: 1 },
 ]);
 
 const uploadProfileAvatar = multer({

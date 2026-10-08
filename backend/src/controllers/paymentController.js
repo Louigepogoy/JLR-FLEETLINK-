@@ -1,6 +1,7 @@
 const { query, pool } = require('../config/db');
 const { generateInvoiceNumber, calculateCommission } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
+const { autoPayoutOwner } = require('../services/payoutService');
 
 /**
  * Records a confirmed payment against a booking. Called by the PayMongo webhook
@@ -29,7 +30,13 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
       'SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1'
     );
     const commissionPct = parseFloat(settingsResult.rows[0]?.commission_percentage || 10);
-    const { platformAmount, ownerAmount } = calculateCommission(amount, commissionPct);
+    let { platformAmount, ownerAmount } = calculateCommission(amount, commissionPct);
+    // Cash booking reservation: the owner gets the cash at pickup, so the platform takes its commission on
+    // the whole booking from this online reservation fee.
+    if (booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0) {
+      platformAmount = Math.min(amount, Math.round(parseFloat(booking.total_amount) * commissionPct) / 100);
+      ownerAmount = Math.round((amount - platformAmount) * 100) / 100;
+    }
 
     const newPaidAmount = parseFloat(booking.paid_amount) + amount;
     const paymentStatus =
@@ -96,6 +103,30 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
         'payment',
         '/dashboard/bookings'
       ).catch(() => {});
+      return {
+        payment: paymentInsert.rows[0], invoiceNumber, referenceNumber, paidAmount: newPaidAmount,
+        remainingBalance: parseFloat(booking.total_amount) - newPaidAmount, paymentStatus,
+        receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
+      };
+    }
+
+    // A late fee paid after the trip: the vehicle was already accepted, so the owner's share is payable now.
+    if (booking.status === 'completed') {
+      await createNotification(
+        booking.owner_id,
+        'Late fee paid',
+        `The renter paid ₱${amount.toFixed(2)} for returning ${booking.title} late. Your share of ₱${ownerAmount.toFixed(2)} is on its way to your payout account.`,
+        'payment',
+        '/dashboard/earnings'
+      );
+      await createNotification(
+        booking.customer_id,
+        'Late fee paid',
+        `₱${amount.toFixed(2)} paid for ${booking.title}. ${paymentStatus === 'fully_paid' ? 'Your booking is fully paid.' : `Remaining: ₱${(parseFloat(booking.total_amount) - newPaidAmount).toFixed(2)}`}`,
+        'payment',
+        '/dashboard/bookings'
+      );
+      await autoPayoutOwner(booking.owner_id, 'late_fee').catch(() => {});
       return {
         payment: paymentInsert.rows[0], invoiceNumber, referenceNumber, paidAmount: newPaidAmount,
         remainingBalance: parseFloat(booking.total_amount) - newPaidAmount, paymentStatus,

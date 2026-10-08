@@ -22,6 +22,8 @@ const getPendingRegistrations = async (req, res, next) => {
     const result = await query(
       `SELECT u.id, u.email, u.full_name, u.phone, u.role, u.license_number,
               u.license_image_url, u.selfie_image_url, u.approval_status, u.created_at,
+              u.account_type, u.business_name, u.business_proof_url, u.business_proof_type,
+              u.owner_or_url, u.owner_cr_url,
               (SELECT row_to_json(r) FROM (
                  SELECT risk_score, verdict, reasons, summary, model, created_at
                  FROM ai_verification_results

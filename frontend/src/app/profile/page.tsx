@@ -157,7 +157,9 @@ export default function ProfilePage() {
                   <p className="font-semibold">{user?.full_name}</p>
                   <p className="text-sm text-[var(--muted)]">{user?.email}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="inline-block text-xs px-3 py-1 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] capitalize">{user?.role}</span>
+                    <span className="inline-block text-xs px-3 py-1 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] capitalize">
+                      {user?.role === 'admin' ? 'Admin' : user?.account_type === 'owner' ? 'Owner' : user?.account_type === 'customer' ? 'Customer' : 'Customer & Owner'}
+                    </span>
                     {!verificationChecking && (
                       <span className={`inline-flex items-center gap-1 text-xs px-3 py-1 rounded-full ${
                         verificationStatus === 'approved' ? 'bg-green-500/15 text-green-500' :

@@ -31,6 +31,15 @@ CREATE TABLE users (
   license_number VARCHAR(50),
   license_image_url TEXT,
   selfie_image_url TEXT,
+  -- 'customer' books vehicles, 'owner' lists them; accounts from before the split do both.
+  account_type VARCHAR(20) NOT NULL DEFAULT 'both' CHECK (account_type IN ('customer', 'owner', 'both')),
+  -- Owner business proof (DTI, Mayor's/Business Permit, SEC, or BIR 2303).
+  business_name VARCHAR(255),
+  business_proof_url TEXT,
+  -- Which business document was uploaded, and the OR/CR of a vehicle the owner has (owner verification).
+  business_proof_type VARCHAR(30) CHECK (business_proof_type IS NULL OR business_proof_type IN ('dti', 'mayors_permit', 'sec', 'bir_2303')),
+  owner_or_url TEXT,
+  owner_cr_url TEXT,
   approval_status approval_status DEFAULT 'unverified',
   rejection_reason TEXT,
   approved_by UUID REFERENCES users(id),
@@ -110,6 +119,21 @@ CREATE TABLE bookings (
   status booking_status DEFAULT 'pending',
   notes TEXT,
   completed_at TIMESTAMPTZ,
+  -- Late return: started hours past end_date + dropoff_time (Philippine time) and the fee charged
+  -- for them (daily price / 24 per hour). The fee is included in total_amount.
+  late_hours INTEGER NOT NULL DEFAULT 0,
+  late_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+  -- 'online' or 'cash' (online reservation fee + cash to the owner at pickup). cash_due is still to be
+  -- collected; cash_collected was recorded by the owner and is never refunded through PayMongo.
+  payment_option VARCHAR(10) NOT NULL DEFAULT 'online' CHECK (payment_option IN ('online', 'cash')),
+  cash_due DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cash_collected DECIMAL(12,2) NOT NULL DEFAULT 0,
+  cash_collected_at TIMESTAMPTZ,
+  -- Rental agreement accepted by the renter when booking (typed full name as signature).
+  agreement_signed_name VARCHAR(255),
+  agreement_signed_at TIMESTAMPTZ,
+  agreement_version VARCHAR(20),
+  agreement_ip VARCHAR(64),
   -- Pickup inspection: the owner hands the vehicle over, then the customer has until
   -- inspection_deadline to accept or reject it before it is auto-accepted.
   handed_over_at TIMESTAMPTZ,
@@ -241,7 +265,7 @@ CREATE TABLE owner_payouts (
   account_name VARCHAR(255),
   account_number VARCHAR(50),
   source VARCHAR(20) NOT NULL
-    CHECK (source IN ('accepted', 'auto_accepted', 'dispute', 'account_added', 'manual', 'legacy')),
+    CHECK (source IN ('accepted', 'auto_accepted', 'dispute', 'account_added', 'manual', 'legacy', 'late_fee')),
   reference VARCHAR(40) NOT NULL UNIQUE,
   paid_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -502,3 +526,40 @@ CREATE INDEX idx_reports_status ON reports(status);
 CREATE INDEX idx_reports_booking ON reports(booking_id);
 
 INSERT INTO platform_settings (commission_percentage) VALUES (10.00);
+
+-- Read-only views that split users into owners and customers, so each group can be browsed on its own
+-- (e.g. in the Neon console: SELECT * FROM owners). The data stays in the users table, which the app
+-- uses for login, bookings, chat, payments, etc.; these views just filter it and add a few totals.
+-- Accounts from before the customer/owner split ('both') appear in both views. No passwords.
+
+DROP VIEW IF EXISTS owners;
+CREATE VIEW owners AS
+SELECT
+  u.id, u.full_name, u.username, u.email, u.phone, u.account_type,
+  u.approval_status AS verification_status, u.license_number,
+  u.business_name, u.business_proof_url IS NOT NULL AS has_business_proof,
+  u.is_active, u.created_at,
+  (SELECT COUNT(*)::int FROM vehicles v WHERE v.owner_id = u.id) AS vehicles_listed,
+  (SELECT s.plan_name FROM owner_subscriptions s
+    WHERE s.owner_id = u.id AND s.status = 'active' AND (s.ends_at IS NULL OR s.ends_at > NOW())
+    ORDER BY s.created_at DESC LIMIT 1) AS current_plan,
+  (SELECT COUNT(*)::int FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id
+    WHERE v.owner_id = u.id AND b.status IN ('approved', 'active', 'completed')) AS times_rented_out,
+  (SELECT COALESCE(SUM(t.owner_amount), 0) FROM transactions t
+    WHERE t.user_id = u.id AND t.type = 'payment') AS total_earnings
+FROM users u
+WHERE u.role = 'user' AND u.account_type IN ('owner', 'both');
+
+DROP VIEW IF EXISTS customers;
+CREATE VIEW customers AS
+SELECT
+  u.id, u.full_name, u.username, u.email, u.phone, u.account_type,
+  u.approval_status AS verification_status, u.license_number,
+  u.is_active, u.created_at,
+  (SELECT COUNT(*)::int FROM bookings b WHERE b.customer_id = u.id) AS bookings_made,
+  (SELECT COUNT(*)::int FROM bookings b
+    WHERE b.customer_id = u.id AND b.status IN ('approved', 'active', 'completed')) AS times_rented,
+  (SELECT COALESCE(SUM(b.paid_amount), 0) FROM bookings b WHERE b.customer_id = u.id) AS total_spent,
+  (SELECT COALESCE(SUM(b.late_fee), 0) FROM bookings b WHERE b.customer_id = u.id) AS late_fees
+FROM users u
+WHERE u.role = 'user' AND u.account_type IN ('customer', 'both');

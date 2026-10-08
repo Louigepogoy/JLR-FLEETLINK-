@@ -93,7 +93,9 @@ export type VehicleProofKey =
   | 'side'
   | 'interior'
   | 'ownerWithVehicle'
-  | 'additionalProof';
+  | 'additionalProof'
+  | 'officialReceipt'
+  | 'certificateOfRegistration';
 
 export const vehicleProofSlots: {
   key: VehicleProofKey;
@@ -106,10 +108,20 @@ export const vehicleProofSlots: {
   { key: 'side', field: 'proofSide', label: 'Side View', hint: 'Left or right side profile' },
   { key: 'interior', field: 'proofInterior', label: 'Interior', hint: 'Dashboard, seats, or cabin' },
   { key: 'ownerWithVehicle', field: 'proofOwner', label: 'You + Vehicle', hint: 'Your face visible with the car' },
-  { key: 'additionalProof', field: 'proofExtra', label: 'Extra Proof', hint: 'Plate, OR/CR, or ownership doc' },
+  { key: 'additionalProof', field: 'proofExtra', label: 'Extra Proof', hint: 'Plate number or other ownership doc' },
+  // Registration documents: only you and the admins can see these, never renters.
+  { key: 'officialReceipt', field: 'proofOr', label: 'OR (Official Receipt)', hint: 'LTO Official Receipt · private' },
+  { key: 'certificateOfRegistration', field: 'proofCr', label: 'CR (Certificate of Registration)', hint: 'LTO Certificate of Registration · private' },
 ];
 
 export const requiredProofCount = vehicleProofSlots.length;
+
+// Cash bookings pay this share online to reserve (the backend never charges less than the commission).
+export const CASH_RESERVATION_PERCENT = 15;
+
+// What's still owed online for a booking: cash to be paid at pickup isn't paid online.
+export const onlineDue = (b: { total_amount: number | string; paid_amount?: number | string | null; cash_due?: number | string | null }) =>
+  Math.max(0, Math.round((Number(b.total_amount) - Number(b.paid_amount || 0) - Number(b.cash_due || 0)) * 100) / 100);
 export const paymentStatuses = ['pending', 'partially_paid', 'fully_paid', 'refunded', 'cancelled'];
 export const bookingStatuses = ['pending', 'approved', 'rejected', 'active', 'completed', 'cancelled'];
 

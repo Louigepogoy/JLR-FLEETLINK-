@@ -252,7 +252,7 @@ export default function MyVehiclesPage() {
 
     const missingProofs = vehicleProofSlots.filter(({ key }) => !proofPhotos[key]?.preview);
     if (!editingVehicle && missingProofs.length) {
-      toast.error(`Please upload all 6 proof photos. Missing: ${missingProofs.map((p) => p.label).join(', ')}`);
+      toast.error(`Please upload all vehicle photos and the OR/CR. Missing: ${missingProofs.map((p) => p.label).join(', ')}`);
       return;
     }
 
@@ -375,7 +375,7 @@ export default function MyVehiclesPage() {
           <div className="md:col-span-2 flex items-center justify-between gap-3">
             <div>
               <h3 className="text-xl font-bold">{editingVehicle ? 'Edit Vehicle Details' : 'Add Vehicle'}</h3>
-              <p className="text-sm text-[var(--muted)]">Upload 6 proof photos and pin the exact pickup spot on the map.</p>
+              <p className="text-sm text-[var(--muted)]">Upload the vehicle photos and OR/CR, then pin the exact pickup spot on the map. Your OR/CR stays private.</p>
             </div>
             <button type="button" onClick={resetForm} className="btn-outline flex items-center gap-2 text-sm">
               <X className="h-4 w-4" /> Cancel

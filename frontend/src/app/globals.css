@@ -325,8 +325,13 @@ select.input-field {
     background: white !important;
     color: black !important;
   }
-  nav, aside, footer, .print\:hidden {
+  nav, aside, footer, header, .print\:hidden {
     display: none !important;
+  }
+  .print-page {
+    break-after: page;
+    box-shadow: none !important;
+    border: none !important;
   }
   #receipt {
     box-shadow: none !important;

@@ -3,7 +3,7 @@
 
 INSERT INTO users (
   id, email, password_hash, full_name, phone, role,
-  license_number, approval_status, is_active
+  license_number, approval_status, is_active, account_type
 ) VALUES
 (
   'a0000000-0000-0000-0000-000000000001',
@@ -14,7 +14,8 @@ INSERT INTO users (
   'admin',
   NULL,
   'approved',
-  TRUE
+  TRUE,
+  'both'
 ),
 (
   'a0000000-0000-0000-0000-000000000002',
@@ -25,7 +26,8 @@ INSERT INTO users (
   'user',
   'N01-12-345678',
   'approved',
-  TRUE
+  TRUE,
+  'owner'
 ),
 (
   'a0000000-0000-0000-0000-000000000003',
@@ -36,9 +38,11 @@ INSERT INTO users (
   'user',
   'N02-98-765432',
   'approved',
-  TRUE
+  TRUE,
+  'customer'
 )
 ON CONFLICT (email) DO UPDATE SET
   password_hash = EXCLUDED.password_hash,
   approval_status = 'approved',
-  is_active = TRUE;
+  is_active = TRUE,
+  account_type = EXCLUDED.account_type;

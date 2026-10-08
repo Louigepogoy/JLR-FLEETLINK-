@@ -85,9 +85,21 @@ const getOwnerEarnings = async (req, res, next) => {
       [req.user.id]
     );
 
+    // Cash bookings: cash the owner received at pickup (or for late fees) never goes through payouts,
+    // so it's reported separately, plus cash still to collect on confirmed bookings.
+    const cash = await query(
+      `SELECT
+         COALESCE(SUM(b.cash_collected), 0) AS cash_collected,
+         COALESCE(SUM(b.cash_collected) FILTER (WHERE b.cash_collected_at >= NOW() - INTERVAL '30 days'), 0) AS cash_collected_month,
+         COALESCE(SUM(b.cash_due) FILTER (WHERE b.status IN ('approved', 'active') AND b.payment_status <> 'pending'), 0) AS cash_to_collect
+       FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id
+       WHERE v.owner_id = $1`,
+      [req.user.id]
+    );
+
     res.json({
       success: true,
-      data: { summary: result.rows[0], monthlyBreakdown: monthly.rows },
+      data: { summary: { ...result.rows[0], ...cash.rows[0] }, monthlyBreakdown: monthly.rows },
     });
   } catch (error) {
     next(error);

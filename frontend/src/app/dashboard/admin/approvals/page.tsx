@@ -22,7 +22,20 @@ interface PendingUser {
   selfie_image_url: string;
   created_at: string;
   ai_result: AiResult | null;
+  account_type?: 'customer' | 'owner' | 'both';
+  business_name?: string | null;
+  business_proof_url?: string | null;
+  business_proof_type?: string | null;
+  owner_or_url?: string | null;
+  owner_cr_url?: string | null;
 }
+
+const BUSINESS_PROOF_LABELS: Record<string, string> = {
+  dti: 'DTI Business Name Registration',
+  mayors_permit: "Mayor's / Business Permit",
+  sec: 'SEC Registration',
+  bir_2303: 'BIR Certificate of Registration (Form 2303)',
+};
 
 interface PendingVehicle {
   id: string;
@@ -32,6 +45,7 @@ interface PendingVehicle {
   vehicle_type: string;
   plate_number?: string;
   images: string[];
+  proof_photos?: Record<string, string>;
   owner_name: string;
   verification_status: string;
   created_at: string;
@@ -215,7 +229,16 @@ export default function AdminApprovalsPage() {
                   <div className="space-y-2 text-sm mb-6">
                     <p><span className="text-[var(--muted)]">Email:</span> {selectedUser.email}</p>
                     <p><span className="text-[var(--muted)]">Phone:</span> {selectedUser.phone}</p>
-                    <p><span className="text-[var(--muted)]">Role:</span> <span className="capitalize">{selectedUser.role}</span></p>
+                    <p>
+                      <span className="text-[var(--muted)]">Account:</span>{' '}
+                      {selectedUser.account_type === 'owner' ? 'Owner' : selectedUser.account_type === 'customer' ? 'Customer' : 'Customer & Owner'}
+                    </p>
+                    {selectedUser.business_name && (
+                      <p>
+                        <span className="text-[var(--muted)]">Business:</span> {selectedUser.business_name}
+                        {selectedUser.business_proof_type && <> · {BUSINESS_PROOF_LABELS[selectedUser.business_proof_type] || selectedUser.business_proof_type}</>}
+                      </p>
+                    )}
                     <p><span className="text-[var(--muted)]">License #:</span> {selectedUser.license_number}</p>
                     <p><span className="text-[var(--muted)]">Submitted:</span> {formatDate(selectedUser.created_at)}</p>
                   </div>
@@ -237,6 +260,20 @@ export default function AdminApprovalsPage() {
                         <img src={selectedUser.selfie_image_url} alt="Selfie" className="w-full h-full object-contain" />
                       </a>
                     </div>
+                    {([
+                      ['business_proof_url', 'Business Proof'],
+                      ['owner_or_url', 'Vehicle OR (Official Receipt)'],
+                      ['owner_cr_url', 'Vehicle CR (Certificate of Registration)'],
+                    ] as const).filter(([key]) => selectedUser[key]).map(([key, label]) => (
+                      <div key={key}>
+                        <p className="text-xs font-medium mb-2 flex items-center gap-1"><IdCard className="w-3 h-3" /> {label}</p>
+                        <a href={selectedUser[key] || undefined} target="_blank" rel="noopener noreferrer"
+                          className="block aspect-video rounded-xl overflow-hidden border border-[var(--card-border)] bg-black/5">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={selectedUser[key] || undefined} alt={label} className="w-full h-full object-contain" />
+                        </a>
+                      </div>
+                    ))}
                   </div>
 
                   <AiRiskPanel
@@ -338,6 +375,29 @@ export default function AdminApprovalsPage() {
 
                   <div className="mb-6">
                     <ImageGallery images={selectedVehicle.images ?? []} alt={selectedVehicle.title} className="h-56 rounded-xl" />
+                  </div>
+
+                  {/* Registration documents (private to the owner and admins). */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    {([['officialReceipt', 'OR (Official Receipt)'], ['certificateOfRegistration', 'CR (Certificate of Registration)']] as const).map(([key, label]) => {
+                      const url = selectedVehicle.proof_photos?.[key];
+                      return (
+                        <div key={key}>
+                          <p className="text-xs font-medium mb-2 flex items-center gap-1"><IdCard className="w-3 h-3" /> {label}</p>
+                          {url ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer"
+                              className="block aspect-video rounded-xl overflow-hidden border border-[var(--card-border)] bg-black/5">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt={label} className="w-full h-full object-contain" />
+                            </a>
+                          ) : (
+                            <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-[var(--card-border)] p-2 text-center text-xs text-[var(--muted)]">
+                              Not uploaded (listed before OR/CR was required)
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <AiRiskPanel

@@ -27,7 +27,11 @@ const registerValidation = [
   body('email').isEmail().withMessage('Enter a valid email address').normalizeEmail(),
   body('password').custom(strongPassword),
   body('phone').trim().notEmpty().matches(/^09\d{9}$/).withMessage('Valid Philippine mobile number required (09XXXXXXXXX)'),
+  body('accountType').isIn(['customer', 'owner']).withMessage('Choose whether you are signing up as a Customer or an Owner'),
 ];
+
+// New accounts are either a customer (books vehicles) or an owner (lists vehicles).
+const ACCOUNT_TYPES = ['customer', 'owner'];
 
 // `identifier` is a username or an email; `email` is still accepted from older clients.
 const loginValidation = [
@@ -79,7 +83,7 @@ const register = async (req, res, next) => {
       return res.status(400).json({ success: false, message: firstError(errors), errors: errors.array() });
     }
 
-    const { email, password, phone } = req.body;
+    const { email, password, phone, accountType } = req.body;
     const username = req.body.username.trim();
 
     const existing = await query('SELECT id, email_verified FROM users WHERE email = $1', [email]);
@@ -108,15 +112,15 @@ const register = async (req, res, next) => {
     const passwordHash = await bcrypt.hash(password, 12);
     const result = pending
       ? await query(
-        `UPDATE users SET username = $1, full_name = $1, password_hash = $2, phone = $3, updated_at = NOW()
+        `UPDATE users SET username = $1, full_name = $1, password_hash = $2, phone = $3, account_type = $5, updated_at = NOW()
          WHERE id = $4 RETURNING *`,
-        [username, passwordHash, phone, pending.id]
+        [username, passwordHash, phone, pending.id, accountType]
       )
       : await query(
-        `INSERT INTO users (email, username, full_name, password_hash, phone, role, email_verified)
-         VALUES ($1, $2, $2, $3, $4, 'user', false)
+        `INSERT INTO users (email, username, full_name, password_hash, phone, role, email_verified, account_type)
+         VALUES ($1, $2, $2, $3, $4, 'user', false, $5)
          RETURNING *`,
-        [email, username, passwordHash, phone]
+        [email, username, passwordHash, phone, accountType]
       );
     const user = result.rows[0];
 
@@ -347,6 +351,8 @@ const login = async (req, res, next) => {
 const googleLogin = async (req, res, next) => {
   try {
     const { credential } = req.body;
+    // Only used when Google creates a brand-new account (the Register page sends the chosen type).
+    const accountType = ACCOUNT_TYPES.includes(req.body.accountType) ? req.body.accountType : 'customer';
     if (!credential) {
       return res.status(400).json({ success: false, message: 'Missing Google credential' });
     }
@@ -378,10 +384,10 @@ const googleLogin = async (req, res, next) => {
 
     if (!user) {
       const insertResult = await query(
-        `INSERT INTO users (email, full_name, role, google_id, avatar_url, approval_status, is_active)
-         VALUES ($1, $2, 'user', $3, $4, 'unverified', true)
+        `INSERT INTO users (email, full_name, role, google_id, avatar_url, approval_status, is_active, account_type)
+         VALUES ($1, $2, 'user', $3, $4, 'unverified', true, $5)
          RETURNING *`,
-        [email, name, googleId, picture || null]
+        [email, name, googleId, picture || null, accountType]
       );
       user = insertResult.rows[0];
     } else if (!user.google_id || !user.email_verified) {

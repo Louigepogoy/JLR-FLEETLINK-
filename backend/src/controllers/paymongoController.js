@@ -2,7 +2,7 @@ const { query } = require('../config/db');
 const { createCheckoutSession, getCheckoutSession, verifyWebhookEvent } = require('../services/paymongoService');
 const { finalizeBookingPayment } = require('./paymentController');
 const {
-  PLANS, activateSubscription, isFirstPaidSubscription, priceForUser,
+  PLANS, activateSubscription, isFirstPaidSubscription, priceForUser, rejectNonOwner,
   EXTRA_VEHICLE_SLOT_PRICE, MAX_EXTRA_SLOTS_PER_PURCHASE, getActivePaidSubscription, addExtraVehicleSlots,
 } = require('./subscriptionController');
 const { createNotification } = require('../utils/notifications');
@@ -119,11 +119,20 @@ const createBookingPaymentCheckout = async (req, res, next) => {
     if (booking.customer_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
-    if (!['pending', 'approved', 'active'].includes(booking.status)) {
+    // Completed bookings can still be paid when they owe a balance (a late return fee).
+    if (!['pending', 'approved', 'active', 'completed'].includes(booking.status)) {
       return res.status(400).json({ success: false, message: 'Booking not eligible for payment' });
     }
 
-    const remaining = parseFloat(booking.total_amount) - parseFloat(booking.paid_amount);
+    // Cash still to be collected at pickup isn't paid online.
+    const remaining = Math.round((parseFloat(booking.total_amount) - parseFloat(booking.paid_amount)
+      - parseFloat(booking.cash_due || 0)) * 100) / 100;
+    if (booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0 && amount < remaining) {
+      return res.status(400).json({
+        success: false,
+        message: `Pay the full ₱${remaining.toFixed(2)} reservation fee to confirm your cash booking.`,
+      });
+    }
     if (amount > remaining) {
       return res.status(400).json({
         success: false,
@@ -159,6 +168,7 @@ const createBookingPaymentCheckout = async (req, res, next) => {
 
 const createSubscriptionCheckout = async (req, res, next) => {
   try {
+    if (rejectNonOwner(req, res)) return;
     const { planId } = req.body;
     const plan = PLANS[planId];
     if (!plan) {
@@ -200,6 +210,7 @@ const createSubscriptionCheckout = async (req, res, next) => {
 
 const createExtraSlotsCheckout = async (req, res, next) => {
   try {
+    if (rejectNonOwner(req, res)) return;
     const quantity = Number(req.body.quantity);
     if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_EXTRA_SLOTS_PER_PURCHASE) {
       return res.status(400).json({

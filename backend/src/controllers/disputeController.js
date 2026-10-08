@@ -99,7 +99,7 @@ const resolveDispute = async (req, res, next) => {
   try {
     await client.query('BEGIN');
     const disputeResult = await client.query(
-      `SELECT d.*, b.paid_amount, v.owner_id, v.title
+      `SELECT d.*, b.paid_amount, b.cash_collected, v.owner_id, v.title
        FROM booking_disputes d
        JOIN bookings b ON d.booking_id = b.id
        JOIN vehicles v ON b.vehicle_id = v.id
@@ -124,7 +124,8 @@ const resolveDispute = async (req, res, next) => {
       });
     }
 
-    const paid = parseFloat(d.paid_amount);
+    // Cash paid to the owner at pickup isn't refundable here; only the online payments are.
+    const paid = parseFloat(d.paid_amount) - parseFloat(d.cash_collected || 0);
     let refundAmount = null;
     let disputeStatus = 'dismissed';
 

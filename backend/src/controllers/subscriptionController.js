@@ -1,6 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
-const { generateReferenceNumber } = require('../utils/helpers');
+const { generateReferenceNumber, canList } = require('../utils/helpers');
 
 const PLANS = {
   basic: {
@@ -164,8 +164,20 @@ const addExtraVehicleSlots = async ({ userId, quantity }) => {
   return result.rows[0] || null;
 };
 
+// Plans and extra slots are for listing vehicles, so customer accounts can't buy them. Returns true if rejected.
+const rejectNonOwner = (req, res) => {
+  if (canList(req.user)) return false;
+  res.status(403).json({
+    success: false,
+    code: 'OWNER_ACCOUNT_REQUIRED',
+    message: 'Subscriptions are for Owner accounts. Sign up for a separate Owner account to list vehicles.',
+  });
+  return true;
+};
+
 const subscribe = async (req, res, next) => {
   try {
+    if (rejectNonOwner(req, res)) return;
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ success: false, errors: errors.array() });
@@ -204,6 +216,7 @@ const subscriptionValidation = [
 
 module.exports = {
   PLANS,
+  rejectNonOwner,
   EXTRA_VEHICLE_SLOT_PRICE,
   MAX_EXTRA_SLOTS_PER_PURCHASE,
   getActivePaidSubscription,

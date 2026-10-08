@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Eye, EyeOff, Loader2, XCircle } from 'lucide-react';
+import { Car, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import AuthShell from '@/components/auth/AuthShell';
@@ -42,6 +42,7 @@ export default function RegisterPage() {
 
   const [form, setForm] = useState({
     username: '', email: '', phone: '', password: '',
+    accountType: '' as '' | 'customer' | 'owner',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,6 +50,10 @@ export default function RegisterPage() {
     const emailResult = await checkEmail(form.email);
     if (emailResult && BAD_EMAIL_STATUSES.includes(emailResult.status)) {
       toast.error(emailResult.message || 'Please check your email address');
+      return;
+    }
+    if (!form.accountType) {
+      toast.error('Choose whether you are signing up as a Customer or an Owner');
       return;
     }
     if (!isStrongPassword(form.password)) {
@@ -70,9 +75,13 @@ export default function RegisterPage() {
   };
 
   const handleGoogleCredential = async (credential: string) => {
+    if (!form.accountType) {
+      toast.error('Choose Customer or Owner first, then continue with Google');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await api.post('/auth/google', { credential });
+      const res = await api.post('/auth/google', { credential, accountType: form.accountType });
       const { user, token } = res.data.data;
       setAuth(user, token);
       toast.success(`Welcome, ${user.full_name}!`);
@@ -88,11 +97,43 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Create Account"
-      subtitle="Rent a ride or list your own — you can do both"
+      subtitle="Sign up to rent a ride, or to list your own vehicle"
       panelTitle={<>More Than Rentals.<br />It&apos;s Your Journey.</>}
       panelText="Join a community of renters and owners. Payments stay protected until pickup, and every account is verified by our team."
     >
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">I want to…</label>
+            <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Account type">
+              {([
+                { value: 'customer', icon: KeyRound, title: 'Rent a vehicle', sub: 'Customer account' },
+                { value: 'owner', icon: Car, title: 'List my vehicle', sub: 'Owner account' },
+              ] as const).map((option) => {
+                const selected = form.accountType === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setForm({ ...form, accountType: option.value })}
+                    className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left transition ${
+                      selected
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 ring-2 ring-[var(--primary)]/40'
+                        : 'border-[var(--card-border)] hover:border-[var(--primary)]/50'
+                    }`}
+                  >
+                    <option.icon className={`h-5 w-5 ${selected ? 'text-[var(--primary)]' : 'text-[var(--muted)]'}`} />
+                    <span className="text-sm font-semibold">{option.title}</span>
+                    <span className="text-xs text-[var(--muted)]">{option.sub}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Customers book vehicles; owners list them. Need both? Use a separate account for each.
+            </p>
+          </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Username</label>
             <input

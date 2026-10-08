@@ -13,8 +13,8 @@ import PaymentModal from '@/components/payment/PaymentModal';
 import EmptyState from '@/components/ui/EmptyState';
 import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
-import { useAuthStore } from '@/store/authStore';
-import { addRentalDays, formatCurrency, formatDate, formatTime, localDateString } from '@/lib/utils';
+import { canRent, useAuthStore } from '@/store/authStore';
+import { addRentalDays, formatCurrency, formatDate, formatTime, localDateString, CASH_RESERVATION_PERCENT, onlineDue } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
 import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines';
 import { PickupMap } from '@/components/maps';
@@ -22,6 +22,7 @@ import type { ReviewSummary } from '@/lib/reviews';
 import ReviewList from '@/components/reviews/ReviewList';
 import { PAYMENT_WINDOW_MINUTES } from '@/lib/inspection';
 import { RatingBadge } from '@/components/reviews/StarRating';
+import { rentalAgreementTerms, RENTAL_AGREEMENT_VERSION } from '@/lib/rentalAgreement';
 
 const MAX_RENTAL_DAYS = 30;
 
@@ -34,6 +35,11 @@ export default function VehicleDetailPage() {
   const [step, setStep] = useState(2);
   const [dates, setDates] = useState({ startDate: '', pickupTime: '09:00', rentalDays: 1 });
   const [withDriver, setWithDriver] = useState(false);
+  const [paymentOption, setPaymentOption] = useState<'online' | 'cash'>('online');
+  // Rental Agreement: accepted with a checkbox and the renter's typed full name as signature.
+  const [agreed, setAgreed] = useState(false);
+  const [signatureName, setSignatureName] = useState('');
+  const agreementSigned = agreed && signatureName.trim().length >= 2;
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
@@ -107,6 +113,10 @@ export default function VehicleDetailPage() {
       toast.error('This vehicle is already booked or unavailable for the selected dates');
       return;
     }
+    if (!agreementSigned) {
+      toast.error('Please accept the Rental Agreement and type your full name to sign it');
+      return;
+    }
     setBookingLoading(true);
     try {
       const res = await api.post('/bookings', {
@@ -116,6 +126,9 @@ export default function VehicleDetailPage() {
         endDate,
         dropoffTime,
         withDriver: withDriver && vehicle?.driver_available,
+        paymentOption,
+        agreeToTerms: true,
+        signatureName: signatureName.trim(),
       });
       setBooking(res.data.data);
       setStep(4);
@@ -171,13 +184,15 @@ export default function VehicleDetailPage() {
   const isOwner = isAuthenticated && user?.id === vehicle.owner_id;
   // Admins oversee the platform and can't book vehicles themselves.
   const isAdmin = isAuthenticated && user?.role === 'admin';
+  // Owner accounts list vehicles; only customer accounts book them.
+  const isOwnerAccount = isAuthenticated && !isAdmin && !canRent(user);
 
   return (
     <>
       <Navbar />
       <main className="pt-24 pb-16 min-h-screen">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {!isAdmin && <BookingProgress currentStep={booking ? 4 : step} />}
+          {!isAdmin && !isOwnerAccount && <BookingProgress currentStep={booking ? 4 : step} />}
 
           <div className="grid lg:grid-cols-2 gap-8">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="glass-card overflow-hidden">
@@ -305,6 +320,15 @@ export default function VehicleDetailPage() {
                     <Link href="/dashboard/admin/approvals" className="btn-primary text-sm">Review Vehicle Verifications</Link>
                     <Link href="/dashboard/admin/bookings" className="btn-outline text-sm">View All Bookings</Link>
                   </div>
+                </div>
+              ) : isOwnerAccount && !isOwner ? (
+                <div className="rounded-xl bg-[var(--primary)]/5 p-5 text-center">
+                  <Car className="w-8 h-8 mx-auto mb-3 text-[var(--primary)]" />
+                  <p className="font-semibold mb-1">Owner account</p>
+                  <p className="text-sm text-[var(--muted)] mb-4">
+                    Owner accounts list vehicles and can&apos;t book them. To rent, sign up for a separate Customer account.
+                  </p>
+                  <Link href="/dashboard/vehicles" className="btn-outline inline-block text-sm">Go to My Vehicles</Link>
                 </div>
               ) : isOwner ? (
                 <div className="rounded-xl bg-[var(--primary)]/5 p-5 text-center">
@@ -451,6 +475,50 @@ export default function VehicleDetailPage() {
                     </div>
                   )}
 
+                  {days > 0 && (
+                    <div className="mb-4">
+                      <p className="text-sm font-medium mb-2">How do you want to pay?</p>
+                      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment option">
+                        {([
+                          { value: 'online', title: 'Pay online', sub: 'GCash, Maya, or card' },
+                          { value: 'cash', title: 'Cash at pickup', sub: `${CASH_RESERVATION_PERCENT}% online to reserve` },
+                        ] as const).map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            role="radio"
+                            aria-checked={paymentOption === o.value}
+                            onClick={() => setPaymentOption(o.value)}
+                            className={`rounded-xl border p-3 text-left text-sm transition ${
+                              paymentOption === o.value
+                                ? 'border-[var(--primary)] bg-[var(--primary)]/10 ring-2 ring-[var(--primary)]/30'
+                                : 'border-[var(--card-border)] hover:border-[var(--primary)]/50'
+                            }`}
+                          >
+                            <span className="block font-semibold">{o.title}</span>
+                            <span className="block text-xs text-[var(--muted)]">{o.sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                      {paymentOption === 'cash' && (
+                        <div className="mt-2 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+                          <p className="flex justify-between font-semibold">
+                            <span>Reservation fee (online now)</span>
+                            <span>{formatCurrency(Math.round(total * CASH_RESERVATION_PERCENT) / 100)}</span>
+                          </p>
+                          <p className="flex justify-between font-semibold">
+                            <span>Cash to the owner at pickup</span>
+                            <span>{formatCurrency(total - Math.round(total * CASH_RESERVATION_PERCENT) / 100)}</span>
+                          </p>
+                          <p className="mt-1">
+                            Only the online reservation fee is protected by JLR Fleetlink refunds. Pay the cash only when you
+                            meet the owner, and inspect the vehicle before you drive off.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {isAuthenticated && user?.approval_status !== 'approved' && (
                     <Link
                       href={`/verify-identity?returnTo=${encodeURIComponent(`/vehicles/${id}`)}`}
@@ -461,8 +529,31 @@ export default function VehicleDetailPage() {
                     </Link>
                   )}
 
-                  <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict || pickupInPast} className="btn-primary w-full">
-                    {bookingLoading ? 'Booking...' : 'Book & Pay'}
+                  {days > 0 && (
+                    <div className="mb-4 rounded-xl border border-[var(--card-border)] p-3">
+                      <p className="text-sm font-semibold">Rental Agreement</p>
+                      <div className="mt-2 max-h-40 space-y-2 overflow-y-auto rounded-lg bg-[var(--primary)]/5 p-3 text-xs text-[var(--muted)]">
+                        {rentalAgreementTerms.map((term, i) => (
+                          <p key={term.title}><span className="font-semibold text-[var(--foreground)]">{i + 1}. {term.title}.</span> {term.body}</p>
+                        ))}
+                        <p className="text-[10px]">Version {RENTAL_AGREEMENT_VERSION}</p>
+                      </div>
+                      <label className="mt-3 flex items-start gap-2 text-sm">
+                        <input type="checkbox" className="mt-1" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                        <span>I have read and agree to the Rental Agreement.</span>
+                      </label>
+                      <input
+                        className="input-field mt-2"
+                        placeholder="Type your full name to sign"
+                        value={signatureName}
+                        maxLength={255}
+                        onChange={(e) => setSignatureName(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <button onClick={handleBook} disabled={bookingLoading || days === 0 || hasDateConflict || pickupInPast || !agreementSigned} className="btn-primary w-full disabled:opacity-60">
+                    {bookingLoading ? 'Booking...' : paymentOption === 'cash' ? 'Book & Pay Reservation' : 'Book & Pay'}
                   </button>
                 </>
               ) : (
@@ -485,11 +576,16 @@ export default function VehicleDetailPage() {
                     {Boolean(booking.with_driver) && <p>Includes driver: +{formatCurrency(Number(booking.driver_fee || 0))}</p>}
                     <p>Total: {formatCurrency(Number(booking.total_amount))}</p>
                     <p>Paid: {formatCurrency(Number(booking.paid_amount || 0))}</p>
+                    {Number(booking.cash_due || 0) > 0 && (
+                      <p className="font-semibold text-amber-600 dark:text-amber-400">
+                        Cash at pickup: {formatCurrency(Number(booking.cash_due))}
+                      </p>
+                    )}
                     <p>Status: <span className="capitalize">{String(booking.payment_status)}</span></p>
                   </div>
-                  {booking.payment_status !== 'fully_paid' && (
+                  {onlineDue(booking as { total_amount: number; paid_amount: number; cash_due: number }) > 0 && (
                     <button onClick={() => setShowPayment(true)} className="btn-primary w-full mb-3">
-                      Make Payment
+                      {Number(booking.cash_due || 0) > 0 ? 'Pay Reservation Fee' : 'Make Payment'}
                     </button>
                   )}
                   {Number(booking.paid_amount || 0) > 0 && (
@@ -526,7 +622,8 @@ export default function VehicleDetailPage() {
 
       {booking && (
         <PaymentModal
-          booking={{ id: String(booking.id), total_amount: Number(booking.total_amount), paid_amount: Number(booking.paid_amount || 0), title: String(vehicle.title) }}
+          // Only the online part: cash due at pickup is paid to the owner, not here.
+          booking={{ id: String(booking.id), total_amount: Number(booking.total_amount) - Number(booking.cash_due || 0), paid_amount: Number(booking.paid_amount || 0), title: String(vehicle.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
         />

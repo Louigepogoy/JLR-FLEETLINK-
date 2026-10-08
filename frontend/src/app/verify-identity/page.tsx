@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  Camera, Check, CheckCircle2, Clock, IdCard, ShieldCheck, Upload, XCircle,
+  Briefcase, Camera, Check, CheckCircle2, Clock, IdCard, ShieldCheck, Upload, XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
@@ -16,7 +16,18 @@ import { useAuthStore } from '@/store/authStore';
 
 type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
-const steps = ['Why We Ask', 'License Number', 'License Photo', 'Selfie', 'Review'];
+const customerSteps = ['Why We Ask', 'License Number', 'License Photo', 'Selfie', 'Review'];
+// Owners also prove their business and that they have a vehicle (OR/CR).
+const ownerSteps = ['Why We Ask', 'License Number', 'License Photo', 'Selfie', 'Business & Vehicle', 'Review'];
+
+const BUSINESS_PROOF_TYPES = [
+  { value: 'dti', label: 'DTI Business Name Registration' },
+  { value: 'mayors_permit', label: "Mayor's / Business Permit" },
+  { value: 'sec', label: 'SEC Registration' },
+  { value: 'bir_2303', label: 'BIR Certificate of Registration (Form 2303)' },
+];
+
+type DocField = 'licenseImage' | 'selfieImage' | 'businessProof' | 'ownerOr' | 'ownerCr';
 
 function VerifyIdentityContent() {
   const router = useRouter();
@@ -33,7 +44,21 @@ function VerifyIdentityContent() {
   const [licenseNumber, setLicenseNumber] = useState('');
   const [licensePreview, setLicensePreview] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
-  const [files, setFiles] = useState<{ licenseImage?: File; selfieImage?: File }>({});
+  const [files, setFiles] = useState<Partial<Record<DocField, File>>>({});
+  // Owner accounts must also add business proof and their vehicle's OR/CR.
+  const [accountType, setAccountType] = useState<'customer' | 'owner' | 'both'>('both');
+  const [businessName, setBusinessName] = useState('');
+  const [businessType, setBusinessType] = useState('');
+  const [docPreviews, setDocPreviews] = useState<Partial<Record<'businessProof' | 'ownerOr' | 'ownerCr', string>>>({});
+  const docRefs = {
+    businessProof: useRef<HTMLInputElement>(null),
+    ownerOr: useRef<HTMLInputElement>(null),
+    ownerCr: useRef<HTMLInputElement>(null),
+  };
+  const isOwnerAccount = accountType === 'owner' || accountType === 'both';
+  const steps = isOwnerAccount ? ownerSteps : customerSteps;
+  const DOCS_STEP = 5; // owners only
+  const REVIEW_STEP = steps.length;
   const [submitting, setSubmitting] = useState(false);
   const licenseRef = useRef<HTMLInputElement>(null);
   const selfieRef = useRef<HTMLInputElement>(null);
@@ -48,12 +73,13 @@ function VerifyIdentityContent() {
       const data = res.data.data;
       setStatus(data.approval_status || 'unverified');
       setRejectionReason(data.rejection_reason || '');
+      if (data.account_type) setAccountType(data.account_type);
       setShowForm(data.approval_status === 'unverified' || !data.approval_status);
     }).catch(() => {}).finally(() => setChecking(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydrated, isAuthenticated]);
 
-  const handleFile = (field: 'licenseImage' | 'selfieImage', file: File | undefined) => {
+  const handleFile = (field: DocField, file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Please upload an image file');
@@ -66,13 +92,17 @@ function VerifyIdentityContent() {
     setFiles((prev) => ({ ...prev, [field]: file }));
     const url = URL.createObjectURL(file);
     if (field === 'licenseImage') setLicensePreview(url);
-    else setSelfiePreview(url);
+    else if (field === 'selfieImage') setSelfiePreview(url);
+    else setDocPreviews((prev) => ({ ...prev, [field]: url }));
   };
 
   const canContinue = () => {
     if (step === 2) return licenseNumber.trim().length > 0;
     if (step === 3) return !!files.licenseImage;
     if (step === 4) return !!files.selfieImage;
+    if (isOwnerAccount && step === DOCS_STEP) {
+      return !!businessType && businessName.trim().length > 0 && !!files.businessProof && !!files.ownerOr && !!files.ownerCr;
+    }
     return true;
   };
 
@@ -87,6 +117,18 @@ function VerifyIdentityContent() {
       data.append('licenseNumber', licenseNumber);
       data.append('licenseImage', files.licenseImage);
       data.append('selfieImage', files.selfieImage);
+      if (isOwnerAccount) {
+        if (!files.businessProof || !files.ownerOr || !files.ownerCr || !businessType || !businessName.trim()) {
+          toast.error('Please add your business proof and your vehicle\'s OR/CR');
+          setSubmitting(false);
+          return;
+        }
+        data.append('businessProofType', businessType);
+        data.append('businessName', businessName.trim());
+        data.append('businessProof', files.businessProof);
+        data.append('ownerOr', files.ownerOr);
+        data.append('ownerCr', files.ownerCr);
+      }
 
       const res = await api.post('/verification', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -171,8 +213,14 @@ function VerifyIdentityContent() {
                   </div>
                   <h1 className="text-xl font-bold mb-2">Verify your identity</h1>
                   <p className="text-sm text-[var(--muted)] mb-6">
-                    To keep JLR Fleetlink safe for everyone, we ask every renter and vehicle owner to verify a valid
-                    driver&apos;s license before booking or listing a vehicle. It only takes a minute.
+                    {accountType === 'owner'
+                      ? <>To keep renters safe, every vehicle owner verifies a valid driver&apos;s license, a business
+                        document (DTI, Mayor&apos;s Permit, SEC, or BIR 2303), and the OR/CR of a vehicle they own before listing.</>
+                      : accountType === 'customer'
+                        ? <>To keep owners and their vehicles safe, every renter verifies a valid driver&apos;s license
+                          before booking. It only takes a minute.</>
+                        : <>To keep JLR Fleetlink safe for everyone, we ask every renter and vehicle owner to verify a valid
+                          driver&apos;s license before booking or listing a vehicle. It only takes a minute.</>}
                   </p>
                   <button onClick={() => setStep(2)} className="btn-primary w-full">Get Started</button>
                 </div>
@@ -235,7 +283,52 @@ function VerifyIdentityContent() {
                 </div>
               )}
 
-              {step === 5 && (
+              {isOwnerAccount && step === DOCS_STEP && (
+                <div className="py-4 space-y-4">
+                  <div>
+                    <h2 className="font-semibold mb-1 flex items-center gap-2"><Briefcase className="w-4 h-4" /> Business proof</h2>
+                    <p className="text-sm text-[var(--muted)] mb-3">Required for owners. Choose the document you&apos;re uploading.</p>
+                    <select className="input-field mb-3" value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
+                      <option value="">Select business document…</option>
+                      {BUSINESS_PROOF_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <input
+                      className="input-field"
+                      placeholder="Business name (as written on the document)"
+                      value={businessName}
+                      maxLength={255}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                    />
+                  </div>
+                  {([
+                    { field: 'businessProof', label: 'Business document photo', hint: 'The whole document, clear and readable' },
+                    { field: 'ownerOr', label: 'OR (Official Receipt)', hint: 'LTO Official Receipt of a vehicle you own' },
+                    { field: 'ownerCr', label: 'CR (Certificate of Registration)', hint: 'LTO Certificate of Registration of the same vehicle' },
+                  ] as const).map(({ field, label, hint }) => (
+                    <div key={field}>
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-[var(--muted)] mb-2">{hint}</p>
+                      <input ref={docRefs[field]} type="file" accept="image/*" className="hidden"
+                        onChange={(e) => handleFile(field, e.target.files?.[0])} />
+                      <button type="button" onClick={() => docRefs[field].current?.click()}
+                        className="flex h-28 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-[var(--card-border)] transition-colors hover:border-[var(--primary)]">
+                        {docPreviews[field] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={docPreviews[field]} alt={label} className="h-full w-full object-cover" />
+                        ) : (
+                          <>
+                            <Upload className="h-5 w-5 text-[var(--muted)]" />
+                            <span className="text-sm text-[var(--muted)]">Tap to upload</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                  <p className="text-xs text-[var(--muted)]">Only the JLR Fleetlink admin team sees these documents.</p>
+                </div>
+              )}
+
+              {step === REVIEW_STEP && (
                 <div className="py-4">
                   <h2 className="font-semibold mb-4">Review &amp; submit</h2>
                   <div className="space-y-3 mb-4">
@@ -254,13 +347,31 @@ function VerifyIdentityContent() {
                       </div>
                     </div>
                   </div>
+                  {isOwnerAccount && (
+                    <div className="mb-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--card-border)]">
+                        <span className="text-sm text-[var(--muted)]">Business</span>
+                        <span className="text-sm font-medium text-right">
+                          {businessName} · {BUSINESS_PROOF_TYPES.find((t) => t.value === businessType)?.label}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {(['businessProof', 'ownerOr', 'ownerCr'] as const).map((field) => (
+                          <div key={field} className="aspect-video rounded-xl overflow-hidden border border-[var(--card-border)]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {docPreviews[field] && <img src={docPreviews[field]} alt={field} className="w-full h-full object-cover" />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <button onClick={handleSubmit} disabled={submitting} className="btn-primary w-full flex items-center justify-center gap-2">
                     {submitting ? 'Submitting...' : <><Check className="w-4 h-4" /> Submit for Review</>}
                   </button>
                 </div>
               )}
 
-              {step > 1 && step < 5 && (
+              {step > 1 && step < REVIEW_STEP && (
                 <div className="flex gap-3 mt-4">
                   <button onClick={() => setStep(step - 1)} className="btn-outline flex-1">Back</button>
                   <button onClick={() => setStep(step + 1)} disabled={!canContinue()} className="btn-primary flex-1 disabled:opacity-50">
@@ -268,8 +379,8 @@ function VerifyIdentityContent() {
                   </button>
                 </div>
               )}
-              {step === 5 && (
-                <button onClick={() => setStep(4)} className="text-sm text-[var(--muted)] hover:underline w-full text-center mt-3">
+              {step === REVIEW_STEP && (
+                <button onClick={() => setStep(REVIEW_STEP - 1)} className="text-sm text-[var(--muted)] hover:underline w-full text-center mt-3">
                   Back
                 </button>
               )}

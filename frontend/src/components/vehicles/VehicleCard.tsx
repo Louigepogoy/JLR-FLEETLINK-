@@ -7,7 +7,7 @@ import { BadgeCheck, LocateFixed, MapPin, Users, Fuel, Settings2 } from 'lucide-
 import { formatCurrency } from '@/lib/utils';
 import { formatPlace } from '@/lib/philippines';
 import { RatingBadge } from '@/components/reviews/StarRating';
-import { useAuthStore } from '@/store/authStore';
+import { canRent, useAuthStore } from '@/store/authStore';
 
 interface Vehicle {
   id: string;
@@ -42,6 +42,8 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
   const [imageFailed, setImageFailed] = useState(false);
   // Admins can't book, so their card button just opens the listing.
   const isAdmin = useAuthStore((s) => s.isAuthenticated && s.user?.role === 'admin');
+  // Owner accounts can't book, so their card button just opens the listing too.
+  const viewOnly = useAuthStore((s) => s.isAuthenticated && s.user?.role !== 'admin' && !canRent(s.user));
   const image = imageFailed ? undefined : vehicle.images?.[0];
   const pickupText = formatPlace(vehicle.city || vehicle.location, vehicle.province);
 
@@ -117,7 +119,7 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
             <span className="text-xs text-[var(--muted)]">/day</span>
           </div>
           <Link href={`/vehicles/${vehicle.id}`} className="btn-primary shrink-0 whitespace-nowrap text-sm py-2 px-4">
-            {isAdmin ? 'View Details' : 'Book Now'}
+            {isAdmin || viewOnly ? 'View Details' : 'Book Now'}
           </Link>
         </div>
       </div>

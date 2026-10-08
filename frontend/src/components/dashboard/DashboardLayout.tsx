@@ -32,6 +32,32 @@ const BADGE_PATHS = new Set([
 
 type NavItem = { href: string; label: string; icon: MiniIcon; showUnread?: boolean };
 
+// Customer and owner accounts get their own dashboard: same pages, but each menu leads with what that
+// account is for. Accounts from before the customer/owner split ('both') keep the combined menu.
+const customerNav: NavItem[] = [
+  { href: '/', label: 'Home', icon: HomeIcon },
+  { href: '/dashboard', label: 'Overview', icon: OverviewIcon },
+  { href: '/vehicles', label: 'Browse Vehicles', icon: BrowseCarIcon },
+  { href: '/dashboard/bookings', label: 'My Bookings', icon: CalendarCheckIcon },
+  { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: ReceiptIcon },
+  { href: '/dashboard/vehicle-report', label: 'Rental Report', icon: ChartIcon },
+  { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
+];
+
+const ownerNav: NavItem[] = [
+  { href: '/', label: 'Home', icon: HomeIcon },
+  { href: '/dashboard', label: 'Overview', icon: OverviewIcon },
+  { href: '/dashboard/vehicles', label: 'My Vehicles', icon: MyVehicleIcon },
+  { href: '/dashboard/booking-requests', label: 'Booking Requests', icon: RequestsIcon },
+  { href: '/dashboard/earnings', label: 'Earnings', icon: EarningsIcon },
+  { href: '/dashboard/vehicle-report', label: 'Vehicle Report', icon: ChartIcon },
+  { href: '/dashboard/transactions', label: 'Transactions', icon: ReceiptIcon },
+  { href: '/dashboard/subscription', label: 'Subscription', icon: CrownIcon },
+  { href: '/dashboard/messages', label: 'Messages', icon: MessagesIcon, showUnread: true },
+  { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
+];
+
 const navByRole: Record<string, NavItem[]> = {
   user: [
     { href: '/', label: 'Home', icon: HomeIcon },
@@ -44,7 +70,7 @@ const navByRole: Record<string, NavItem[]> = {
     { href: '/dashboard/earnings', label: 'Earnings', icon: EarningsIcon },
     { href: '/dashboard/vehicle-report', label: 'Vehicle Report', icon: ChartIcon },
     { href: '/dashboard/transactions', label: 'Transactions', icon: ReceiptIcon },
-    { href: '/dashboard/subscription', label: 'Become a Provider', icon: CrownIcon },
+    { href: '/dashboard/subscription', label: 'Subscription', icon: CrownIcon },
     { href: '/dashboard/support', label: 'Support', icon: SupportIcon },
   ],
   admin: [
@@ -74,7 +100,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isAuthenticated, hasHydrated, logout } = useAuthStore();
+  const { user, isAuthenticated, hasHydrated, logout, updateUser } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
   // Pending-item counts per sidebar path (e.g. booking requests waiting for handover).
@@ -90,6 +116,18 @@ export default function DashboardLayout({
     const timer = setInterval(loadUnread, UNREAD_POLL_MS);
     return () => clearInterval(timer);
   }, [hasHydrated, isAuthenticated]);
+
+  // The saved user is a login-time snapshot; refresh it so a changed account type (customer/owner)
+  // or verification status shows the right dashboard without signing out and back in.
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated) return;
+    api.get('/auth/me')
+      .then((res) => {
+        const fresh = res.data.data?.user;
+        if (fresh) updateUser({ account_type: fresh.account_type, approval_status: fresh.approval_status });
+      })
+      .catch(() => {});
+  }, [hasHydrated, isAuthenticated, updateUser]);
 
   // Opening a page with a badge marks it as seen, so its count clears until something new arrives.
   useEffect(() => {
@@ -107,7 +145,13 @@ export default function DashboardLayout({
     }
   }, [hasHydrated, isAuthenticated, user, role, router]);
 
-  const navItems = navByRole[role] || [];
+  const accountType = role === 'admin' ? 'admin' : user?.account_type || 'both';
+  const navItems = accountType === 'customer' ? customerNav
+    : accountType === 'owner' ? ownerNav
+      : navByRole[role] || [];
+  const dashboardLabel = {
+    admin: 'Admin Dashboard', customer: 'Customer Dashboard', owner: 'Owner Dashboard', both: 'Dashboard',
+  }[accountType];
 
   const handleLogout = () => {
     logout();
@@ -125,7 +169,7 @@ export default function DashboardLayout({
       )}>
         <div className="p-6 border-b border-[var(--card-border)]">
           <Link href="/" className="flex items-center gap-2.5"><BrandLogo className="h-9 w-9" /><span className="text-xl font-bold gradient-text">JLR Fleetlink</span></Link>
-          <p className="text-xs text-[var(--muted)] mt-1">{role === 'admin' ? 'Admin Dashboard' : 'Dashboard'}</p>
+          <p className="text-xs text-[var(--muted)] mt-1">{dashboardLabel}</p>
         </div>
         {/* pb-24 keeps the last menu items clear of the Logout button pinned to the bottom. */}
         <nav className="p-4 pb-24 space-y-1">
@@ -168,7 +212,7 @@ export default function DashboardLayout({
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="min-w-0 flex-1 flex flex-col min-h-screen">
         <header className="sticky top-0 z-30 glass-card border-b border-[var(--card-border)] px-6 py-4 flex items-center justify-between">
           <button className="lg:hidden" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X /> : <Menu />}

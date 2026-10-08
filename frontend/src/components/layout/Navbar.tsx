@@ -83,7 +83,7 @@ export default function Navbar() {
             <span className="text-xl font-bold gradient-text">JLR Fleetlink</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-8">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -107,7 +107,7 @@ export default function Navbar() {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             <ThemeToggle />
 
             {!isAuthenticated ? (
@@ -135,7 +135,7 @@ export default function Navbar() {
             )}
           </div>
 
-          <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
+          <button className="lg:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
             {mobileOpen ? <X /> : <Menu />}
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function Navbar() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden mt-4 glass-card p-4 space-y-3"
+              className="lg:hidden mt-4 glass-card p-4 space-y-3"
             >
               {navLinks.map((link) => (
                 <Link

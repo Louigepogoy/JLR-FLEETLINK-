@@ -33,6 +33,15 @@ const calculateRentalPeriod = (startDate, pickupTime, endDate, dropoffTime) => {
   return { minutes, days: Math.ceil(minutes / MINUTES_PER_RENTAL_DAY) };
 };
 
+// Cash bookings pay this share of the total online to reserve (never less than the commission).
+const CASH_RESERVATION_PERCENT = 15;
+const cashReservationAmount = (total, commissionPct) =>
+  Math.round(total * Math.max(CASH_RESERVATION_PERCENT, commissionPct)) / 100;
+
+// Customer accounts book vehicles, owner accounts list them; accounts from before the split do both.
+const canRent = (user) => ['customer', 'both'].includes(user?.account_type || 'both');
+const canList = (user) => ['owner', 'both'].includes(user?.account_type || 'both');
+
 const sanitizeUser = (user) => {
   const { password_hash, ...safe } = user;
   return safe;
@@ -50,4 +59,8 @@ module.exports = {
   calculateRentalPeriod,
   sanitizeUser,
   calculateCommission,
+  canRent,
+  canList,
+  CASH_RESERVATION_PERCENT,
+  cashReservationAmount,
 };
