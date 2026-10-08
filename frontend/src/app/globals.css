@@ -73,6 +73,15 @@
   box-shadow: inset 0 0 0 1px var(--illo-tile-ring);
 }
 
+/* Active sidebar item sits on the blue gradient, where the blue icon would disappear: make it white. */
+.nav-active .illo-tile {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+.nav-active .illo-tile svg {
+  color: #ffffff;
+}
+
 /* Leaflet maps (components/maps/LeafletMaps.tsx) */
 .ph-map {
   position: relative;

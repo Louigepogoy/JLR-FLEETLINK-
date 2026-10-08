@@ -140,7 +140,7 @@ export default function DashboardLayout({
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all',
                 pathname === item.href
-                  ? 'gradient-bg text-white shadow-lg'
+                  ? 'nav-active gradient-bg text-white shadow-lg'
                   : 'hover:bg-[var(--primary)]/10 text-[var(--muted)]'
               )}
             >
