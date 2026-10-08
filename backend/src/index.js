@@ -36,8 +36,17 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 app.use(morgan('dev'));
+// FRONTEND_URL is the main site (also used for payment return links and email links). Other addresses
+// that serve the same frontend, e.g. a custom domain plus the *.vercel.app URL, go in
+// EXTRA_FRONTEND_URLS, comma-separated.
+const extraFrontendUrls = (process.env.EXTRA_FRONTEND_URLS || '')
+  .split(',')
+  .map((url) => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
 const allowedOrigins = new Set([
-  process.env.FRONTEND_URL || 'http://localhost:3000',
+  (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, ''),
+  ...extraFrontendUrls,
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:3002',

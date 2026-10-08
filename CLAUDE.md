@@ -41,7 +41,7 @@ Postgres (Neon recommended). There is no generic migration runner — `backend/s
 ### Backend request flow
 Plain layered Express app, no ORM — raw SQL via `pg` (`backend/src/config/db.js` exports a pooled `query(text, params)` helper). Pattern per feature: `routes/*.routes.js` → `middleware/auth.js` (`authenticate`, `authorize(...roles)`) → `controllers/*Controller.js` (SQL + response shaping) → occasionally `services/` (e.g. `paymentService.js` simulates GCash/Card processing) or `utils/`.
 
-All routes are mounted in `backend/src/index.js` under `/api/<resource>` (auth, users, vehicles, bookings, payments, transactions, commission, notifications, subscriptions, reports). CORS is an explicit allow-list of localhost origins plus `FRONTEND_URL` — update `allowedOrigins` in `index.js` when adding new frontend origins.
+All routes are mounted in `backend/src/index.js` under `/api/<resource>` (auth, users, vehicles, bookings, payments, transactions, commission, notifications, subscriptions, reports). CORS is an explicit allow-list of localhost origins plus `FRONTEND_URL` — add extra deployed frontend origins (custom domain, `*.vercel.app`) to the comma-separated `EXTRA_FRONTEND_URLS` env var rather than editing `allowedOrigins` in `index.js`.
 
 Auth: JWT bearer tokens (`Authorization: Bearer <token>`), verified in `authenticate` middleware which also re-fetches the user row and enforces `is_active` and `approval_status` (non-admins with `approval_status !== 'approved'` are rejected — this is the driver's-license/selfie admin-approval gate described in the README). `authorize('admin', 'owner', ...)` gates by `role`.
 
