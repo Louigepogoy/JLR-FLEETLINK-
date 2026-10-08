@@ -10,6 +10,7 @@ import Footer from '@/components/layout/Footer';
 import api from '@/lib/api';
 import { noSpaces } from '@/lib/utils';
 import PasswordChecklist, { isStrongPassword } from '@/components/auth/PasswordChecklist';
+import PasswordInput from '@/components/auth/PasswordInput';
 import { useAuthStore } from '@/store/authStore';
 
 type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
@@ -200,25 +201,22 @@ export default function ProfilePage() {
                 <h2 className="text-2xl font-bold">Change Password</h2>
                 <p className="text-sm text-[var(--muted)]">Use at least 8 characters for your new password.</p>
               </div>
-              <input
-                className="input-field"
-                type="password"
+              <PasswordInput
                 placeholder="Current password"
+                autoComplete="current-password"
                 value={passwordForm.currentPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: noSpaces(e.target.value) })}
               />
-              <input
-                className="input-field"
-                type="password"
+              <PasswordInput
                 placeholder="New password"
+                autoComplete="new-password"
                 value={passwordForm.newPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: noSpaces(e.target.value) })}
               />
               {passwordForm.newPassword && <PasswordChecklist password={passwordForm.newPassword} />}
-              <input
-                className="input-field"
-                type="password"
+              <PasswordInput
                 placeholder="Confirm new password"
+                autoComplete="new-password"
                 value={passwordForm.confirmPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: noSpaces(e.target.value) })}
               />
