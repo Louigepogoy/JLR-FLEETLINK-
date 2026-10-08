@@ -1,5 +1,5 @@
 const { query } = require('../config/db');
-const { sendAdminAlertEmail } = require('./mailer');
+const { sendAdminAlertEmail, isEmailConfigured } = require('./mailer');
 
 const createNotification = async (userId, title, message, type = 'system', link = null) => {
   await query(
@@ -23,7 +23,7 @@ const notifyAdmins = async (title, message, type = 'alert', link = null, emailTe
     ));
 
     const emails = admins.rows.map((admin) => admin.email).filter(Boolean);
-    if (emails.length && process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD) {
+    if (emails.length && isEmailConfigured()) {
       const url = link && process.env.FRONTEND_URL ? `\n\nOpen: ${process.env.FRONTEND_URL}${link}` : '';
       // Not awaited: sending mail is slow and shouldn't delay the user's response.
       sendAdminAlertEmail(emails, title, `${emailText}${url}`)
