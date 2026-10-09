@@ -14,7 +14,36 @@ import {
 } from 'lucide-react';
 import ProvinceSelect from '@/components/ui/ProvinceSelect';
 import { vehicleTypes } from '@/lib/utils';
-import { useAuthStore } from '@/store/authStore';
+import { canList, useAuthStore } from '@/store/authStore';
+
+// The "rent out" banner speaks to whoever is looking: guests and owners are invited to list a vehicle,
+// customers (who can't list) are sent to find one, and admins go to their dashboard.
+const BANNER = {
+  owner: {
+    title: ['Do You Have', 'Something', 'To Rent?'],
+    text: 'List your car, van, truck, or motorcycle and start earning from verified renters nationwide.',
+    cta: 'Rent Out Your Vehicle',
+    href: '/dashboard/vehicles',
+  },
+  guest: {
+    title: ['Do You Have', 'Something', 'To Rent?'],
+    text: 'List your car, van, truck, or motorcycle and start earning from verified renters nationwide.',
+    cta: 'Rent Out Your Vehicle',
+    href: '/auth/register',
+  },
+  customer: {
+    title: ['Need a Ride?', 'Rent One', 'Today.'],
+    text: 'Book verified cars, vans, and motorcycles from owners near you, with payments protected until pickup.',
+    cta: 'Browse Vehicles',
+    href: '/vehicles',
+  },
+  admin: {
+    title: ['Keep the', 'Platform', 'Running.'],
+    text: 'Review verifications, bookings, disputes, and payouts from your admin dashboard.',
+    cta: 'Go to Admin Dashboard',
+    href: '/dashboard/admin',
+  },
+} as const;
 
 // Fades the hero picture into the page so it reads as a background, not a framed box: the left side
 // fades out behind the text and the right side runs to the edge of the window.
@@ -24,7 +53,11 @@ const HERO_IMAGE_MASK = [
 ].join(' ');
 
 export default function Hero() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
+  const banner = !isAuthenticated || !user ? BANNER.guest
+    : user.role === 'admin' ? BANNER.admin
+      : canList(user) ? BANNER.owner
+        : BANNER.customer;
   const [search, setSearch] = useState({ province: '', type: '' });
 
   const vehicleHref = useMemo(() => {
@@ -131,20 +164,20 @@ export default function Hero() {
             className="max-w-[48%] sm:max-w-[42%] lg:max-w-md"
           >
             <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight mb-3 sm:mb-6 text-[#061934] dark:text-white">
-              Do You Have
-              <span className="block text-blue-600 dark:text-blue-500">Something</span>
-              To Rent?
+              {banner.title[0]}
+              <span className="block text-blue-600 dark:text-blue-500">{banner.title[1]}</span>
+              {banner.title[2]}
             </h1>
 
             <p className="max-w-[82%] lg:max-w-none text-[11px] leading-snug sm:text-base lg:text-lg text-[var(--muted)] mb-4 sm:mb-8">
-              List your car, van, truck, or motorcycle and start earning from verified renters nationwide.
+              {banner.text}
             </p>
 
             <Link
-              href={isAuthenticated ? '/dashboard/vehicles' : '/auth/register'}
+              href={banner.href}
               className="btn-primary inline-flex items-center whitespace-nowrap gap-1.5 sm:gap-2 !px-4 !py-2.5 !text-xs sm:!px-8 sm:!py-4 sm:!text-base"
             >
-              Rent Out Your Vehicle <ArrowRight className="w-4 h-4" />
+              {banner.cta} <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>
         </div>

@@ -47,7 +47,7 @@ const faqSections = [
       },
       {
         q: 'Do I need a subscription to list vehicles?',
-        a: 'Yes. Go to Become a Provider in your dashboard to choose a plan. Basic is a free trial with up to 5 vehicles; Pro and Premium unlock higher vehicle limits and priority placement.',
+        a: 'Yes. With an Owner account, go to Subscription in your dashboard to choose a plan. Basic is a free trial with up to 5 vehicles; Pro, Premium, and Enterprise unlock higher vehicle limits and featured placement, and you can buy extra vehicle slots.',
       },
       {
         q: 'Can I block out dates when my vehicle isn\'t available?',
