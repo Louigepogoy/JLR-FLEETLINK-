@@ -11,13 +11,14 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import Stepper from '@/components/ui/Stepper';
+import CameraCapture from '@/components/auth/CameraCapture';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
 type VerificationStatus = 'unverified' | 'pending' | 'approved' | 'rejected';
 
 const customerSteps = ['Why We Ask', 'License Number', 'License Photo', 'Selfie', 'Review'];
-// Owners also prove their business and that they have a vehicle (OR/CR).
+// Owners also prove they have a vehicle (OR/CR); business proof is optional for individual owners.
 const ownerSteps = ['Why We Ask', 'License Number', 'License Photo', 'Selfie', 'Business & Vehicle', 'Review'];
 
 const BUSINESS_PROOF_TYPES = [
@@ -45,7 +46,7 @@ function VerifyIdentityContent() {
   const [licensePreview, setLicensePreview] = useState<string | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [files, setFiles] = useState<Partial<Record<DocField, File>>>({});
-  // Owner accounts must also add business proof and their vehicle's OR/CR.
+  // Owner accounts must also add their vehicle's OR/CR; business proof is optional.
   const [accountType, setAccountType] = useState<'customer' | 'owner' | 'both'>('both');
   const [businessName, setBusinessName] = useState('');
   const [businessType, setBusinessType] = useState('');
@@ -61,7 +62,6 @@ function VerifyIdentityContent() {
   const REVIEW_STEP = steps.length;
   const [submitting, setSubmitting] = useState(false);
   const licenseRef = useRef<HTMLInputElement>(null);
-  const selfieRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!hasHydrated) return;
@@ -96,13 +96,15 @@ function VerifyIdentityContent() {
     else setDocPreviews((prev) => ({ ...prev, [field]: url }));
   };
 
+  // Business proof is optional, but once started it must be complete (document type, name, and photo).
+  const businessStarted = Boolean(businessType || businessName.trim() || files.businessProof);
+  const businessComplete = !businessStarted || Boolean(businessType && businessName.trim() && files.businessProof);
+
   const canContinue = () => {
     if (step === 2) return licenseNumber.trim().length > 0;
     if (step === 3) return !!files.licenseImage;
     if (step === 4) return !!files.selfieImage;
-    if (isOwnerAccount && step === DOCS_STEP) {
-      return !!businessType && businessName.trim().length > 0 && !!files.businessProof && !!files.ownerOr && !!files.ownerCr;
-    }
+    if (isOwnerAccount && step === DOCS_STEP) return !!files.ownerOr && !!files.ownerCr && businessComplete;
     return true;
   };
 
@@ -118,16 +120,20 @@ function VerifyIdentityContent() {
       data.append('licenseImage', files.licenseImage);
       data.append('selfieImage', files.selfieImage);
       if (isOwnerAccount) {
-        if (!files.businessProof || !files.ownerOr || !files.ownerCr || !businessType || !businessName.trim()) {
-          toast.error('Please add your business proof and your vehicle\'s OR/CR');
+        if (!files.ownerOr || !files.ownerCr || !businessComplete) {
+          toast.error(!businessComplete
+            ? 'Complete your business proof (document type, name, and photo), or clear it if you have none'
+            : 'Please add your vehicle\'s OR and CR');
           setSubmitting(false);
           return;
         }
-        data.append('businessProofType', businessType);
-        data.append('businessName', businessName.trim());
-        data.append('businessProof', files.businessProof);
         data.append('ownerOr', files.ownerOr);
         data.append('ownerCr', files.ownerCr);
+        if (files.businessProof) {
+          data.append('businessProofType', businessType);
+          data.append('businessName', businessName.trim());
+          data.append('businessProof', files.businessProof);
+        }
       }
 
       const res = await api.post('/verification', data, {
@@ -144,6 +150,27 @@ function VerifyIdentityContent() {
       setSubmitting(false);
     }
   };
+
+  const renderDocUpload = (field: 'businessProof' | 'ownerOr' | 'ownerCr', label: string, hint: string) => (
+    <div key={field}>
+      <p className="text-sm font-medium">{label}</p>
+      <p className="text-xs text-[var(--muted)] mb-2">{hint}</p>
+      <input ref={docRefs[field]} type="file" accept="image/*" className="hidden"
+        onChange={(e) => handleFile(field, e.target.files?.[0])} />
+      <button type="button" onClick={() => docRefs[field].current?.click()}
+        className="flex h-28 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-[var(--card-border)] transition-colors hover:border-[var(--primary)]">
+        {docPreviews[field] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={docPreviews[field]} alt={label} className="h-full w-full object-cover" />
+        ) : (
+          <>
+            <Upload className="h-5 w-5 text-[var(--muted)]" />
+            <span className="text-sm text-[var(--muted)]">Tap to upload</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
 
   if (checking) {
     return (
@@ -214,8 +241,8 @@ function VerifyIdentityContent() {
                   <h1 className="text-xl font-bold mb-2">Verify your identity</h1>
                   <p className="text-sm text-[var(--muted)] mb-6">
                     {accountType === 'owner'
-                      ? <>To keep renters safe, every vehicle owner verifies a valid driver&apos;s license, a business
-                        document (DTI, Mayor&apos;s Permit, SEC, or BIR 2303), and the OR/CR of a vehicle they own before listing.</>
+                      ? <>To keep renters safe, every vehicle owner verifies a valid driver&apos;s license, a live selfie, and the
+                        OR/CR of a vehicle they own before listing. Renting out as a business? You can add your business proof too.</>
                       : accountType === 'customer'
                         ? <>To keep owners and their vehicles safe, every renter verifies a valid driver&apos;s license
                           before booking. It only takes a minute.</>
@@ -265,30 +292,29 @@ function VerifyIdentityContent() {
               {step === 4 && (
                 <div className="py-4">
                   <h2 className="font-semibold mb-1 flex items-center gap-2"><Camera className="w-4 h-4" /> Take a live selfie</h2>
-                  <p className="text-sm text-[var(--muted)] mb-4">Hold your license next to your face so we can match them.</p>
-                  <input ref={selfieRef} type="file" accept="image/*" capture="user" className="hidden"
-                    onChange={(e) => handleFile('selfieImage', e.target.files?.[0])} />
-                  <button type="button" onClick={() => selfieRef.current?.click()}
-                    className="w-full h-48 rounded-xl border-2 border-dashed border-[var(--card-border)] flex flex-col items-center justify-center gap-2 hover:border-[var(--primary)] transition-colors overflow-hidden">
-                    {selfiePreview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={selfiePreview} alt="Selfie" className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <Camera className="w-8 h-8 text-[var(--muted)]" />
-                        <span className="text-sm text-[var(--muted)]">Tap to take a selfie</span>
-                      </>
-                    )}
-                  </button>
+                  <p className="text-sm text-[var(--muted)] mb-4">
+                    Hold your license next to your face so we can match them. Allow the camera when your browser asks.
+                  </p>
+                  <CameraCapture initialPreview={selfiePreview} onCapture={(file) => handleFile('selfieImage', file)} />
                 </div>
               )}
 
               {isOwnerAccount && step === DOCS_STEP && (
                 <div className="py-4 space-y-4">
                   <div>
-                    <h2 className="font-semibold mb-1 flex items-center gap-2"><Briefcase className="w-4 h-4" /> Business proof</h2>
-                    <p className="text-sm text-[var(--muted)] mb-3">Required for owners. Choose the document you&apos;re uploading.</p>
-                    <select className="input-field mb-3" value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
+                    <h2 className="font-semibold mb-1">Vehicle documents</h2>
+                    <p className="text-sm text-[var(--muted)]">Required: the OR and CR of a vehicle you own.</p>
+                  </div>
+                  {renderDocUpload('ownerOr', 'OR (Official Receipt)', 'LTO Official Receipt of a vehicle you own')}
+                  {renderDocUpload('ownerCr', 'CR (Certificate of Registration)', 'LTO Certificate of Registration of the same vehicle')}
+                  <div className="space-y-3 border-t border-[var(--card-border)] pt-4">
+                    <h2 className="font-semibold flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" /> Business proof <span className="font-normal text-[var(--muted)]">(optional)</span>
+                    </h2>
+                    <p className="text-sm text-[var(--muted)]">
+                      Only if you rent out as a registered business. Individual owners can skip this.
+                    </p>
+                    <select className="input-field" value={businessType} onChange={(e) => setBusinessType(e.target.value)}>
                       <option value="">Select business document…</option>
                       {BUSINESS_PROOF_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
@@ -299,31 +325,13 @@ function VerifyIdentityContent() {
                       maxLength={255}
                       onChange={(e) => setBusinessName(e.target.value)}
                     />
+                    {renderDocUpload('businessProof', 'Business document photo', 'The whole document, clear and readable')}
+                    {!businessComplete && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        To add business proof, fill in the document type, the business name, and the photo, or leave all three empty.
+                      </p>
+                    )}
                   </div>
-                  {([
-                    { field: 'businessProof', label: 'Business document photo', hint: 'The whole document, clear and readable' },
-                    { field: 'ownerOr', label: 'OR (Official Receipt)', hint: 'LTO Official Receipt of a vehicle you own' },
-                    { field: 'ownerCr', label: 'CR (Certificate of Registration)', hint: 'LTO Certificate of Registration of the same vehicle' },
-                  ] as const).map(({ field, label, hint }) => (
-                    <div key={field}>
-                      <p className="text-sm font-medium">{label}</p>
-                      <p className="text-xs text-[var(--muted)] mb-2">{hint}</p>
-                      <input ref={docRefs[field]} type="file" accept="image/*" className="hidden"
-                        onChange={(e) => handleFile(field, e.target.files?.[0])} />
-                      <button type="button" onClick={() => docRefs[field].current?.click()}
-                        className="flex h-28 w-full items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-[var(--card-border)] transition-colors hover:border-[var(--primary)]">
-                        {docPreviews[field] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={docPreviews[field]} alt={label} className="h-full w-full object-cover" />
-                        ) : (
-                          <>
-                            <Upload className="h-5 w-5 text-[var(--muted)]" />
-                            <span className="text-sm text-[var(--muted)]">Tap to upload</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  ))}
                   <p className="text-xs text-[var(--muted)]">Only the JLR Fleetlink admin team sees these documents.</p>
                 </div>
               )}
@@ -352,11 +360,13 @@ function VerifyIdentityContent() {
                       <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-[var(--card-border)]">
                         <span className="text-sm text-[var(--muted)]">Business</span>
                         <span className="text-sm font-medium text-right">
-                          {businessName} · {BUSINESS_PROOF_TYPES.find((t) => t.value === businessType)?.label}
+                          {files.businessProof
+                            ? <>{businessName} · {BUSINESS_PROOF_TYPES.find((t) => t.value === businessType)?.label}</>
+                            : 'Individual owner (no business proof)'}
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
-                        {(['businessProof', 'ownerOr', 'ownerCr'] as const).map((field) => (
+                        {(['ownerOr', 'ownerCr', 'businessProof'] as const).filter((field) => docPreviews[field]).map((field) => (
                           <div key={field} className="aspect-video rounded-xl overflow-hidden border border-[var(--card-border)]">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             {docPreviews[field] && <img src={docPreviews[field]} alt={field} className="w-full h-full object-cover" />}

@@ -46,17 +46,20 @@ const submitVerification = async (req, res, next) => {
     const orFile = isOwner ? req.files?.ownerOr?.[0] : null;
     const crFile = isOwner ? req.files?.ownerCr?.[0] : null;
     if (isOwner) {
+      // The vehicle's OR/CR is required. Business proof is optional (individual owners have none),
+      // but if any of it is sent, all of it is needed so admins get the full picture.
+      const businessStarted = Boolean(businessType || businessName || businessFile);
       const missing = [
-        !businessType && 'business document type',
-        !businessName && 'business name',
-        !businessFile && 'business proof photo',
         !orFile && 'OR (Official Receipt)',
         !crFile && 'CR (Certificate of Registration)',
+        businessStarted && !businessType && 'business document type',
+        businessStarted && !businessName && 'business name',
+        businessStarted && !businessFile && 'business proof photo',
       ].filter(Boolean);
       if (missing.length) {
         return res.status(400).json({
           success: false,
-          message: `Owner verification also needs your business proof and your vehicle's OR/CR. Missing: ${missing.join(', ')}.`,
+          message: `Owner verification needs your vehicle's OR/CR (and complete business proof if you add it). Missing: ${missing.join(', ')}.`,
         });
       }
     }
@@ -112,7 +115,7 @@ const submitVerification = async (req, res, next) => {
         createNotification(
           admin.id,
           'New Identity Verification Submitted',
-          `${user.full_name} (${req.user.account_type === 'owner' ? 'Owner' : req.user.account_type === 'customer' ? 'Customer' : 'User'}) submitted a driver's license${businessProofUrl ? `, ${BUSINESS_PROOF_TYPES[businessType]}, and vehicle OR/CR` : ''} for verification. License: ${licenseNumber}.`,
+          `${user.full_name} (${req.user.account_type === 'owner' ? 'Owner' : req.user.account_type === 'customer' ? 'Customer' : 'User'}) submitted a driver's license${ownerOrUrl ? `, vehicle OR/CR${businessProofUrl ? `, and ${BUSINESS_PROOF_TYPES[businessType]}` : ''}` : ''} for verification. License: ${licenseNumber}.`,
           'alert',
           '/dashboard/admin/approvals'
         )
