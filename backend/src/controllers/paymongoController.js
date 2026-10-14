@@ -1,6 +1,7 @@
 const { query } = require('../config/db');
 const { createCheckoutSession, getCheckoutSession, verifyWebhookEvent } = require('../services/paymongoService');
-const { finalizeBookingPayment } = require('./paymentController');
+const { finalizeBookingPayment, finalizeExtensionPayment } = require('./paymentController');
+const { getExtensionQuote, extensionOnlineAmount } = require('../services/extensionService');
 const {
   PLANS, activateSubscription, isFirstPaidSubscription, priceForUser, rejectNonOwner,
   EXTRA_VEHICLE_SLOT_PRICE, MAX_EXTRA_SLOTS_PER_PURCHASE, getActivePaidSubscription, addExtraVehicleSlots,
@@ -52,6 +53,16 @@ const finalizeCheckoutSession = async (checkoutSession) => {
       paymentMethod,
       referenceNumber,
       metadata: { paymongoCheckoutSessionId: checkoutSession.id },
+    });
+  } else if (intent.purpose === 'booking_extension') {
+    await finalizeExtensionPayment({
+      bookingId: intent.payload.bookingId,
+      hours: Number(intent.payload.hours),
+      totalAmount: parseFloat(intent.payload.totalAmount),
+      amount: parseFloat(intent.amount),
+      paymentMethod,
+      referenceNumber,
+      metadata: { paymongoCheckoutSessionId: checkoutSession.id, extension: true },
     });
   } else if (intent.purpose === 'subscription') {
     const plan = PLANS[intent.payload.planId];
@@ -155,6 +166,53 @@ const createBookingPaymentCheckout = async (req, res, next) => {
       `INSERT INTO payment_intents (external_id, gateway_session_id, purpose, user_id, amount, payload, checkout_url)
        VALUES ($1, $2, 'booking_payment', $3, $4, $5, $6)`,
       [externalId, session.id, req.user.id, amount, JSON.stringify({ bookingId }), session.checkoutUrl]
+    );
+
+    res.status(201).json({ success: true, data: { checkoutUrl: session.checkoutUrl } });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
+// "Add hours" to a trip in use. The hours are re-validated against the vehicle's next booking when the
+// payment lands (finalizeExtensionPayment), so the amount/hours here only become a payment_intent.
+const createExtensionCheckout = async (req, res, next) => {
+  try {
+    const { bookingId, hours } = req.body;
+    if (!bookingId) {
+      return res.status(400).json({ success: false, message: 'bookingId and hours are required' });
+    }
+    const quote = await getExtensionQuote(bookingId, hours);
+    if (!quote) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (quote.booking.customer_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+    if (!quote.allowed) {
+      return res.status(400).json({ success: false, message: quote.reason });
+    }
+
+    const settings = await query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+    const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+    const onlineAmount = extensionOnlineAmount(quote.booking, quote.amount, commissionPct);
+
+    const externalId = `extension-${bookingId}-${Date.now()}`;
+    const session = await createCheckoutSession({
+      referenceNumber: externalId,
+      amount: onlineAmount,
+      description: `Add ${quote.hours} hour${quote.hours === 1 ? '' : 's'} - ${quote.booking.title}`,
+      payerEmail: req.user.email,
+      successUrl: `${FRONTEND_URL}/dashboard/bookings?payment=success`,
+      cancelUrl: `${FRONTEND_URL}/dashboard/bookings?payment=failed`,
+    });
+
+    await query(
+      `INSERT INTO payment_intents (external_id, gateway_session_id, purpose, user_id, amount, payload, checkout_url)
+       VALUES ($1, $2, 'booking_extension', $3, $4, $5, $6)`,
+      [externalId, session.id, req.user.id, onlineAmount,
+        JSON.stringify({ bookingId, hours: quote.hours, totalAmount: quote.amount }), session.checkoutUrl]
     );
 
     res.status(201).json({ success: true, data: { checkoutUrl: session.checkoutUrl } });
@@ -317,6 +375,7 @@ module.exports = {
   createBookingPaymentCheckout,
   createSubscriptionCheckout,
   createExtraSlotsCheckout,
+  createExtensionCheckout,
   handleWebhook,
   reconcilePendingPayments,
   finalizeCheckoutSession,

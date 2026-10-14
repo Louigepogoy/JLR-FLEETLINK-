@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlarmClock, Calendar, CalendarClock, Clock, FileText, MapPin, MessageCircle, Star } from 'lucide-react';
+import { AlarmClock, Calendar, CalendarClock, Clock, FileText, MapPin, MessageCircle, Star, TimerReset } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
@@ -21,6 +21,7 @@ import BookingStatusTabs, { matchesBookingTab, type BookingTab } from '@/compone
 import type { InspectionFields } from '@/lib/inspection';
 import { fetchPendingReviews, REVIEWS_CHANGED_EVENT, type PendingReview } from '@/lib/reviews';
 import BookingId from '@/components/booking/BookingId';
+import ExtendBookingModal from '@/components/booking/ExtendBookingModal';
 
 type CustomerBooking = InspectionFields & {
   id: string;
@@ -36,6 +37,8 @@ type CustomerBooking = InspectionFields & {
   // Late return: started hours past the agreed drop-off and the fee for them (included in total_amount).
   late_hours?: number;
   late_fee?: number | string;
+  // Hours added while using the vehicle (end_date/dropoff_time already include them).
+  extended_hours?: number;
   // Cash bookings: cash still to pay the owner at pickup.
   payment_option?: 'online' | 'cash';
   cash_due?: number | string;
@@ -68,6 +71,7 @@ function MyBookingsContent() {
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
   const [showPayment, setShowPayment] = useState(false);
+  const [extendFor, setExtendFor] = useState<CustomerBooking | null>(null);
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
   const [ratingFor, setRatingFor] = useState<PendingReview | null>(null);
 
@@ -189,8 +193,14 @@ function MyBookingsContent() {
                     <MapPin className="h-4 w-4 text-[var(--primary)]" />
                     {[b.pickup_address, b.barangay, b.city].filter(Boolean).join(', ')}
                   </p>
+                  {Number(b.extended_hours) > 0 && (
+                    <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-1 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                      <TimerReset className="h-3.5 w-3.5" />
+                      Extended +{b.extended_hours}h · now ends {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
+                    </p>
+                  )}
                   {b.with_driver && (
-                    <span className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+                    <span className="mt-2 block w-fit text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
                       With Driver
                     </span>
                   )}
@@ -201,7 +211,7 @@ function MyBookingsContent() {
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
                 {Number(b.cash_due) > 0 && (
                   <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
-                    Cash at pickup: {formatCurrency(Number(b.cash_due))}
+                    {b.status === 'active' || b.status === 'completed' ? 'Cash to owner at return' : 'Cash at pickup'}: {formatCurrency(Number(b.cash_due))}
                   </p>
                 )}
                 {Number(b.late_fee) > 0 && (
@@ -269,6 +279,11 @@ function MyBookingsContent() {
                   Pay Late Fee · {formatCurrency(Number(b.total_amount) - Number(b.paid_amount || 0))}
                 </button>
               )}
+              {(b.status === 'active' || (b.status === 'approved' && b.payment_status !== 'pending' && !b.handed_over_at)) && (
+                <button className="btn-outline text-sm flex items-center gap-2" onClick={() => setExtendFor(b)}>
+                  <TimerReset className="h-4 w-4" /> Add Hours
+                </button>
+              )}
               {(b.paid_amount || 0) > 0 && (
                 <button
                   className="btn-outline text-sm flex items-center gap-2"
@@ -316,6 +331,7 @@ function MyBookingsContent() {
           onClose={() => setShowPayment(false)}
         />
       )}
+      <ExtendBookingModal booking={extendFor} onClose={() => setExtendFor(null)} />
       <ReviewModal
         pending={ratingFor}
         onClose={() => setRatingFor(null)}

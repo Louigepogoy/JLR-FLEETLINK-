@@ -9,7 +9,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import ReportModal from '@/components/reports/ReportModal';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { AlarmClock, Calendar, CalendarClock, CheckCircle2, Clock, FileText, KeyRound, MessageCircle, Star } from 'lucide-react';
+import { AlarmClock, Calendar, CalendarClock, CheckCircle2, Clock, FileText, KeyRound, MessageCircle, Star, TimerReset } from 'lucide-react';
 import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
@@ -45,6 +45,7 @@ type OwnerBooking = InspectionFields & {
   // Late return: started hours past the agreed drop-off and the fee for them (included in total_amount).
   late_hours?: number;
   late_fee?: number | string;
+  extended_hours?: number;
   // Cash bookings: cash to collect from the renter at pickup.
   payment_option?: 'online' | 'cash';
   cash_due?: number | string;
@@ -183,8 +184,14 @@ export default function BookingRequestsPage() {
                     <CalendarClock className="h-3.5 w-3.5 text-[var(--primary)]" />
                     Booked on {formatTimestamp(b.created_at)}
                   </p>
+                  {Number(b.extended_hours) > 0 && (
+                    <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-1 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                      <TimerReset className="h-3.5 w-3.5" />
+                      Extended +{b.extended_hours}h · now due back {formatDate(b.end_date)} {formatTime(b.dropoff_time)}
+                    </p>
+                  )}
                   {b.with_driver && (
-                    <span className="mt-2 inline-block text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
+                    <span className="mt-2 block w-fit text-xs px-2 py-1 rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">
                       With Driver — provide a driver for this trip
                     </span>
                   )}
@@ -195,7 +202,7 @@ export default function BookingRequestsPage() {
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
                 {Number(b.cash_due) > 0 && (
                   <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
-                    Collect cash at pickup: {formatCurrency(Number(b.cash_due))}
+                    {b.status === 'active' ? 'Collect cash at return' : 'Collect cash at pickup'}: {formatCurrency(Number(b.cash_due))}
                   </p>
                 )}
                 {Number(b.late_fee) > 0 && (

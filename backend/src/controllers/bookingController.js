@@ -9,6 +9,7 @@ const {
 } = require('../services/inspectionService');
 const { autoPayoutOwner } = require('../services/payoutService');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
+const { getExtensionQuote, extensionOnlineAmount, round2 } = require('../services/extensionService');
 
 // Renter and owner only see each other's phone (and the renter the owner's email) once the renter
 // has paid and the booking is confirmed, so contact details aren't handed out on unpaid bookings.
@@ -105,8 +106,9 @@ const createBooking = async (req, res, next) => {
     const bookingConflict = await query(
       `SELECT id FROM bookings
        WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
-       AND start_date <= $3 AND end_date >= $2`,
-      [vehicleId, startDate, endDate]
+       AND (start_date + COALESCE(pickup_time, '09:00'::time)) < ($3::date + $5::time)
+       AND (end_date + COALESCE(dropoff_time, '17:00'::time)) > ($2::date + $4::time)`,
+      [vehicleId, startDate, endDate, pickup, dropoff]
     );
     if (bookingConflict.rows.length) {
       return res.status(409).json({
@@ -457,7 +459,7 @@ const recordCashPayment = async (req, res, next) => {
     }
     const result = await query(
       `UPDATE bookings SET paid_amount = total_amount, cash_collected = cash_collected + $2,
-         cash_collected_at = NOW(), payment_status = 'fully_paid', updated_at = NOW()
+         cash_collected_at = NOW(), payment_status = 'fully_paid', cash_due = 0, updated_at = NOW()
        WHERE id = $1 AND paid_amount < total_amount RETURNING *`,
       [b.id, balance]
     );
@@ -668,6 +670,43 @@ const rejectVehicle = async (req, res, next) => {
   }
 };
 
+// What the renter can still extend: allowed or not (with the reason), the most hours they can add and
+// the hourly price. Used by the "Add Hours" dialog.
+const getExtensionOptions = async (req, res, next) => {
+  try {
+    const quote = await getExtensionQuote(req.params.id, req.query.hours);
+    if (!quote) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (quote.booking.customer_id !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    const settings = await query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+    const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+    const onlineAmount = quote.amount !== undefined
+      ? extensionOnlineAmount(quote.booking, quote.amount, commissionPct) : undefined;
+    res.json({
+      success: true,
+      data: {
+        allowed: quote.allowed,
+        reason: quote.reason,
+        maxHours: quote.maxHours,
+        hourlyRate: quote.hourlyRate,
+        paymentOption: quote.booking.payment_option,
+        currentEndDate: quote.booking.end_date,
+        currentDropoffTime: quote.booking.dropoff_time,
+        nextBlockAt: quote.nextBlockAt,
+        hours: quote.hours,
+        amount: quote.amount,
+        onlineAmount,
+        cashAmount: onlineAmount !== undefined ? round2(quote.amount - onlineAmount) : undefined,
+        newEndDate: quote.newEndDate,
+        newDropoffTime: quote.newDropoffTime,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const bookingValidation = [
   body('vehicleId').isUUID(),
   body('startDate').isISO8601(),
@@ -682,5 +721,5 @@ const bookingValidation = [
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, getExtensionOptions,
 };

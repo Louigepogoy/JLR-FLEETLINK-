@@ -21,7 +21,7 @@ type PendingPayout = {
   pending_transactions: number;
 };
 
-type PayoutSource = 'accepted' | 'auto_accepted' | 'dispute' | 'account_added' | 'manual' | 'legacy';
+type PayoutSource = 'accepted' | 'auto_accepted' | 'dispute' | 'account_added' | 'manual' | 'legacy' | 'late_fee' | 'extension';
 
 type PayoutRecord = {
   id: string;
@@ -43,9 +43,13 @@ const sourceLabel: Record<PayoutSource, { label: string; className: string }> = 
   auto_accepted: { label: 'Auto · inspection time ended', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
   dispute: { label: 'Auto · dispute closed', className: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
   account_added: { label: 'Auto · payout account added', className: 'bg-sky-500/15 text-sky-600 dark:text-sky-400' },
+  late_fee: { label: 'Auto · late fee paid', className: 'bg-orange-500/15 text-orange-600 dark:text-orange-400' },
+  extension: { label: 'Auto · hours added', className: 'bg-violet-500/15 text-violet-600 dark:text-violet-400' },
   manual: { label: 'Manual · admin', className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400' },
   legacy: { label: 'Earlier payout', className: 'bg-gray-500/15 text-gray-500' },
 };
+
+const fallbackSource = { label: 'Payout', className: 'bg-gray-500/15 text-gray-500' };
 
 export default function AdminPayoutsPage() {
   const [loading, setLoading] = useState(true);
@@ -195,8 +199,8 @@ export default function AdminPayoutsPage() {
                     )}
                   </td>
                   <td className="p-4">
-                    <span className={cn('rounded-full px-2 py-1 text-xs whitespace-nowrap', sourceLabel[p.source].className)}>
-                      {sourceLabel[p.source].label}
+                    <span className={cn('rounded-full px-2 py-1 text-xs whitespace-nowrap', (sourceLabel[p.source] ?? fallbackSource).className)}>
+                      {(sourceLabel[p.source] ?? fallbackSource).label}
                     </span>
                     {p.source === 'manual' && p.paid_by_name && (
                       <p className="mt-1 text-xs text-[var(--muted)]">by {p.paid_by_name}</p>

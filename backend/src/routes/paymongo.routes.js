@@ -5,10 +5,12 @@ const {
   createBookingPaymentCheckout,
   createSubscriptionCheckout,
   createExtraSlotsCheckout,
+  createExtensionCheckout,
   reconcilePendingPayments,
 } = require('../controllers/paymongoController');
 
 router.post('/bookings/checkout', authenticate, authorize('user'), createBookingPaymentCheckout);
+router.post('/bookings/extend-checkout', authenticate, authorize('user'), createExtensionCheckout);
 router.post('/subscriptions/checkout', authenticate, authorize('user', 'admin'), createSubscriptionCheckout);
 router.post('/subscriptions/extra-slots/checkout', authenticate, authorize('user', 'admin'), createExtraSlotsCheckout);
 router.post('/reconcile', authenticate, authorize('user', 'admin'), reconcilePendingPayments);

@@ -72,7 +72,8 @@ async function setup() {
     const ownerDocumentsMigrationPath = path.join(__dirname, '../database/migrations/037_owner_verification_documents.sql');
     const cashPaymentsMigrationPath = path.join(__dirname, '../database/migrations/038_cash_payments.sql');
     const rentalAgreementMigrationPath = path.join(__dirname, '../database/migrations/039_rental_agreement.sql');
-    const seedPath = path.join(__dirname, '../database/seed-users.sql');
+    const bookingExtensionsMigrationPath = path.join(__dirname, '../database/migrations/040_booking_extensions.sql');
+    const seedPath =path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
       `SELECT EXISTS (
@@ -168,6 +169,10 @@ async function setup() {
       console.log('Cash payments migration applied.');
       await runSqlFile(rentalAgreementMigrationPath);
       console.log('Rental agreement migration applied.');
+      await runSqlFile(bookingExtensionsMigrationPath);
+      console.log('Booking extensions migration applied.');
+      await runSqlFile(payoutSourceExtensionMigrationPath);
+      console.log('Payout source migration applied.');
     }
 
     await runSqlFile(seedPath);

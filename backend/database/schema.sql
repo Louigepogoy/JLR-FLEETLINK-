@@ -129,6 +129,10 @@ CREATE TABLE bookings (
   cash_due DECIMAL(12,2) NOT NULL DEFAULT 0,
   cash_collected DECIMAL(12,2) NOT NULL DEFAULT 0,
   cash_collected_at TIMESTAMPTZ,
+  -- Hours the renter added to the rental while using it (see booking_extensions) and their price;
+  -- the fee is included in total_amount and end_date/dropoff_time already include the extra hours.
+  extended_hours INTEGER NOT NULL DEFAULT 0,
+  extension_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
   -- Rental agreement accepted by the renter when booking (typed full name as signature).
   agreement_signed_name VARCHAR(255),
   agreement_signed_at TIMESTAMPTZ,
@@ -145,6 +149,20 @@ CREATE TABLE bookings (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT valid_dates CHECK (end_date >= start_date)
 );
+
+CREATE TABLE booking_extensions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  hours INTEGER NOT NULL CHECK (hours > 0),
+  amount DECIMAL(12,2) NOT NULL,
+  online_amount DECIMAL(12,2) NOT NULL,
+  previous_end_date DATE NOT NULL,
+  previous_dropoff_time TIME NOT NULL,
+  new_end_date DATE NOT NULL,
+  new_dropoff_time TIME NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_booking_extensions_booking ON booking_extensions(booking_id);
 
 CREATE TABLE vehicle_maintenance_dates (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -201,7 +219,7 @@ CREATE TABLE payment_intents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_id VARCHAR(120) UNIQUE NOT NULL,
   gateway_session_id VARCHAR(100),
-  purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription', 'vehicle_slots')),
+  purpose VARCHAR(20) NOT NULL CHECK (purpose IN ('booking_payment', 'subscription', 'vehicle_slots', 'booking_extension')),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   amount DECIMAL(12,2) NOT NULL,
   payload JSONB NOT NULL,
@@ -265,7 +283,7 @@ CREATE TABLE owner_payouts (
   account_name VARCHAR(255),
   account_number VARCHAR(50),
   source VARCHAR(20) NOT NULL
-    CHECK (source IN ('accepted', 'auto_accepted', 'dispute', 'account_added', 'manual', 'legacy', 'late_fee')),
+    CHECK (source IN ('accepted', 'auto_accepted', 'dispute', 'account_added', 'manual', 'legacy', 'late_fee', 'extension')),
   reference VARCHAR(40) NOT NULL UNIQUE,
   paid_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()

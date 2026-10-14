@@ -2,6 +2,7 @@ const { query, pool } = require('../config/db');
 const { generateInvoiceNumber, calculateCommission } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { autoPayoutOwner } = require('../services/payoutService');
+const { getExtensionQuote } = require('../services/extensionService');
 
 /**
  * Records a confirmed payment against a booking. Called by the PayMongo webhook
@@ -168,6 +169,133 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
   }
 };
 
+/**
+ * Records a confirmed payment for "add hours" on a trip in use and moves the booking's return time
+ * forward. `amount` is what was paid online; `totalAmount` is the price of the added hours (for cash
+ * bookings the difference is cash the owner collects at return, tracked in cash_due).
+ * The hours are re-checked against the vehicle's next booking: if someone else took the slot while the
+ * renter was paying, the payment is recorded and an admin is asked to refund it instead.
+ */
+const finalizeExtensionPayment = async ({ bookingId, hours, totalAmount, amount, paymentMethod, referenceNumber, metadata = {} }) => {
+  const quote = await getExtensionQuote(bookingId, hours);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const bookingResult = await client.query(
+      `SELECT b.*, v.owner_id, v.title FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id
+       WHERE b.id = $1 FOR UPDATE`,
+      [bookingId]
+    );
+    const booking = bookingResult.rows[0];
+    if (!booking) {
+      await client.query('ROLLBACK');
+      throw new Error(`Booking ${bookingId} not found while finalizing extension payment`);
+    }
+
+    const settingsResult = await client.query(
+      'SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1'
+    );
+    const commissionPct = parseFloat(settingsResult.rows[0]?.commission_percentage || 10);
+    // Commission is on the whole extension; a cash booking's online share covers it up front.
+    const commissionBase = booking.payment_option === 'cash' ? totalAmount : amount;
+    const platformAmount = Math.min(amount, calculateCommission(commissionBase, commissionPct).platformAmount);
+    const ownerAmount = Math.round((amount - platformAmount) * 100) / 100;
+
+    const applies = Boolean(quote && quote.allowed && quote.hours === hours);
+    const cashPart = Math.round((totalAmount - amount) * 100) / 100;
+    const newPaidAmount = parseFloat(booking.paid_amount) + (applies ? amount : 0);
+    const newTotal = parseFloat(booking.total_amount) + (applies ? totalAmount : 0);
+    const paymentStatus = newPaidAmount >= newTotal ? 'fully_paid' : 'partially_paid';
+
+    const paymentInsert = await client.query(
+      `INSERT INTO payments (booking_id, amount, payment_method, status, reference_number, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [bookingId, amount, paymentMethod, paymentStatus, referenceNumber,
+        JSON.stringify({ ...metadata, extensionHours: hours })]
+    );
+    const invoiceNumber = generateInvoiceNumber();
+    await client.query(
+      `INSERT INTO transactions (booking_id, payment_id, user_id, type, total_amount,
+        commission_amount, owner_amount, platform_amount, commission_percentage, status, invoice_number, description)
+       VALUES ($1, $2, $3, 'payment', $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        bookingId, paymentInsert.rows[0].id, booking.owner_id, amount,
+        platformAmount, ownerAmount, platformAmount, commissionPct,
+        paymentStatus, invoiceNumber,
+        `Added ${hours} hour${hours === 1 ? '' : 's'} to ${booking.title} - ${paymentMethod.toUpperCase()}`,
+      ]
+    );
+
+    if (applies) {
+      await client.query(
+        `UPDATE bookings SET end_date = $2, dropoff_time = $3, total_amount = total_amount + $4,
+           paid_amount = paid_amount + $5, cash_due = cash_due + $6, payment_status = $7::payment_status,
+           extended_hours = extended_hours + $8, extension_fee = extension_fee + $4, updated_at = NOW()
+         WHERE id = $1`,
+        [bookingId, quote.newEndDate, quote.newDropoffTime, totalAmount, amount, cashPart, paymentStatus, hours]
+      );
+      await client.query(
+        `INSERT INTO booking_extensions (booking_id, hours, amount, online_amount,
+           previous_end_date, previous_dropoff_time, new_end_date, new_dropoff_time)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [bookingId, hours, totalAmount, amount, quote.booking.end_date, quote.booking.dropoff_time,
+          quote.newEndDate, quote.newDropoffTime]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    if (!applies) {
+      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'Refund needed: extension no longer possible',
+          `A renter paid ₱${amount.toFixed(2)} (ref ${referenceNumber}) to add ${hours} hour(s) to ${booking.title}, but those hours were no longer available. Please refund them.`,
+          'alert',
+          '/dashboard/admin/payments'
+        ).catch(() => {});
+      }
+      await createNotification(
+        booking.customer_id,
+        'Could not add hours',
+        `Your payment of ₱${amount.toFixed(2)} for extra hours on ${booking.title} was received, but the vehicle is no longer free for that time. It will be refunded.`,
+        'payment',
+        '/dashboard/bookings'
+      ).catch(() => {});
+    } else {
+      const when = `${quote.newEndDate} ${quote.newDropoffTime}`;
+      await createNotification(
+        booking.owner_id,
+        'Rental extended',
+        `The renter added ${hours} hour${hours === 1 ? '' : 's'} to ${booking.title}. It is now due back ${when}.${cashPart > 0 ? ` Collect ₱${cashPart.toFixed(2)} cash from the renter at return.` : ''} Your share of ₱${ownerAmount.toFixed(2)} is on its way to your payout account.`,
+        'booking',
+        '/dashboard/booking-requests'
+      ).catch(() => {});
+      await createNotification(
+        booking.customer_id,
+        'Hours added',
+        `${hours} hour${hours === 1 ? '' : 's'} added to ${booking.title}. Return it by ${when}.${cashPart > 0 ? ` Pay ₱${cashPart.toFixed(2)} in cash to the owner at return.` : ''}`,
+        'payment',
+        '/dashboard/bookings'
+      ).catch(() => {});
+      await autoPayoutOwner(booking.owner_id, 'extension').catch(() => {});
+    }
+
+    return {
+      payment: paymentInsert.rows[0], invoiceNumber, referenceNumber, paidAmount: newPaidAmount,
+      remainingBalance: newTotal - newPaidAmount, paymentStatus, extended: applies,
+      receiptUrl: `/dashboard/receipt/${invoiceNumber}`,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 const getPaymentsByBooking = async (req, res, next) => {
   try {
     const booking = await query('SELECT customer_id FROM bookings WHERE id = $1', [req.params.bookingId]);
@@ -293,5 +421,5 @@ const getBookingReceipt = async (req, res, next) => {
 };
 
 module.exports = {
-  finalizeBookingPayment, getPaymentsByBooking, getInvoice, getBookingReceipt,
+  finalizeBookingPayment, finalizeExtensionPayment, getPaymentsByBooking, getInvoice, getBookingReceipt,
 };

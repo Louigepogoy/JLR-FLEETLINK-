@@ -44,7 +44,7 @@ export default function VehicleDetailPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
-  const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
+  const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string; extended_hours?: number }[]>([]);
   const [messagingOwner, setMessagingOwner] = useState(false);
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
 
@@ -356,7 +356,10 @@ export default function VehicleDetailPage() {
                     <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
                       <p className="font-semibold mb-1">Already booked:</p>
                       {upcomingBookedDates.map((b) => (
-                        <p key={b.id}>{formatDate(b.start_date)} - {formatDate(b.end_date)}</p>
+                        <p key={b.id}>
+                          {formatDate(b.start_date)} - {formatDate(b.end_date)}
+                          {b.extended_hours ? ` (extended +${b.extended_hours}h, returns ${formatTime(b.dropoff_time)})` : ''}
+                        </p>
                       ))}
                     </div>
                   )}
