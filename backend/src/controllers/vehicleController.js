@@ -502,6 +502,28 @@ const getOwnerVehicles = async (req, res, next) => {
   }
 };
 
+// Admin: vehicles an owner deleted that had bookings. They are hidden everywhere else but kept on
+// record (and still count toward the owner's vehicle limit).
+const getDeletedVehicles = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT v.id, v.title, v.brand, v.model, v.plate_number, v.vehicle_type, v.price_per_day,
+              v.city, v.province, v.images, v.deleted_at,
+              u.id AS owner_id, u.full_name AS owner_name, u.email AS owner_email,
+              (SELECT COUNT(*)::int FROM bookings b WHERE b.vehicle_id = v.id) AS bookings_count,
+              (SELECT COUNT(*)::int FROM bookings b WHERE b.vehicle_id = v.id AND b.status = 'completed') AS completed_count,
+              (SELECT COALESCE(SUM(b.paid_amount), 0) FROM bookings b WHERE b.vehicle_id = v.id) AS total_paid
+       FROM vehicles v
+       JOIN users u ON u.id = v.owner_id
+       WHERE v.deleted_at IS NOT NULL
+       ORDER BY v.deleted_at DESC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getPendingVehicleVerifications = async (req, res, next) => {
   try {
     const result = await query(
@@ -684,5 +706,5 @@ module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
   getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate, getBookedDates,
-  getPendingVehicleVerifications, recordVehicleVerification,
+  getPendingVehicleVerifications, recordVehicleVerification, getDeletedVehicles,
 };

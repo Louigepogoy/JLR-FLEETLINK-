@@ -81,6 +81,7 @@ const navByRole: Record<string, NavItem[]> = {
     { href: '/dashboard/admin/users', label: 'Users', icon: UsersIcon },
     { href: '/dashboard/admin/login-logs', label: 'Login Logs', icon: HistoryIcon },
     { href: '/dashboard/admin/bookings', label: 'Bookings', icon: CalendarCheckIcon },
+    { href: '/dashboard/admin/deleted-vehicles', label: 'Deleted Vehicles', icon: MyVehicleIcon },
     { href: '/dashboard/admin/disputes', label: 'Pickup Disputes', icon: DisputeIcon },
     { href: '/dashboard/admin/reports', label: 'Reports', icon: FlagIcon },
     { href: '/dashboard/admin/support', label: 'Support Tickets', icon: SupportIcon },
