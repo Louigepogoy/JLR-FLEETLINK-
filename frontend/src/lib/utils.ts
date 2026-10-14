@@ -119,6 +119,9 @@ export const requiredProofCount = vehicleProofSlots.length;
 // Cash bookings pay this share online to reserve (the backend never charges less than the commission).
 export const CASH_RESERVATION_PERCENT = 15;
 
+// Hours the owner needs between one rental ending and the next starting (matches the backend).
+export const BOOKING_GAP_HOURS = 2;
+
 // What's still owed online for a booking: cash to be paid at pickup isn't paid online.
 export const onlineDue = (b: { total_amount: number | string; paid_amount?: number | string | null; cash_due?: number | string | null }) =>
   Math.max(0, Math.round((Number(b.total_amount) - Number(b.paid_amount || 0) - Number(b.cash_due || 0)) * 100) / 100);

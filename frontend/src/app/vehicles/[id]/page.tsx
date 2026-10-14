@@ -4,17 +4,18 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BadgeCheck, Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldAlert, ShieldCheck, Settings2, User, Users } from 'lucide-react';
+import { BadgeCheck, Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldCheck, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import BookingProgress from '@/components/booking/BookingProgress';
 import PaymentModal from '@/components/payment/PaymentModal';
+import VerificationNotice from '@/components/booking/VerificationNotice';
 import EmptyState from '@/components/ui/EmptyState';
 import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
 import { canRent, useAuthStore } from '@/store/authStore';
-import { addRentalDays, formatCurrency, formatDate, formatTime, localDateString, CASH_RESERVATION_PERCENT, onlineDue } from '@/lib/utils';
+import { addRentalDays, BOOKING_GAP_HOURS, formatCurrency, formatDate, formatTime, localDateString, CASH_RESERVATION_PERCENT, onlineDue } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
 import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines';
 import { PickupMap } from '@/components/maps';
@@ -67,9 +68,17 @@ export default function VehicleDetailPage() {
   const upcomingBookedDates = bookedDates.filter((b) => b.end_date >= today);
   const hasDateConflict = Boolean(
     dates.startDate && endDate &&
-    [...maintenanceDates, ...bookedDates].some(
-      (b) => b.start_date <= endDate && b.end_date >= dates.startDate
-    )
+    (maintenanceDates.some((b) => b.start_date <= endDate && b.end_date >= dates.startDate) ||
+      // Bookings are compared by date AND time, with a gap of BOOKING_GAP_HOURS between two rentals.
+      bookedDates.some((b) => {
+        const stamp = (d: string, t: string) => new Date(`${d.slice(0, 10)}T${t.slice(0, 5)}:00Z`).getTime();
+        const gap = BOOKING_GAP_HOURS * 3600 * 1000;
+        const existingStart = stamp(b.start_date, b.pickup_time || '09:00');
+        const existingEnd = stamp(b.end_date, b.dropoff_time || '17:00');
+        const newStart = stamp(dates.startDate, dates.pickupTime);
+        const newEnd = stamp(endDate, dropoffTime);
+        return existingStart < newEnd + gap && existingEnd + gap > newStart;
+      }))
   );
   const driverFeePerDay = vehicle ? parseFloat(String(vehicle.driver_fee_per_day || 0)) : 0;
   const driverFee = withDriver && vehicle?.driver_available ? days * driverFeePerDay : 0;
@@ -99,6 +108,11 @@ export default function VehicleDetailPage() {
     }
     if (vehicle && user?.id === vehicle.owner_id) {
       toast.error('You cannot book your own vehicle');
+      return;
+    }
+    if (user?.role !== 'admin' && user?.approval_status !== 'approved') {
+      toast.error('Verify your driver’s license first so you can book.');
+      router.push(`/verify-identity?returnTo=${encodeURIComponent(`/vehicles/${id}`)}`);
       return;
     }
     if (!dates.startDate) {
@@ -355,10 +369,11 @@ export default function VehicleDetailPage() {
                   {upcomingBookedDates.length > 0 && (
                     <div className="mb-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
                       <p className="font-semibold mb-1">Already booked:</p>
+                      <p className="mb-1 opacity-80">The vehicle can be booked again {BOOKING_GAP_HOURS} hours after the return time.</p>
                       {upcomingBookedDates.map((b) => (
                         <p key={b.id}>
-                          {formatDate(b.start_date)} - {formatDate(b.end_date)}
-                          {b.extended_hours ? ` (extended +${b.extended_hours}h, returns ${formatTime(b.dropoff_time)})` : ''}
+                          {formatDate(b.start_date)}, {formatTime(b.pickup_time)} - {formatDate(b.end_date)}, {formatTime(b.dropoff_time)}
+                          {b.extended_hours ? ` (extended +${b.extended_hours}h)` : ''}
                         </p>
                       ))}
                     </div>
@@ -522,14 +537,8 @@ export default function VehicleDetailPage() {
                     </div>
                   )}
 
-                  {isAuthenticated && user?.approval_status !== 'approved' && (
-                    <Link
-                      href={`/verify-identity?returnTo=${encodeURIComponent(`/vehicles/${id}`)}`}
-                      className="flex items-center gap-2 text-xs p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-3"
-                    >
-                      <ShieldAlert className="w-4 h-4 shrink-0" />
-                      Verify your driver&apos;s license to complete a booking.
-                    </Link>
+                  {isAuthenticated && user?.id !== vehicle.owner_id && (
+                    <VerificationNotice action="book" returnTo={`/vehicles/${id}`} className="mb-3" />
                   )}
 
                   {days > 0 && (

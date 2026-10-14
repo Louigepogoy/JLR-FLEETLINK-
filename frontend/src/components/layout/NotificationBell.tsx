@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, ShieldAlert } from 'lucide-react';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { canList, canRent, useAuthStore } from '@/store/authStore';
 
 const POLL_MS = 30000;
 
@@ -39,6 +40,14 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
   // Badge on the bell: unread notifications that arrived since the list was last opened.
   const [unseenCount, setUnseenCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const user = useAuthStore((state) => state.user);
+  // Unverified accounts always get a reminder here, even after dismissing the floating one. It is not a
+  // stored notification: it disappears on its own once the account is verified.
+  const status = user?.approval_status || 'unverified';
+  const needsVerification = Boolean(user) && user?.role !== 'admin' && (status === 'unverified' || status === 'rejected');
+  const [verifySeen, setVerifySeen] = useState(false);
+  const verifyBadge = needsVerification && !verifySeen ? 1 : 0;
+  const goal = [canRent(user) ? 'book vehicles' : '', canList(user) ? 'list your vehicles' : ''].filter(Boolean).join(' and ');
 
   useEffect(() => {
     const load = () =>
@@ -83,6 +92,7 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
       <button
         onClick={() => {
           // Opening the list counts as seeing these notifications, so the badge clears.
+          if (!open) setVerifySeen(true);
           if (!open && unseenCount > 0) {
             setUnseenCount(0);
             api.post('/badges/seen', { key: 'notifications' }).catch(() => {});
@@ -93,9 +103,9 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
         aria-label={unreadCount ? `Notifications (${unreadCount} unread)` : 'Notifications'}
       >
         <Bell className="h-5 w-5" />
-        {unseenCount > 0 && (
+        {unseenCount + verifyBadge > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-            {unseenCount > 9 ? '9+' : unseenCount}
+            {unseenCount + verifyBadge > 9 ? '9+' : unseenCount + verifyBadge}
           </span>
         )}
       </button>
@@ -116,7 +126,25 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
                 </button>
               )}
             </div>
-            {notifications.length === 0 ? (
+            {needsVerification && (
+              <button
+                onClick={() => { setOpen(false); router.push('/profile#verification'); }}
+                className="mb-1 flex w-full gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-left transition-colors hover:bg-amber-500/15"
+              >
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    {status === 'rejected' ? 'Verification not approved' : 'Verify your account'}
+                  </span>
+                  <span className="block text-xs text-[var(--muted)]">
+                    {status === 'rejected'
+                      ? 'Submit your driver’s license again'
+                      : 'Verify your driver’s license'} so you can {goal || 'use JLR Fleetlink'}. Tap to verify.
+                  </span>
+                </span>
+              </button>
+            )}
+            {notifications.length === 0 && !needsVerification ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <BellOff className="h-5 w-5 text-[var(--muted)]" />
                 <p className="text-sm text-[var(--muted)]">No notifications</p>

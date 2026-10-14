@@ -14,6 +14,9 @@ const generateReferenceNumber = (method) => {
   return `${prefix}${Date.now()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 };
 
+// Hours the owner needs between one rental ending and the next starting (cleaning, handover, delays).
+const BOOKING_GAP_HOURS = 2;
+
 const MINUTES_PER_RENTAL_DAY = 24 * 60;
 
 // Parses "YYYY-MM-DD" + "HH:MM[:SS]" as a timezone-free timestamp (only differences are used).
@@ -57,6 +60,7 @@ module.exports = {
   generateInvoiceNumber,
   generateReferenceNumber,
   calculateRentalPeriod,
+  BOOKING_GAP_HOURS,
   sanitizeUser,
   calculateCommission,
   canRent,

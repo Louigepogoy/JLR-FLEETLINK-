@@ -1,9 +1,9 @@
 const { query } = require('../config/db');
-const { cashReservationAmount } = require('../utils/helpers');
+const { cashReservationAmount, BOOKING_GAP_HOURS } = require('../utils/helpers');
 
 // A renter can add hours to a trip in use, but never so close to the next booking (or owner
 // maintenance block) that the owner has less than this many hours to get the vehicle ready.
-const EXTENSION_BUFFER_HOURS = 4;
+const EXTENSION_BUFFER_HOURS = BOOKING_GAP_HOURS;
 const MAX_EXTENSION_HOURS = 24;
 const HOUR_MS = 3600 * 1000;
 

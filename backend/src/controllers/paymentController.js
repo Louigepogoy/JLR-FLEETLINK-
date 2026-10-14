@@ -1,5 +1,5 @@
 const { query, pool } = require('../config/db');
-const { generateInvoiceNumber, calculateCommission } = require('../utils/helpers');
+const { generateInvoiceNumber, calculateCommission, BOOKING_GAP_HOURS } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { autoPayoutOwner } = require('../services/payoutService');
 const { getExtensionQuote } = require('../services/extensionService');
@@ -71,8 +71,9 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
     if (booking.status === 'cancelled' && parseFloat(booking.paid_amount) === 0) {
       const conflict = await client.query(
         `SELECT 1 FROM bookings WHERE vehicle_id = $1 AND id <> $2 AND status IN ('pending', 'approved', 'active')
-           AND start_date <= $4 AND end_date >= $3 LIMIT 1`,
-        [booking.vehicle_id, bookingId, booking.start_date, booking.end_date]
+           AND (start_date + COALESCE(pickup_time, '09:00'::time)) < ($4::date + COALESCE($6::time, '17:00'::time)) + $7 * INTERVAL '1 hour'
+           AND (end_date + COALESCE(dropoff_time, '17:00'::time)) + $7 * INTERVAL '1 hour' > ($3::date + COALESCE($5::time, '09:00'::time)) LIMIT 1`,
+        [booking.vehicle_id, bookingId, booking.start_date, booking.end_date, booking.pickup_time, booking.dropoff_time, BOOKING_GAP_HOURS]
       );
       if (conflict.rows.length) paidAfterCancel = true;
       else confirmsBooking = true;

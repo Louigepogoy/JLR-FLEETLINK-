@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Car, Crown, MapPin, Pencil, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Car, Crown, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, MyVehicleIcon } from '@/components/illustrations/MiniIcons';
@@ -20,6 +20,7 @@ import { useBarangayOptions, useCityOptions } from '@/lib/usePlaceOptions';
 import ProvinceSelect from '@/components/ui/ProvinceSelect';
 import PlaceAutocomplete from '@/components/ui/PlaceAutocomplete';
 import OptionCombobox from '@/components/ui/OptionCombobox';
+import VerificationNotice from '@/components/booking/VerificationNotice';
 import { LocationPickerMap } from '@/components/maps';
 
 type OwnerVehicle = {
@@ -184,6 +185,11 @@ export default function MyVehiclesPage() {
   };
 
   const handleAddClick = () => {
+    if (user?.role !== 'admin' && user?.approval_status !== 'approved') {
+      toast.error('Verify your driver’s license first so you can list a vehicle.');
+      router.push('/verify-identity?returnTo=/dashboard/vehicles');
+      return;
+    }
     if (isAtVehicleLimit) {
       toast.error(`Vehicle limit reached. Upgrade from ${planName} to add more vehicles.`);
       return;
@@ -344,15 +350,7 @@ export default function MyVehiclesPage() {
         </button>
       </div>
 
-      {user?.approval_status !== 'approved' && (
-        <Link
-          href="/verify-identity?returnTo=/dashboard/vehicles"
-          className="flex items-center gap-2 text-sm p-3 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-6"
-        >
-          <ShieldAlert className="w-4 h-4 shrink-0" />
-          Verify your driver&apos;s license to list a vehicle.
-        </Link>
-      )}
+      <VerificationNotice action="list" returnTo="/dashboard/vehicles" className="mb-6" />
 
       <div className={`mb-6 rounded-2xl border p-4 ${
         isAtVehicleLimit

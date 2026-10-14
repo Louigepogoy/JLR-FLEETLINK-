@@ -1,7 +1,7 @@
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { query, pool } = require('../config/db');
-const { calculateRentalPeriod, canRent, cashReservationAmount } = require('../utils/helpers');
+const { calculateRentalPeriod, canRent, cashReservationAmount, BOOKING_GAP_HOURS } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const {
@@ -106,14 +106,14 @@ const createBooking = async (req, res, next) => {
     const bookingConflict = await query(
       `SELECT id FROM bookings
        WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
-       AND (start_date + COALESCE(pickup_time, '09:00'::time)) < ($3::date + $5::time)
-       AND (end_date + COALESCE(dropoff_time, '17:00'::time)) > ($2::date + $4::time)`,
-      [vehicleId, startDate, endDate, pickup, dropoff]
+       AND (start_date + COALESCE(pickup_time, '09:00'::time)) < ($3::date + $5::time) + $6 * INTERVAL '1 hour'
+       AND (end_date + COALESCE(dropoff_time, '17:00'::time)) + $6 * INTERVAL '1 hour' > ($2::date + $4::time)`,
+      [vehicleId, startDate, endDate, pickup, dropoff, BOOKING_GAP_HOURS]
     );
     if (bookingConflict.rows.length) {
       return res.status(409).json({
         success: false,
-        message: 'This vehicle is already booked for the selected dates.',
+        message: `This vehicle is already booked around those dates. Another rental needs a ${BOOKING_GAP_HOURS}-hour gap before and after, so please pick a later pickup or an earlier return.`,
       });
     }
 
