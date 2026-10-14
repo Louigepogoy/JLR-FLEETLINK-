@@ -26,7 +26,7 @@ const getSidebarBadges = async (req, res, next) => {
         `SELECT
            (SELECT COUNT(*) FROM users WHERE approval_status = 'pending' AND role <> 'admin'
               AND COALESCE(updated_at, created_at) > ${seenSql('/dashboard/admin/approvals')})
-             + (SELECT COUNT(*) FROM vehicles WHERE verification_status = 'unreviewed'
+             + (SELECT COUNT(*) FROM vehicles WHERE deleted_at IS NULL AND verification_status = 'unreviewed'
               AND COALESCE(updated_at, created_at) > ${seenSql('/dashboard/admin/approvals')}) AS approvals,
            (SELECT COUNT(*) FROM bookings WHERE created_at > ${seenSql('/dashboard/admin/bookings')}) AS bookings,
            (SELECT COUNT(*) FROM booking_disputes
@@ -76,7 +76,7 @@ const getSidebarBadges = async (req, res, next) => {
           WHERE v.owner_id = $1 AND b.status = 'approved' AND b.handed_over_at IS NULL
             AND COALESCE(b.updated_at, b.created_at) > ${seenSql('/dashboard/booking-requests')}) AS requests,
          -- Listings the admin sent back for more information.
-         (SELECT COUNT(*) FROM vehicles WHERE owner_id = $1 AND verification_status = 'needs_more_info'
+         (SELECT COUNT(*) FROM vehicles WHERE owner_id = $1 AND deleted_at IS NULL AND verification_status = 'needs_more_info'
             AND COALESCE(updated_at, created_at) > ${seenSql('/dashboard/vehicles')}) AS vehicles`,
       [req.user.id]
     );

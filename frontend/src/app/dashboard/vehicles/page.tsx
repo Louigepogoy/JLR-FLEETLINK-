@@ -88,6 +88,8 @@ export default function MyVehiclesPage() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<OwnerVehicle[]>([]);
+  // Deleted vehicles that had bookings stay on record and keep counting toward the plan limit.
+  const [deletedCount, setDeletedCount] = useState(0);
   const [subscription, setSubscription] = useState<OwnerSubscription>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<OwnerVehicle | null>(null);
@@ -102,9 +104,10 @@ export default function MyVehiclesPage() {
   const { options: barangayOptions, loading: barangaysLoading } = useBarangayOptions(form.province, form.city);
   const vehicleLimit = Number(subscription?.vehicle_limit || defaultVehicleLimit);
   const planName = subscription?.plan_name || 'Basic';
-  const isAtVehicleLimit = vehicles.length >= vehicleLimit;
+  const vehiclesUsed = vehicles.length + deletedCount;
+  const isAtVehicleLimit = vehiclesUsed >= vehicleLimit;
 
-  const fetchVehicles = () => api.get('/vehicles/owner/my-vehicles').then((res) => setVehicles(res.data.data)).catch(() => {});
+  const fetchVehicles = () => api.get('/vehicles/owner/my-vehicles').then((res) => { setVehicles(res.data.data); setDeletedCount(Number(res.data.deletedCount || 0)); }).catch(() => {});
   const fetchSubscription = () => api.get('/subscriptions/me').then((res) => setSubscription(res.data.data)).catch(() => setSubscription(null));
   useEffect(() => {
     Promise.all([fetchVehicles(), fetchSubscription()]).finally(() => setLoading(false));
@@ -306,10 +309,10 @@ export default function MyVehiclesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this vehicle?')) return;
+    if (!confirm('Delete this vehicle? If customers have already tried to rent it, it stays on record and still counts toward your vehicle limit.')) return;
     try {
-      await api.delete(`/vehicles/${id}`);
-      toast.success('Vehicle deleted');
+      const res = await api.delete(`/vehicles/${id}`);
+      toast.success(res.data.softDeleted ? 'Vehicle removed (kept on record, still counts toward your limit)' : 'Vehicle deleted');
       fetchVehicles();
     } catch (err) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -360,11 +363,12 @@ export default function MyVehiclesPage() {
           <div className="flex items-start gap-3">
             {isAtVehicleLimit ? <AlertTriangle className="mt-0.5 h-5 w-5" /> : <Crown className="mt-0.5 h-5 w-5 text-[var(--primary)]" />}
             <div>
-              <p className="font-semibold">{vehicles.length}/{vehicleLimit} vehicles used on {planName} plan</p>
+              <p className="font-semibold">{vehiclesUsed}/{vehicleLimit} vehicles used on {planName} plan</p>
               <p className="text-sm opacity-80">
                 {isAtVehicleLimit
                   ? 'You reached your vehicle limit. Select Pro, Premium, or Enterprise to publish more vehicles.'
                   : 'You can still add vehicles under your current plan.'}
+                {deletedCount > 0 && ` ${deletedCount} deleted vehicle${deletedCount === 1 ? '' : 's'} that had bookings still count toward this limit.`}
               </p>
             </div>
           </div>

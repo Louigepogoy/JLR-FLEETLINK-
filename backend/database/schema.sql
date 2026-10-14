@@ -99,6 +99,9 @@ CREATE TABLE vehicles (
   status vehicle_status DEFAULT 'available',
   verification_status VARCHAR(20) NOT NULL DEFAULT 'unreviewed',
   verification_notes TEXT,
+  -- Set when an owner deletes a vehicle that was ever booked: hidden, but kept (and still counted
+  -- toward the plan's vehicle limit) so its history can't be erased by re-creating the listing.
+  deleted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

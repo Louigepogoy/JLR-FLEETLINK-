@@ -168,9 +168,9 @@ const validateProofPhotos = (proofPhotos = {}, isCreate = true) => {
 const getPublicStats = async (req, res, next) => {
   try {
     const [vehicles, users, provinces] = await Promise.all([
-      query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available' AND verification_status <> 'rejected'"),
+      query("SELECT COUNT(*)::int AS count FROM vehicles WHERE status = 'available' AND verification_status <> 'rejected' AND deleted_at IS NULL"),
       query("SELECT COUNT(*)::int AS count FROM users WHERE approval_status = 'approved' AND is_active = true"),
-      query("SELECT COUNT(DISTINCT province)::int AS count FROM vehicles WHERE status <> 'inactive'"),
+      query("SELECT COUNT(DISTINCT province)::int AS count FROM vehicles WHERE status <> 'inactive' AND deleted_at IS NULL"),
     ]);
 
     res.json({
@@ -222,7 +222,7 @@ const getVehicles = async (req, res, next) => {
         (SELECT COUNT(*)::int FROM booking_reviews r WHERE r.vehicle_id = v.id) AS rating_count
       FROM vehicles v
       JOIN users u ON v.owner_id = u.id
-      WHERE v.verification_status <> 'rejected'
+      WHERE v.verification_status <> 'rejected' AND v.deleted_at IS NULL
     `;
 
     if (status) {
@@ -296,7 +296,7 @@ const getVehicleById = async (req, res, next) => {
     );
     const vehicle = result.rows[0];
     const canSeeRejected = req.user && (req.user.role === 'admin' || req.user.id === vehicle?.owner_id);
-    if (!vehicle || (vehicle.verification_status === 'rejected' && !canSeeRejected)) {
+    if (!vehicle || vehicle.deleted_at || (vehicle.verification_status === 'rejected' && !canSeeRejected)) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
     }
     res.json({ success: true, data: hidePrivateProofs(vehicle, req.user) });
@@ -449,26 +449,33 @@ const updateVehicle = async (req, res, next) => {
 
 const deleteVehicle = async (req, res, next) => {
   try {
-    const vehicle = await query('SELECT owner_id FROM vehicles WHERE id = $1', [req.params.id]);
+    const vehicle = await query('SELECT owner_id FROM vehicles WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
     if (!vehicle.rows[0]) {
       return res.status(404).json({ success: false, message: 'Vehicle not found' });
     }
     if (vehicle.rows[0].owner_id !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
-    // Deleting a vehicle cascades to its bookings and their payment records. Keep the money trail:
-    // a vehicle that was ever booked with a payment can only be set to inactive, not deleted.
-    const paid = await query(
-      `SELECT 1 FROM bookings b
-       WHERE b.vehicle_id = $1
-         AND (b.paid_amount > 0 OR EXISTS (SELECT 1 FROM payments p WHERE p.booking_id = b.id))
-       LIMIT 1`,
-      [req.params.id]
-    );
-    if (paid.rows[0]) {
+    // A vehicle with a booking in progress (awaiting payment, confirmed or on the road) can't be removed.
+    const history = await query('SELECT status FROM bookings WHERE vehicle_id = $1', [req.params.id]);
+    if (history.rows.some((r) => ['pending', 'approved', 'active'].includes(r.status))) {
       return res.status(409).json({
         success: false,
-        message: 'This vehicle has bookings with payment records, so it can\'t be deleted. Set its status to Inactive to hide it instead.',
+        message: 'This vehicle has a booking in progress. Wait until it is completed or cancelled before deleting it.',
+      });
+    }
+    // Once a customer has tried to rent a vehicle (any booking, paid or not) it is only hidden, not erased:
+    // its history stays and it keeps counting toward the plan's vehicle limit, so deleting and
+    // re-listing the same vehicle can't be used to free a slot or wipe its record.
+    if (history.rows.length > 0) {
+      await query(
+        "UPDATE vehicles SET deleted_at = NOW(), status = 'inactive', updated_at = NOW() WHERE id = $1",
+        [req.params.id]
+      );
+      return res.json({
+        success: true,
+        softDeleted: true,
+        message: 'Vehicle removed. Because it had bookings, it is kept on record and still counts toward your vehicle limit.',
       });
     }
     await query('DELETE FROM vehicles WHERE id = $1', [req.params.id]);
@@ -481,10 +488,15 @@ const deleteVehicle = async (req, res, next) => {
 const getOwnerVehicles = async (req, res, next) => {
   try {
     const result = await query(
-      'SELECT * FROM vehicles WHERE owner_id = $1 ORDER BY created_at DESC',
+      'SELECT * FROM vehicles WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
       [req.user.id]
     );
-    res.json({ success: true, data: result.rows });
+    // Deleted vehicles that had bookings stay in the owner's vehicle-limit count.
+    const deleted = await query(
+      'SELECT COUNT(*)::int AS count FROM vehicles WHERE owner_id = $1 AND deleted_at IS NOT NULL',
+      [req.user.id]
+    );
+    res.json({ success: true, data: result.rows, deletedCount: deleted.rows[0].count });
   } catch (error) {
     next(error);
   }
@@ -502,7 +514,7 @@ const getPendingVehicleVerifications = async (req, res, next) => {
          ) r) AS ai_result
        FROM vehicles v
        JOIN users u ON v.owner_id = u.id
-       WHERE v.verification_status IN ('unreviewed', 'needs_more_info')
+       WHERE v.verification_status IN ('unreviewed', 'needs_more_info') AND v.deleted_at IS NULL
        ORDER BY v.created_at ASC`
     );
     res.json({ success: true, data: result.rows });
