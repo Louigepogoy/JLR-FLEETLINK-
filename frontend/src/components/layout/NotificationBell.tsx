@@ -88,7 +88,7 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="sm:relative" ref={ref}>
       <button
         onClick={() => {
           // Opening the list counts as seeing these notifications, so the badge clears.
@@ -116,7 +116,7 @@ export default function NotificationBell({ buttonClassName }: { buttonClassName?
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="absolute right-0 z-50 mt-2 max-h-[28rem] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto glass-card p-3 shadow-xl"
+            className="absolute inset-x-3 top-full z-50 mt-2 max-h-[70vh] overflow-y-auto glass-card p-3 shadow-xl sm:inset-x-auto sm:right-0 sm:max-h-[28rem] sm:w-[22rem]"
           >
             <div className="mb-2 flex items-center justify-between px-1">
               <h4 className="font-semibold">Notifications</h4>
