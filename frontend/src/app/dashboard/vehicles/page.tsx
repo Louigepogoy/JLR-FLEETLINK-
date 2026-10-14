@@ -16,8 +16,10 @@ import { useAuthStore } from '@/store/authStore';
 import { formatCurrency, vehicleProofSlots, vehicleTypes } from '@/lib/utils';
 import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines';
 import { geocodeCity, geocodeWithinCity } from '@/lib/geocode';
+import { useBarangayOptions, useCityOptions } from '@/lib/usePlaceOptions';
 import ProvinceSelect from '@/components/ui/ProvinceSelect';
 import PlaceAutocomplete from '@/components/ui/PlaceAutocomplete';
+import OptionCombobox from '@/components/ui/OptionCombobox';
 import { LocationPickerMap } from '@/components/maps';
 
 type OwnerVehicle = {
@@ -96,6 +98,8 @@ export default function MyVehiclesPage() {
   // when the owner clicks/drags the pin.
   const [mapFocus, setMapFocus] = useState(PH_MAP_FOCUS);
   const selectedProvince = useMemo(() => getProvince(form.province), [form.province]);
+  const { options: cityOptions, loading: citiesLoading } = useCityOptions(form.province, selectedProvince?.cities);
+  const { options: barangayOptions, loading: barangaysLoading } = useBarangayOptions(form.province, form.city);
   const vehicleLimit = Number(subscription?.vehicle_limit || defaultVehicleLimit);
   const planName = subscription?.plan_name || 'Basic';
   const isAtVehicleLimit = vehicles.length >= vehicleLimit;
@@ -482,26 +486,28 @@ export default function MyVehiclesPage() {
           </div>
           <div>
             <label className="text-sm font-medium">City / Municipality</label>
-            <input required maxLength={100} list="province-cities" className="input-field mt-1"
+            <OptionCombobox required maxLength={100} className="input-field mt-1"
               placeholder={selectedProvince ? `e.g. ${selectedProvince.cities[0]}` : 'Choose a province first'}
               disabled={!form.province}
+              loading={citiesLoading}
+              options={cityOptions}
               value={form.city}
-              onChange={(e) => {
-                const next = { ...form, city: e.target.value };
-                setForm(next);
-                // Picking a suggestion from the list is a finished entry, so find it right away.
-                if (selectedProvince?.cities.includes(e.target.value)) locatePin(next);
-              }}
+              onChange={(city) => setForm((prev) => ({ ...prev, city, barangay: prev.city === city ? prev.barangay : '' }))}
+              // Picking a suggestion is a finished entry, so find it right away.
+              onPick={(city) => locatePin({ ...form, city, barangay: '' })}
               onBlur={() => locatePin(form)} />
-            <datalist id="province-cities">
-              {selectedProvince?.cities.map((city) => <option key={city} value={city} />)}
-            </datalist>
           </div>
           <div>
             <label className="text-sm font-medium">Barangay</label>
-            <input required className="input-field mt-1" placeholder="Barangay or district"
+            <OptionCombobox required className="input-field mt-1"
+              placeholder={!form.city ? 'Choose a city first' : barangaysLoading ? 'Loading barangays...' : 'Choose or type your barangay / purok'}
+              loading={barangaysLoading}
+              options={barangayOptions}
+              hint={barangayOptions.length ? `${barangayOptions.length} barangays in ${form.city}` : undefined}
               value={form.barangay}
-              onChange={(e) => setForm({ ...form, barangay: e.target.value })}
+              onChange={(barangay) => setForm((prev) => ({ ...prev, barangay }))}
+              // Picking a suggested barangay is a finished entry, so move the pin right away.
+              onPick={(barangay) => locatePin({ ...form, barangay })}
               onBlur={() => locatePin(form)} />
           </div>
           <div>

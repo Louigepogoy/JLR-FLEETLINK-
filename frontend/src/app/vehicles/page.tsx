@@ -14,8 +14,11 @@ import { VehicleCardSkeleton } from '@/components/ui/Skeleton';
 import { PhilippinesVehicleMap, type MapVehicle } from '@/components/maps';
 import api from '@/lib/api';
 import { cn, vehicleTypes } from '@/lib/utils';
+import { getProvince, islandGroups, type IslandGroup } from '@/lib/philippines';
+import { useBarangayOptions, useCityOptions } from '@/lib/usePlaceOptions';
+import OptionCombobox from '@/components/ui/OptionCombobox';
 
-type Filters = { search: string; type: string; province: string; location: string; minPrice: string; maxPrice: string };
+type Filters = { search: string; type: string; islandGroup: string; province: string; city: string; barangay: string; location: string; minPrice: string; maxPrice: string };
 
 // The renter's current location for "nearest first". Only sent with the search, never saved.
 type Near = { lat: number; lng: number } | null;
@@ -29,6 +32,9 @@ const toParams = (filters: Filters, near: Near) => {
   if (filters.search) params.search = filters.search;
   if (filters.type) params.type = filters.type;
   if (filters.province) params.province = filters.province;
+  else if (filters.islandGroup) params.islandGroup = filters.islandGroup;
+  if (filters.city) params.city = filters.city;
+  if (filters.barangay) params.barangay = filters.barangay;
   if (filters.location) params.location = filters.location;
   if (filters.minPrice) params.minPrice = filters.minPrice;
   if (filters.maxPrice) params.maxPrice = filters.maxPrice;
@@ -43,21 +49,27 @@ function VehiclesContent() {
   const [filters, setFilters] = useState<Filters>({
     search: '',
     type: searchParams.get('type') || '',
+    islandGroup: '',
     province: searchParams.get('province') || '',
+    city: '',
+    barangay: '',
     location: searchParams.get('location') || '',
     minPrice: '',
     maxPrice: '',
   });
 
   // Whether the last applied search was narrowed to a place (the map then zooms to its pins).
-  const [placeFiltered, setPlaceFiltered] = useState(Boolean(filters.province || filters.location));
+  const { options: cityOptions, loading: citiesLoading } = useCityOptions(filters.province, getProvince(filters.province)?.cities);
+  const { options: barangayOptions, loading: barangaysLoading } = useBarangayOptions(filters.province, filters.city);
+
+  const [placeFiltered, setPlaceFiltered] = useState(Boolean(filters.islandGroup || filters.province || filters.city || filters.barangay || filters.location));
   const [near, setNear] = useState<Near>(null);
   // Starts true: the page asks for the location automatically on load.
   const [locating, setLocating] = useState(true);
 
   const fetchVehicles = async (nearOverride: Near = near) => {
     setLoading(true);
-    setPlaceFiltered(Boolean(filters.province || filters.location));
+    setPlaceFiltered(Boolean(filters.islandGroup || filters.province || filters.city || filters.barangay || filters.location));
     try {
       const res = await api.get('/vehicles', { params: toParams(filters, nearOverride) });
       setVehicles(res.data.data);
@@ -138,19 +150,43 @@ function VehiclesContent() {
                   onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 />
               </div>
+              <select
+                className="input-field md:col-span-2 lg:col-span-2"
+                value={filters.islandGroup}
+                aria-label="Island group"
+                onChange={(e) => setFilters({ ...filters, islandGroup: e.target.value, province: '', city: '', barangay: '' })}
+              >
+                <option value="">Luzon, Visayas &amp; Mindanao</option>
+                {islandGroups.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
               <ProvinceSelect
                 className="input-field md:col-span-2 lg:col-span-2"
                 value={filters.province}
-                onChange={(province) => setFilters({ ...filters, province })}
-                allLabel="All provinces"
+                group={filters.islandGroup as IslandGroup | ''}
+                onChange={(province) => setFilters({ ...filters, province, city: '', barangay: '' })}
+                allLabel={filters.islandGroup ? `All ${filters.islandGroup} provinces` : 'All provinces'}
               />
               <div className="relative md:col-span-2 lg:col-span-2">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                <input
+                <OptionCombobox
                   className="input-field !pl-10"
-                  placeholder="City or area"
-                  value={filters.location}
-                  onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                  placeholder={filters.province ? 'City or municipality' : 'Pick a province first'}
+                  disabled={!filters.province}
+                  loading={citiesLoading}
+                  options={cityOptions}
+                  value={filters.city}
+                  onChange={(city) => setFilters((prev) => ({ ...prev, city, barangay: prev.city === city ? prev.barangay : '' }))}
+                />
+              </div>
+              <div className="relative md:col-span-2 lg:col-span-2">
+                <OptionCombobox
+                  className="input-field"
+                  placeholder={filters.city ? 'Barangay / area' : 'Pick a city first'}
+                  disabled={!filters.city}
+                  loading={barangaysLoading}
+                  options={barangayOptions}
+                  value={filters.barangay}
+                  onChange={(barangay) => setFilters((prev) => ({ ...prev, barangay }))}
                 />
               </div>
               <select className="input-field md:col-span-2 lg:col-span-2" value={filters.type}
@@ -168,10 +204,18 @@ function VehiclesContent() {
             </div>
           </div>
 
+          {filters.location && (
+            <p className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--primary)]/10 py-1 pl-3 pr-1 text-xs font-semibold text-[var(--primary)]">
+              <MapPin className="h-3.5 w-3.5" /> Area: {filters.location}
+              <button onClick={() => setFilters({ ...filters, location: '' })} className="rounded-full p-0.5 hover:bg-[var(--primary)]/15" aria-label="Clear area">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </p>
+          )}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-[var(--muted)]">
-                {loading ? 'Searching...' : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} found${filters.province ? ` in ${filters.province}` : ' across the Philippines'}`}
+                {loading ? 'Searching...' : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} found${filters.city ? ` in ${filters.barangay ? `${filters.barangay}, ` : ''}${filters.city}` : filters.province ? ` in ${filters.province}` : filters.islandGroup ? ` in ${filters.islandGroup}` : ' across the Philippines'}`}
               </p>
               {near ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary)]/10 py-1 pl-3 pr-1 text-xs font-semibold text-[var(--primary)]">

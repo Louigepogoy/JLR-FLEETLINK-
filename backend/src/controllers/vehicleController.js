@@ -190,7 +190,7 @@ const getPublicStats = async (req, res, next) => {
 
 const getVehicles = async (req, res, next) => {
   try {
-    const { search, type, minPrice, maxPrice, location, province, status = 'available' } = req.query;
+    const { search, type, minPrice, maxPrice, location, province, islandGroup, city, barangay, status = 'available' } = req.query;
     const params = [];
     let idx = 1;
 
@@ -241,6 +241,19 @@ const getVehicles = async (req, res, next) => {
     if (province) {
       sql += ` AND v.province = $${idx++}`;
       params.push(province);
+    }
+    if (islandGroup && !province) {
+      const names = PH_PROVINCES.filter((p) => p.group === islandGroup).map((p) => p.name);
+      sql += ` AND v.province = ANY(${idx++}::text[])`;
+      params.push(names);
+    }
+    if (city) {
+      sql += ` AND v.city ILIKE ${idx++}`;
+      params.push(`%${String(city).replace(/s+city$/i, '').replace(/^city ofs+/i, '').trim()}%`);
+    }
+    if (barangay) {
+      sql += ` AND v.barangay ILIKE ${idx++}`;
+      params.push(`%${String(barangay).trim()}%`);
     }
     if (location) {
       sql += ` AND (v.city ILIKE $${idx} OR v.province ILIKE $${idx} OR v.barangay ILIKE $${idx} OR v.pickup_address ILIKE $${idx})`;
@@ -565,7 +578,7 @@ const getMaintenanceDates = async (req, res, next) => {
 const getBookedDates = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, start_date, end_date FROM bookings
+      `SELECT id, start_date, end_date, pickup_time, dropoff_time, extended_hours FROM bookings
        WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
        ORDER BY start_date ASC`,
       [req.params.id]
