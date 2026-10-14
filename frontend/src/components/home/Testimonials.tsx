@@ -10,7 +10,7 @@ import type { Review } from '@/lib/reviews';
 import { formatDate } from '@/lib/utils';
 import { formatPlace } from '@/lib/philippines';
 
-type HomeReview = Review & { vehicle_id: string; vehicle_title: string; city?: string; province?: string };
+type HomeReview = Review & { vehicle_id: string; vehicle_title: string; owner_rating: number; owner_name: string; city?: string; province?: string };
 type HomeReviews = { average: number | null; count: number; reviews: HomeReview[] };
 
 /** Home page "Reviews" section: real ratings and comments from renters after completed trips. */
@@ -55,11 +55,16 @@ export default function Testimonials() {
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {data.reviews.map((r) => (
               <div key={r.id} className="glass-card flex flex-col p-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <Stars value={r.rating} />
+                <div className="mb-3 flex items-start justify-between">
+                  <div className="space-y-1 text-xs">
+                    <p className="flex items-center gap-2"><Stars value={r.rating} /><span className="text-[var(--muted)]">Vehicle</span></p>
+                    <p className="flex items-center gap-2"><Stars value={r.owner_rating} /><span className="text-[var(--muted)]">Owner {r.owner_name}</span></p>
+                  </div>
                   <Quote className="h-6 w-6 text-[var(--primary)]/30" />
                 </div>
-                <p className="mb-5 flex-1 text-sm leading-relaxed">&ldquo;{r.comment}&rdquo;</p>
+                <p className="mb-5 flex-1 text-sm leading-relaxed">
+                  {r.comment?.trim() ? <>&ldquo;{r.comment}&rdquo;</> : <span className="text-[var(--muted)]">Rated this trip without a written review.</span>}
+                </p>
                 <div className="flex items-center gap-3 border-t border-[var(--card-border)] pt-4">
                   {r.reviewer_avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element

@@ -155,13 +155,15 @@ const getRecentReviews = async (req, res, next) => {
          FROM booking_reviews WHERE reviewer_role = 'customer'`
       ),
       query(
-        `SELECT r.id, r.vehicle_rating AS rating, r.comment, r.created_at,
+        `SELECT r.id, r.vehicle_rating AS rating, r.user_rating AS owner_rating, r.comment, r.created_at,
+                o.full_name AS owner_name,
                 v.id AS vehicle_id, v.title AS vehicle_title, v.city, v.province,
                 u.id AS reviewer_id, u.full_name AS reviewer_name, u.avatar_url AS reviewer_avatar_url
          FROM booking_reviews r
          JOIN users u ON u.id = r.reviewer_id
          JOIN vehicles v ON v.id = r.vehicle_id
-         WHERE r.reviewer_role = 'customer' AND r.comment IS NOT NULL AND btrim(r.comment) <> ''
+         JOIN users o ON o.id = r.reviewee_id
+         WHERE r.reviewer_role = 'customer'
          ORDER BY r.created_at DESC LIMIT $1`,
         [HOME_REVIEWS_LIMIT]
       ),

@@ -113,8 +113,8 @@ export default function VehicleCard({ vehicle, index = 0 }: { vehicle: Vehicle; 
         )}
 
         {/* The price may wrap onto two lines on narrow cards, but the button never squeezes or breaks. */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 leading-tight">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <div className="leading-tight whitespace-nowrap">
             <span className="text-xl font-bold text-[var(--primary)]">{formatCurrency(vehicle.price_per_day)}</span>
             <span className="text-xs text-[var(--muted)]">/day</span>
           </div>

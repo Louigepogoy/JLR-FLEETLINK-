@@ -32,13 +32,14 @@ export default function VehicleShowcase() {
           </Link>
         </div>
 
-        {/* Phones: a sideways swipe row instead of a long stack of cards. */}
-        <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-2 md:gap-6 md:overflow-visible md:px-0 md:pb-0 lg:grid-cols-3">
+        {/* Phones and tablets (touch, including Chrome's "desktop site" mode): a sideways swipe row instead of a
+            long stack of cards. A grid only on wide screens with a mouse. */}
+        <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [@media(min-width:1024px)_and_(pointer:fine)]:mx-0 [@media(min-width:1024px)_and_(pointer:fine)]:grid [@media(min-width:1024px)_and_(pointer:fine)]:grid-cols-3 [@media(min-width:1024px)_and_(pointer:fine)]:gap-6 [@media(min-width:1024px)_and_(pointer:fine)]:overflow-visible [@media(min-width:1024px)_and_(pointer:fine)]:px-0 [@media(min-width:1024px)_and_(pointer:fine)]:pb-0">
           {loading
-            ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="w-[82%] shrink-0 snap-start md:w-auto"><VehicleCardSkeleton /></div>)
+            ? Array.from({ length: 3 }).map((_, i) => <div key={i} className="w-[82%] max-w-sm shrink-0 snap-start [@media(min-width:1024px)_and_(pointer:fine)]:w-auto [@media(min-width:1024px)_and_(pointer:fine)]:max-w-none"><VehicleCardSkeleton /></div>)
             : vehicles.length > 0
             ? vehicles.map((v: never, i: number) => (
-              <div key={(v as {id: string}).id} className="w-[82%] shrink-0 snap-start md:w-auto">
+              <div key={(v as {id: string}).id} className="w-[82%] max-w-sm shrink-0 snap-start [@media(min-width:1024px)_and_(pointer:fine)]:w-auto [@media(min-width:1024px)_and_(pointer:fine)]:max-w-none">
                 <VehicleCard vehicle={v as never} index={i} />
               </div>
             ))
