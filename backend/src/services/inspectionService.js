@@ -64,6 +64,43 @@ const runInspectionSweep = async () => {
     ).catch(() => {});
   }
 
+  // Cash booking nobody showed up for (cash still due at pickup): same cancellation, and the reservation
+  // fee goes entirely to the owner as compensation — the platform gives up its commission on it.
+  const cashNoShows = await query(
+    `WITH cancelled AS (
+       UPDATE bookings b
+       SET status = 'cancelled', inspection_result = 'accepted', inspected_at = NOW(), cash_due = 0, updated_at = NOW()
+       FROM vehicles v
+       WHERE b.vehicle_id = v.id
+         AND b.status = 'approved' AND b.handed_over_at IS NULL AND b.payment_status <> 'pending'
+         AND b.cash_due > 0
+         AND ${AUTO_HANDOVER_AT_SQL} <= NOW()
+       RETURNING b.id, b.customer_id, b.paid_amount, v.owner_id, v.title
+     ), owner_share AS (
+       UPDATE transactions t
+       SET commission_amount = 0, platform_amount = 0, owner_amount = t.total_amount
+       FROM cancelled c WHERE t.booking_id = c.id AND t.type = 'payment'
+       RETURNING t.id
+     )
+     SELECT * FROM cancelled`
+  );
+  for (const b of cashNoShows.rows) {
+    await createNotification(
+      b.customer_id,
+      'Booking cancelled',
+      `Your booking for ${b.title} was cancelled: the vehicle wasn't picked up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} reservation fee you paid is kept by the owner.`,
+      'alert',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    await createNotification(
+      b.owner_id,
+      'Booking cancelled',
+      `${b.title} was cancelled because the renter didn't pick it up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} reservation fee is yours and will be sent to you by the admin.`,
+      'payment',
+      '/dashboard/earnings'
+    ).catch(() => {});
+  }
+
   const handedOver = await query(
     `UPDATE bookings b
      SET handed_over_at = NOW(), inspection_deadline = NOW() + $1::int * INTERVAL '1 minute',

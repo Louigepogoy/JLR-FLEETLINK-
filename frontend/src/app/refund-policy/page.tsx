@@ -21,7 +21,7 @@ const sections = [
   },
   {
     title: '5. Unpaid Balance and No-Shows',
-    body: 'If part of your booking is still unpaid and you do not pay it (online or in cash) and pick up the vehicle within 3 hours of the pickup time, the booking is cancelled automatically so the vehicle is available again. What you already paid is kept by the owner (less the platform commission) for holding the vehicle, and is not refunded. If a booking is fully paid and you do not pick up the vehicle, it is handed over automatically 3 hours after the pickup time, and the inspection time and payout steps below apply.',
+    body: 'If part of your booking is still unpaid and you do not pay it (online or in cash) and pick up the vehicle within 3 hours of the pickup time, the booking is cancelled automatically so the vehicle is available again. What you already paid is kept by the owner for holding the vehicle, and is not refunded. This also applies to a cash booking you do not pick up within 3 hours of the pickup time: the reservation fee you paid online goes to the owner. If a booking is fully paid and you do not pick up the vehicle, it is handed over automatically 3 hours after the pickup time, and the inspection time and payout steps below apply.',
   },
   {
     title: '6. Pickup Inspection',
