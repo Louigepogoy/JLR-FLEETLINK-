@@ -34,6 +34,36 @@ const getInspectionWindowMinutes = async () => {
  */
 const runInspectionSweep = async () => {
   const windowMinutes = await getInspectionWindowMinutes();
+  // Partly paid and never settled: the renter didn't pay the rest (online or in cash) nor show up within
+  // AUTO_HANDOVER_HOURS of the pickup time. The booking is cancelled so the vehicle is free again, and what
+  // the renter paid is the owner's for holding it — payable like any accepted booking (the admin pays it out).
+  const noShows = await query(
+    `UPDATE bookings b
+     SET status = 'cancelled', inspection_result = 'accepted', inspected_at = NOW(), updated_at = NOW()
+     FROM vehicles v
+     WHERE b.vehicle_id = v.id
+       AND b.status = 'approved' AND b.handed_over_at IS NULL AND b.payment_status <> 'pending'
+       AND b.cash_due = 0 AND b.paid_amount < b.total_amount
+       AND ${AUTO_HANDOVER_AT_SQL} <= NOW()
+     RETURNING b.id, b.customer_id, b.paid_amount, v.owner_id, v.title`
+  );
+  for (const b of noShows.rows) {
+    await createNotification(
+      b.customer_id,
+      'Booking cancelled',
+      `Your booking for ${b.title} was cancelled: the remaining balance wasn't paid and the vehicle wasn't picked up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} you paid is kept by the owner.`,
+      'alert',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    await createNotification(
+      b.owner_id,
+      'Booking cancelled',
+      `${b.title} was cancelled because the renter didn't pay the balance or pick up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. Your share of the ₱${parseFloat(b.paid_amount).toFixed(2)} they paid will be sent to you by the admin.`,
+      'payment',
+      '/dashboard/earnings'
+    ).catch(() => {});
+  }
+
   const handedOver = await query(
     `UPDATE bookings b
      SET handed_over_at = NOW(), inspection_deadline = NOW() + $1::int * INTERVAL '1 minute',
@@ -43,6 +73,8 @@ const runInspectionSweep = async () => {
        AND b.status = 'approved' AND b.handed_over_at IS NULL AND b.payment_status <> 'pending'
        -- Cash bookings wait for the owner to confirm the cash at handover; never hand them over automatically.
        AND b.cash_due = 0
+       -- Nor when part of the booking is still unpaid: the renter has to settle it (online or in cash) first.
+       AND b.paid_amount >= b.total_amount
        AND ${AUTO_HANDOVER_AT_SQL} <= NOW()
      RETURNING b.id, b.customer_id, v.owner_id, v.title`,
     [windowMinutes]

@@ -13,30 +13,38 @@ const sections = [
   },
   {
     title: '3. Cancelling a Booking',
-    body: 'You can cancel a booking yourself from My Bookings at any time before you pay. Once a booking has been paid, it can no longer be cancelled from your account; please contact the owner or our support team.',
+    body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded in full. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
   },
   {
-    title: '4. Pickup Inspection',
+    title: '4. Partial Payments and Cash',
+    body: 'You can pay part of your booking online and the rest in cash to the owner at pickup. At least 10% of the total (or the platform commission rate, if higher) must be paid online to confirm your booking and reserve the vehicle. The owner collects the remaining cash when handing over the vehicle and confirms it in the app. Cash paid to the owner is not held by JLR Fleetlink and cannot be refunded through the platform, so only pay it when you have the vehicle in front of you.',
+  },
+  {
+    title: '5. Unpaid Balance and No-Shows',
+    body: 'If part of your booking is still unpaid and you do not pay it (online or in cash) and pick up the vehicle within 3 hours of the pickup time, the booking is cancelled automatically so the vehicle is available again. What you already paid is kept by the owner (less the platform commission) for holding the vehicle, and is not refunded. If a booking is fully paid and you do not pick up the vehicle, it is handed over automatically 3 hours after the pickup time, and the inspection time and payout steps below apply.',
+  },
+  {
+    title: '6. Pickup Inspection',
     body: 'When you meet the owner, they will tap "Hand Over Vehicle." From that moment you have a set inspection time (60 minutes unless stated otherwise) to check the vehicle and choose Accept Vehicle or Reject Vehicle in My Bookings. If you do not respond before the time runs out, the vehicle is accepted automatically. You will receive a reminder 10 minutes before the deadline.',
   },
   {
-    title: '5. Rejecting a Vehicle',
+    title: '7. Rejecting a Vehicle',
     body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately, frees the dates, and keeps your payment on hold while an administrator reviews your report. Please return the keys to the owner.',
   },
   {
-    title: '6. How Disputes Are Decided',
+    title: '8. How Disputes Are Decided',
     body: 'An administrator compares the listing with your report and decides on one of three outcomes: a full refund, a partial refund (the owner receives the rest), or no refund if the report is not supported. Both you and the owner are notified of the decision.',
   },
   {
-    title: '7. How You Receive a Refund',
+    title: '9. How You Receive a Refund',
     body: 'Refunds are sent back automatically to the same GCash, Maya, or card you paid with. GCash and Maya refunds usually arrive within 24 hours; card refunds can take up to 30 days depending on your bank. You do not need to claim it. If an automatic refund is not possible, we will send it to you manually through GCash or bank transfer.',
   },
   {
-    title: '8. Payment Processing Fees',
+    title: '10. Payment Processing Fees',
     body: 'JLR Fleetlink covers the payment processing fee on refunds. You receive the full refund amount that was decided.',
   },
   {
-    title: '9. Problems After You Accept the Vehicle',
+    title: '11. Problems After You Accept the Vehicle',
     body: 'Once a vehicle is accepted (by you or automatically), the pickup dispute process no longer applies. For problems during your trip, use Report Owner on the booking or contact our support team, and we will help resolve it.',
   },
 ];

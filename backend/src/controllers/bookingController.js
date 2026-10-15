@@ -1,13 +1,16 @@
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { query, pool } = require('../config/db');
-const { calculateRentalPeriod, canRent, cashReservationAmount, BOOKING_GAP_HOURS } = require('../utils/helpers');
+const {
+  calculateRentalPeriod, canRent, cashReservationAmount, BOOKING_GAP_HOURS, generateInvoiceNumber,
+} = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const {
   AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly,
 } = require('../services/inspectionService');
 const { autoPayoutOwner } = require('../services/payoutService');
+const { sendPaymongoRefunds } = require('./disputeController');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
 const { getExtensionQuote, extensionOnlineAmount, round2 } = require('../services/extensionService');
 
@@ -363,13 +366,155 @@ const updateBookingStatus = async (req, res, next) => {
   }
 };
 
+// Cancelling a paid booking before pickup: the full online payment comes back when it's cancelled at least
+// FREE_CANCEL_HOURS before the pickup time, otherwise LATE_CANCEL_REFUND_PERCENT of it (the rest goes to the
+// owner, less the platform commission, for holding the vehicle). Once pickup time has passed, there's no cancel.
+const FREE_CANCEL_HOURS = 24;
+const LATE_CANCEL_REFUND_PERCENT = 50;
+const HOURS_TO_PICKUP_SQL = `EXTRACT(EPOCH FROM (((b.start_date + COALESCE(b.pickup_time, '09:00'::time)) AT TIME ZONE 'Asia/Manila') - NOW())) / 3600`;
+
+const cancellationQuote = (b) => {
+  const hoursToPickup = parseFloat(b.hours_to_pickup);
+  const onlinePaid = round2(parseFloat(b.paid_amount) - parseFloat(b.cash_collected || 0));
+  const percent = hoursToPickup >= FREE_CANCEL_HOURS ? 100 : LATE_CANCEL_REFUND_PERCENT;
+  const refundAmount = round2(onlinePaid * percent / 100);
+  return {
+    canCancel: b.status === 'approved' && !b.handed_over_at && hoursToPickup > 0 && onlinePaid > 0,
+    freeCancelHours: FREE_CANCEL_HOURS,
+    hoursToPickup,
+    onlinePaid,
+    percent,
+    refundAmount,
+    retainedAmount: round2(onlinePaid - refundAmount),
+  };
+};
+
+const BOOKING_FOR_CANCEL_SQL = `SELECT b.*, v.owner_id, v.title, ${HOURS_TO_PICKUP_SQL} AS hours_to_pickup
+  FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`;
+
+const getCancellationQuote = async (req, res, next) => {
+  try {
+    const found = await query(BOOKING_FOR_CANCEL_SQL, [req.params.id]);
+    const b = found.rows[0];
+    if (!b) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (b.customer_id !== req.user.id) return res.status(403).json({ success: false, message: 'Access denied' });
+    res.json({ success: true, data: cancellationQuote(b) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const cancelPaidBooking = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(`${BOOKING_FOR_CANCEL_SQL} FOR UPDATE OF b`, [req.params.id]);
+    const b = found.rows[0];
+    const quote = b && cancellationQuote(b);
+    if (!b || b.customer_id !== req.user.id || !quote.canCancel) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'This booking can no longer be cancelled. Once the pickup time has passed or the vehicle was handed over, '
+          + 'please contact the owner or support.',
+      });
+    }
+
+    const settings = await client.query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+    const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+    const fullRefund = quote.retainedAmount <= 0;
+
+    // Send the money back before recording anything. If PayMongo can't, the cancellation still goes
+    // through and the admins are asked to send the refund by hand.
+    const refund = await sendPaymongoRefunds(client, b.id, quote.refundAmount, `Cancelled before pickup: ${b.title}`);
+    const manualRemaining = refund.remaining;
+
+    if (fullRefund) {
+      await client.query(`UPDATE payments SET status = 'refunded' WHERE booking_id = $1`, [b.id]);
+      await client.query(`UPDATE transactions SET status = 'refunded' WHERE booking_id = $1 AND type = 'payment'`, [b.id]);
+      await client.query(
+        `INSERT INTO transactions (booking_id, user_id, type, total_amount, commission_amount, owner_amount,
+           platform_amount, status, invoice_number, description)
+         VALUES ($1, $2, 'refund', $3, 0, 0, 0, 'refunded', $4, $5)`,
+        [b.id, b.owner_id, quote.refundAmount, generateInvoiceNumber(), `Full refund for ${b.title} (cancelled before pickup)`]
+      );
+    } else {
+      // The retained part is split owner/platform by the commission rate; the refund row takes the rest
+      // out of the shares recorded when the renter paid.
+      const shares = await client.query(
+        `SELECT COALESCE(SUM(platform_amount), 0) AS platform, COALESCE(SUM(owner_amount), 0) AS owner
+         FROM transactions WHERE booking_id = $1 AND type = 'payment'`,
+        [b.id]
+      );
+      const platformKept = round2(quote.retainedAmount * commissionPct / 100);
+      const ownerKept = round2(quote.retainedAmount - platformKept);
+      await client.query(
+        `INSERT INTO transactions (booking_id, user_id, type, total_amount, commission_amount, owner_amount,
+           platform_amount, commission_percentage, status, invoice_number, description)
+         VALUES ($1, $2, 'refund', $3, $4, $5, $4, $6, 'refunded', $7, $8)`,
+        [
+          b.id, b.owner_id, quote.refundAmount,
+          -round2(parseFloat(shares.rows[0].platform) - platformKept),
+          -round2(parseFloat(shares.rows[0].owner) - ownerKept),
+          commissionPct, generateInvoiceNumber(), `Partial refund for ${b.title} (late cancellation)`,
+        ]
+      );
+    }
+
+    // The owner's kept share becomes payable (there is no pickup inspection for a cancelled booking). It isn't
+    // paid out automatically: it waits in the admin's Owner Payouts for a manual "Mark as Paid".
+    const updated = await client.query(
+      `UPDATE bookings SET status = 'cancelled', cash_due = 0, updated_at = NOW(),
+         payment_status = CASE WHEN $2 THEN 'refunded'::payment_status ELSE payment_status END,
+         inspection_result = CASE WHEN $2 THEN inspection_result ELSE 'accepted' END,
+         inspected_at = CASE WHEN $2 THEN inspected_at ELSE NOW() END
+       WHERE id = $1 RETURNING *`,
+      [b.id, fullRefund]
+    );
+    await client.query('COMMIT');
+
+    const timing = 'It goes back to the account you paid with: GCash/Maya within 24 hours, cards within 30 days.';
+    await createNotification(
+      b.customer_id,
+      'Booking cancelled',
+      `Your booking for ${b.title} was cancelled. ₱${quote.refundAmount.toFixed(2)} ${manualRemaining > 0 ? 'will be sent back to you.' : `has been refunded. ${timing}`}`,
+      'payment',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    await createNotification(
+      b.owner_id,
+      'Booking Cancelled',
+      fullRefund
+        ? `The customer cancelled their booking for ${b.title} before pickup. The dates are free again.`
+        : `The customer cancelled their booking for ${b.title} close to pickup. You keep ₱${round2(quote.retainedAmount - round2(quote.retainedAmount * commissionPct / 100)).toFixed(2)} for holding the vehicle.`,
+      'booking',
+      '/dashboard/booking-requests'
+    ).catch(() => {});
+    if (manualRemaining > 0) {
+      const admins = await query(`SELECT id FROM users WHERE role = 'admin'`);
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'Manual refund needed',
+          `Send ₱${manualRemaining.toFixed(2)} back to the renter of ${b.title} (cancelled before pickup). It wasn't refunded automatically${refund.error ? `: ${refund.error}` : '.'}`,
+          'alert',
+          '/dashboard/admin/payments'
+        ).catch(() => {});
+      }
+    }
+
+    res.json({ success: true, data: { ...updated.rows[0], refundAmount: quote.refundAmount, manualRefund: manualRemaining > 0 } });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
 const cancelMyBooking = async (req, res, next) => {
   try {
-    const booking = await query(
-      `SELECT b.*, v.owner_id, v.title FROM bookings b
-       JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
-      [req.params.id]
-    );
+    const booking = await query(BOOKING_FOR_CANCEL_SQL, [req.params.id]);
 
     if (!booking.rows[0]) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
@@ -382,11 +527,9 @@ const cancelMyBooking = async (req, res, next) => {
     if (['cancelled', 'completed', 'rejected'].includes(b.status)) {
       return res.status(400).json({ success: false, message: `This booking is already ${b.status}` });
     }
+    // A booking with a payment on file is cancelled (and refunded) by its own flow.
     if (b.payment_status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'This booking already has a payment on file, so it can no longer be self-cancelled. Please contact the owner or support.',
-      });
+      return cancelPaidBooking(req, res, next);
     }
 
     const result = await query(
@@ -476,6 +619,89 @@ const recordCashPayment = async (req, res, next) => {
   }
 };
 
+// Turns what's still unpaid online (`rest`) into cash due at pickup. The platform's commission on the whole
+// booking is taken out of the online payments made so far, as in a regular cash booking.
+const convertRestToCash = async (client, b, rest, commissionPct) => {
+  let commissionLeft = Math.min(parseFloat(b.paid_amount), round2(parseFloat(b.total_amount) * commissionPct / 100));
+  const payments = await client.query(
+    `SELECT id, total_amount FROM transactions WHERE booking_id = $1 AND type = 'payment' ORDER BY created_at, id`,
+    [b.id]
+  );
+  for (const t of payments.rows) {
+    const amount = parseFloat(t.total_amount);
+    const platform = round2(Math.min(amount, commissionLeft));
+    commissionLeft = round2(commissionLeft - platform);
+    await client.query(
+      `UPDATE transactions SET commission_amount = $2, platform_amount = $2, owner_amount = $3 WHERE id = $1`,
+      [t.id, platform, round2(amount - platform)]
+    );
+  }
+  const updated = await client.query(
+    `UPDATE bookings SET payment_option = 'cash', cash_due = cash_due + $2, updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [b.id, rest]
+  );
+  return updated.rows[0];
+};
+
+// An online booking that already has its online share paid: the renter settles the rest in cash with the
+// owner at pickup. It becomes a cash booking (the owner confirms the cash at handover), and the platform's
+// commission on the whole booking is taken out of what was paid online, as in a regular cash booking.
+const payRestInCash = async (req, res, next) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      `SELECT b.*, v.owner_id, v.title FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id
+       WHERE b.id = $1 FOR UPDATE OF b`,
+      [req.params.id]
+    );
+    const b = found.rows[0];
+    if (!b) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+    if (b.customer_id !== req.user.id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    const total = parseFloat(b.total_amount);
+    const paid = parseFloat(b.paid_amount);
+    const rest = round2(total - paid - parseFloat(b.cash_due || 0));
+    if (b.payment_option !== 'online' || b.status !== 'approved' || b.handed_over_at || rest <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'The rest of this booking cannot be paid in cash' });
+    }
+    const settings = await client.query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+    const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+    const minOnline = cashReservationAmount(total, commissionPct);
+    if (paid < minOnline) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: `Pay at least ₱${minOnline.toFixed(2)} online first to pay the rest in cash.`,
+      });
+    }
+
+    const converted = await convertRestToCash(client, b, rest, commissionPct);
+    await client.query('COMMIT');
+
+    await createNotification(
+      b.owner_id,
+      'Renter will pay the rest in cash',
+      `The renter of ${b.title} paid ₱${paid.toFixed(2)} online and will pay the remaining ₱${rest.toFixed(2)} in cash at pickup. Collect it at the handover.`,
+      'booking',
+      '/dashboard/booking-requests'
+    );
+    res.json({ success: true, data: converted });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+};
+
 const handOverVehicle = async (req, res, next) => {
   try {
     const booking = await query(
@@ -498,7 +724,41 @@ const handOverVehicle = async (req, res, next) => {
     if (!b.is_pickup_day) {
       return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
     }
-    const cashDue = parseFloat(b.cash_due) || 0;
+    let cashDue = parseFloat(b.cash_due) || 0;
+    // Part of the booking is still unpaid and isn't set to be paid in cash: the owner collects it in cash at
+    // the handover, as long as the renter paid enough online to cover the platform's commission.
+    const unpaidOnline = round2(parseFloat(b.total_amount) - parseFloat(b.paid_amount) - cashDue);
+    if (unpaidOnline > 0) {
+      const settings = await query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+      const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
+      const minOnline = cashReservationAmount(parseFloat(b.total_amount), commissionPct);
+      if (parseFloat(b.paid_amount) < minOnline) {
+        return res.status(400).json({
+          success: false,
+          code: 'BALANCE_UNPAID',
+          message: `The renter has paid less than the ₱${minOnline.toFixed(2)} minimum online share. They need to pay at least that online first.`,
+        });
+      }
+      if (req.body?.cashReceived !== true) {
+        return res.status(400).json({
+          success: false,
+          code: 'CASH_NOT_CONFIRMED',
+          message: `Collect the ₱${(cashDue + unpaidOnline).toFixed(2)} cash from the renter, then confirm it when handing over.`,
+        });
+      }
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await convertRestToCash(client, b, unpaidOnline, commissionPct);
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
+      cashDue = round2(cashDue + unpaidOnline);
+    }
     if (cashDue > 0 && req.body?.cashReceived !== true) {
       return res.status(400).json({
         success: false,
@@ -721,5 +981,5 @@ const bookingValidation = [
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, getExtensionOptions,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, getExtensionOptions,
 };

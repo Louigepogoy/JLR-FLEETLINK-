@@ -16,9 +16,11 @@ interface PaymentModalProps {
   };
   isOpen: boolean;
   onClose: () => void;
+  // Online bookings can settle the rest in cash with the owner once this much has been paid online.
+  restInCash?: { minOnline: number; onDone: () => void };
 }
 
-export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalProps) {
+export default function PaymentModal({ booking, isOpen, onClose, restInCash }: PaymentModalProps) {
   const remaining = parseFloat(String(booking.total_amount)) - parseFloat(String(booking.paid_amount || 0));
   const [amount, setAmount] = useState(remaining);
   const [loading, setLoading] = useState(false);
@@ -42,6 +44,26 @@ export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalP
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Could not start payment');
+      setLoading(false);
+    }
+  };
+
+  const paidSoFar = parseFloat(String(booking.paid_amount || 0));
+  const canPayRestInCash = !!restInCash && remaining > 0 && paidSoFar >= restInCash.minOnline;
+
+  const handleRestInCash = async () => {
+    if (!restInCash) return;
+    if (!confirm(`Pay the remaining ${formatCurrency(remaining)} in cash to the owner at pickup?`)) return;
+    setLoading(true);
+    try {
+      await api.post(`/bookings/${booking.id}/pay-rest-cash`, {});
+      toast.success('Noted — pay the remaining balance in cash at pickup.');
+      onClose();
+      restInCash.onDone();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Could not switch to cash');
+    } finally {
       setLoading(false);
     }
   };
@@ -115,6 +137,26 @@ export default function PaymentModal({ booking, isOpen, onClose }: PaymentModalP
             <button onClick={handleCheckout} disabled={loading} className="btn-primary w-full">
               {loading ? 'Redirecting to secure checkout...' : `Continue to Payment - ${formatCurrency(amount)}`}
             </button>
+
+            {restInCash && remaining > 0 && (
+              <div className="mt-4 border-t border-[var(--card-border)] pt-4">
+                {canPayRestInCash ? (
+                  <>
+                    <button onClick={handleRestInCash} disabled={loading} className="btn-outline w-full">
+                      Pay the remaining {formatCurrency(remaining)} in cash at pickup
+                    </button>
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                      You give the cash to the owner when you pick up the vehicle. Cash isn&apos;t covered by JLR Fleetlink refunds.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-[var(--muted)]">
+                    Want to pay the rest in cash? Pay at least {formatCurrency(restInCash.minOnline)} online first, then the
+                    cash option appears here.
+                  </p>
+                )}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

@@ -17,11 +17,11 @@ const sections = [
   },
   {
     title: '4. Cancellations',
-    body: 'Bookings may be cancelled from My Bookings before they are paid. Once a rental is active, cancellation terms are between the customer and the vehicle owner. Repeated no-shows or cancellations may affect your ability to book on the platform.',
+    body: 'Unpaid bookings may be cancelled from My Bookings at any time. Paid bookings may be cancelled until the pickup time: a full refund of the online payment if cancelled at least 24 hours before pickup, or 50% if cancelled less than 24 hours before pickup (the rest goes to the owner). After the pickup time, or once the vehicle is handed over, bookings can no longer be cancelled from your account. A booking that is left partly unpaid and not picked up within 3 hours of the pickup time is cancelled automatically and what was paid is kept by the owner. Repeated no-shows or cancellations may affect your ability to book on the platform. See the Refund & Dispute Policy for details.',
   },
   {
     title: '5. Payments',
-    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
+    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. A booking can be paid in full online, or partly online (at least 10% of the total, or the platform commission rate if higher) with the rest paid in cash to the owner at pickup. Cash paid to the owner is not held or refundable through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
   },
   {
     title: '6. Owner Subscriptions & Commission',

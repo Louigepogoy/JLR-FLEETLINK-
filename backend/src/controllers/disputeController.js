@@ -353,5 +353,5 @@ const resolveDisputeValidation = [
 ];
 
 module.exports = {
-  getDisputes, resolveDispute, resolveDisputeValidation, requestEvidence, addDisputeEvidence,
+  getDisputes, resolveDispute, resolveDisputeValidation, requestEvidence, addDisputeEvidence, sendPaymongoRefunds,
 };

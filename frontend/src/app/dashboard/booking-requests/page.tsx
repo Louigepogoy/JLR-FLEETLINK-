@@ -10,7 +10,7 @@ import ReportModal from '@/components/reports/ReportModal';
 import api from '@/lib/api';
 import Link from 'next/link';
 import { AlarmClock, Calendar, CalendarClock, CheckCircle2, Clock, FileText, KeyRound, MessageCircle, Star, TimerReset } from 'lucide-react';
-import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
+import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp, onlineDue, CASH_RESERVATION_PERCENT } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
 import OwnerInspectionStatus from '@/components/booking/OwnerInspectionStatus';
@@ -91,6 +91,11 @@ export default function BookingRequestsPage() {
   };
 
   const needsHandover = (b: OwnerBooking) => b.status === 'approved' && !b.handed_over_at;
+  // Cash the owner collects at handover: what the renter chose to pay in cash plus whatever is still unpaid,
+  // as long as the renter paid the minimum online share (it covers the platform's commission).
+  const meetsMinOnline = (b: OwnerBooking) =>
+    Number(b.paid_amount || 0) >= Math.round(Number(b.total_amount) * CASH_RESERVATION_PERCENT) / 100;
+  const cashToCollect = (b: OwnerBooking) => Number(b.cash_due || 0) + (meetsMinOnline(b) ? onlineDue(b) : 0);
 
   const handOver = async (id: string, cashDue = 0) => {
     const message = cashDue > 0
@@ -200,9 +205,9 @@ export default function BookingRequestsPage() {
               <div className="text-right">
                 <p className="font-bold text-lg">{formatCurrency(b.total_amount)}</p>
                 <p className="text-sm text-green-500">Paid: {formatCurrency(b.paid_amount || 0)}</p>
-                {Number(b.cash_due) > 0 && (
+                {cashToCollect(b) > 0 && (
                   <p className="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
-                    {b.status === 'active' ? 'Collect cash at return' : 'Collect cash at pickup'}: {formatCurrency(Number(b.cash_due))}
+                    {b.status === 'active' ? 'Collect cash at return' : 'Collect cash at pickup'}: {formatCurrency(cashToCollect(b))}
                   </p>
                 )}
                 {Number(b.late_fee) > 0 && (
@@ -234,7 +239,15 @@ export default function BookingRequestsPage() {
                 You can hand over the vehicle only on the pickup date: {formatDate(b.start_date)}{b.pickup_time ? ` at ${formatTime(b.pickup_time)}` : ''}.
               </p>
             )}
-            {needsHandover(b) && b.payment_status !== 'pending' && b.auto_handover_at && (
+            {needsHandover(b) && b.payment_status !== 'pending' && onlineDue(b) > 0 && (
+              <p className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <Clock className="h-4 w-4 shrink-0" />
+                {meetsMinOnline(b)
+                  ? `The renter still owes ${formatCurrency(onlineDue(b))}. Collect it in cash when you hand over the vehicle. If the vehicle isn't picked up within ${AUTO_HANDOVER_HOURS} hours of the pickup time, the booking is cancelled and you keep what they paid.`
+                  : `The renter has paid less than the minimum online share (${formatCurrency(Math.round(Number(b.total_amount) * CASH_RESERVATION_PERCENT) / 100)}). They need to pay at least that online before you can hand over the vehicle.`}
+              </p>
+            )}
+            {needsHandover(b) && b.payment_status !== 'pending' && onlineDue(b) === 0 && b.auto_handover_at && (
               <p className="mt-2 flex items-center gap-2 text-xs text-[var(--muted)]">
                 <Clock className="h-3.5 w-3.5 shrink-0" />
                 If not handed over by {formatTimestamp(b.auto_handover_at)} ({AUTO_HANDOVER_HOURS} hours after pickup time), it is handed over automatically and the renter&apos;s inspection time starts.
@@ -258,13 +271,15 @@ export default function BookingRequestsPage() {
               <div className="flex flex-wrap gap-3 mt-4">
                 {b.status === 'approved' && b.payment_status !== 'pending' && (
                   <button
-                    onClick={() => handOver(b.id, Number(b.cash_due || 0))}
-                    disabled={!b.is_pickup_day}
-                    title={b.is_pickup_day ? undefined : `Available on the pickup date: ${formatDate(b.start_date)}`}
+                    onClick={() => handOver(b.id, cashToCollect(b))}
+                    disabled={!b.is_pickup_day || (onlineDue(b) > 0 && !meetsMinOnline(b))}
+                    title={onlineDue(b) > 0 && !meetsMinOnline(b)
+                      ? 'The renter has not paid the minimum online share yet'
+                      : b.is_pickup_day ? undefined : `Available on the pickup date: ${formatDate(b.start_date)}`}
                     className="btn-primary text-sm py-2 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <KeyRound className="h-4 w-4" />
-                    {Number(b.cash_due) > 0 ? `Cash Received (${formatCurrency(Number(b.cash_due))}) & Hand Over` : 'Hand Over Vehicle'}
+                    {cashToCollect(b) > 0 ? `Cash Received (${formatCurrency(cashToCollect(b))}) & Hand Over` : 'Hand Over Vehicle'}
                   </button>
                 )}
                 {/* Unpaid bookings have nothing held in escrow, so they keep the direct flow. */}

@@ -11,7 +11,7 @@ import PaymentModal from '@/components/payment/PaymentModal';
 import ReportModal from '@/components/reports/ReportModal';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp, onlineDue } from '@/lib/utils';
+import { bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp, onlineDue, CASH_RESERVATION_PERCENT } from '@/lib/utils';
 import { apiErrorMessage, messagesPath, startConversation } from '@/lib/chat';
 import ReviewModal from '@/components/reviews/ReviewModal';
 import PickupInspectionPanel from '@/components/booking/PickupInspectionPanel';
@@ -117,6 +117,31 @@ function MyBookingsContent() {
     try {
       await api.patch(`/bookings/${bookingId}/cancel`);
       toast.success('Booking cancelled');
+      fetchBookings();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Failed to cancel booking');
+    }
+  };
+
+  // A paid booking can be cancelled until pickup time; the refund depends on how close that is.
+  const cancelPaidBooking = async (bookingId: string) => {
+    try {
+      const { data } = await api.get(`/bookings/${bookingId}/cancel-quote`);
+      const q = data.data as {
+        canCancel: boolean; freeCancelHours: number; percent: number; refundAmount: number; retainedAmount: number;
+      };
+      if (!q.canCancel) {
+        toast.error('This booking can no longer be cancelled. Please contact the owner or support.');
+        return;
+      }
+      const message = q.percent === 100
+        ? `Cancel this booking? You will get your full ${formatCurrency(q.refundAmount)} back.`
+        : `Cancel this booking? It is less than ${q.freeCancelHours} hours before pickup, so you will get ${q.percent}% back `
+          + `(${formatCurrency(q.refundAmount)}). The other ${formatCurrency(q.retainedAmount)} goes to the owner for holding the vehicle.`;
+      if (!confirm(message)) return;
+      await api.patch(`/bookings/${bookingId}/cancel`);
+      toast.success(`Booking cancelled. ${formatCurrency(q.refundAmount)} will be refunded.`);
       fetchBookings();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -269,6 +294,12 @@ function MyBookingsContent() {
                   {Number(b.cash_due) > 0 ? 'Pay Reservation Fee' : 'Make Payment'}
                 </button>
               )}
+              {b.status === 'approved' && !b.handed_over_at && b.payment_status === 'partially_paid' && onlineDue(b) > 0 && (
+                <p className="w-full text-xs text-amber-600 dark:text-amber-400">
+                  The remaining {formatCurrency(onlineDue(b))} is paid online now or in cash to the owner at pickup. If it isn&apos;t paid and
+                  the vehicle isn&apos;t picked up within 3 hours of the pickup time, the booking is cancelled and what you paid is kept by the owner.
+                </p>
+              )}
               {/* A completed trip still owes money only when the vehicle came back late. */}
               {b.status === 'completed' && Number(b.total_amount) - Number(b.paid_amount || 0) > 0 && (
                 <button
@@ -300,6 +331,14 @@ function MyBookingsContent() {
                   Cancel Booking
                 </button>
               )}
+              {b.payment_status !== 'pending' && b.payment_status !== 'refunded' && b.status === 'approved' && !b.handed_over_at && (
+                <button
+                  className="btn-outline text-sm text-red-500"
+                  onClick={() => cancelPaidBooking(b.id)}
+                >
+                  Cancel &amp; Refund
+                </button>
+              )}
             </div>
             <button
               className="btn-outline mt-4 text-sm text-red-500 sm:ml-3"
@@ -329,6 +368,11 @@ function MyBookingsContent() {
           booking={{ id: String(selected.id), total_amount: Number(selected.total_amount) - Number(selected.cash_due || 0), paid_amount: Number(selected.paid_amount || 0), title: String(selected.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
+          restInCash={
+            selected.payment_option === 'online' && selected.status === 'approved' && !selected.handed_over_at
+              ? { minOnline: Math.round(Number(selected.total_amount) * CASH_RESERVATION_PERCENT) / 100, onDone: fetchBookings }
+              : undefined
+          }
         />
       )}
       <ExtendBookingModal booking={extendFor} onClose={() => setExtendFor(null)} />
