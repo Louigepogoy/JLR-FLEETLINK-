@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, XCircle } from 'lucide-react';
@@ -44,6 +44,15 @@ export default function RegisterPage() {
     username: '', email: '', phone: '', password: '',
     accountType: '' as '' | 'customer' | 'owner',
   });
+
+  // Check the email as soon as the person pauses typing, so the result shows without leaving the field.
+  useEffect(() => {
+    const value = form.email.trim();
+    if (!/^[^s@]+@[^s@]+.[^s@]{2,}$/.test(value)) return;
+    const timer = setTimeout(() => { void checkEmail(value); }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.email]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,9 +171,12 @@ export default function RegisterPage() {
               <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-red-500">
                 <XCircle className="h-3.5 w-3.5 shrink-0" /> {emailCheck.message}
               </p>
-            ) : emailCheck?.email === form.email.trim() && emailCheck.status === 'exists' ? (
+            ) : emailCheck?.email === form.email.trim() && (emailCheck.status === 'exists' || emailCheck.status === 'domain_ok') ? (
               <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Email address found. We&apos;ll send a code to verify it&apos;s yours.
+                <CheckCircle2 className="h-3.5 w-3.5" />{' '}
+                {emailCheck.status === 'exists'
+                  ? "Email address found. We'll send a code to verify it's yours."
+                  : "Email looks valid. We'll send a code to verify it's yours."}
               </p>
             ) : (
               <p className="mt-1 text-xs text-[var(--muted)]">We&apos;ll send a code to this email to verify it&apos;s yours.</p>

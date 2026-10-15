@@ -3,7 +3,8 @@
 // 2. For Gmail, the mail server is asked about the mailbox itself (SMTP RCPT TO); Gmail answers
 //    "550 5.1.1 NoSuchUser" for accounts that don't exist.
 // Anything inconclusive (port 25 blocked by the network/host, timeouts, other providers) returns
-// 'unknown' so sign-up continues — the emailed verification code is still the final proof.
+// 'domain_ok' (the domain can receive mail, the mailbox just couldn't be confirmed) so sign-up continues —
+// the emailed verification code is still the final proof.
 const dns = require('dns').promises;
 const net = require('net');
 
@@ -54,7 +55,7 @@ const probeMailbox = (host, email) => new Promise((resolve) => {
   });
 });
 
-/** Returns 'exists' | 'not_found' | 'invalid_domain' | 'unknown'. */
+/** Returns 'exists' | 'not_found' | 'invalid_domain' | 'domain_ok' | 'unknown' (couldn't check at all). */
 const checkEmailDeliverable = async (email) => {
   const key = String(email).toLowerCase();
   const cached = cache.get(key);
@@ -65,7 +66,10 @@ const checkEmailDeliverable = async (email) => {
     const domain = key.split('@')[1];
     const mx = await lookupMx(domain);
     if (!mx.length) result = 'invalid_domain';
-    else if (GMAIL_DOMAINS.has(domain)) result = await probeMailbox(mx[0], key);
+    else if (GMAIL_DOMAINS.has(domain)) {
+      const probed = await probeMailbox(mx[0], key);
+      result = probed === 'unknown' ? 'domain_ok' : probed;
+    } else result = 'domain_ok';
   } catch {
     result = 'unknown';
   }
