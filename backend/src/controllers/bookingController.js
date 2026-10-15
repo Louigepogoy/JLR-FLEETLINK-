@@ -702,6 +702,48 @@ const payRestInCash = async (req, res, next) => {
   }
 };
 
+// The renter confirms they're with the owner at pickup. Only then can the owner hand the vehicle over (if the
+// renter never does, the handover happens automatically a few hours after the pickup time).
+const markReadyForPickup = async (req, res, next) => {
+  try {
+    const found = await query(
+      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+       FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
+      [req.params.id]
+    );
+    const b = found.rows[0];
+    if (!b) return res.status(404).json({ success: false, message: 'Booking not found' });
+    if (b.customer_id !== req.user.id) return res.status(403).json({ success: false, message: 'Access denied' });
+    if (b.status !== 'approved' || b.handed_over_at || b.payment_status === 'pending') {
+      return res.status(400).json({ success: false, message: 'This booking is not waiting for pickup' });
+    }
+    if (!b.is_pickup_day) {
+      return res.status(400).json({
+        success: false,
+        code: 'NOT_PICKUP_DAY',
+        message: `You can confirm you're ready on your pickup date (${b.pickup_label}).`,
+      });
+    }
+    const result = await query(
+      `UPDATE bookings SET customer_ready_at = COALESCE(customer_ready_at, NOW()), updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [b.id]
+    );
+    if (!b.customer_ready_at) {
+      await createNotification(
+        b.owner_id,
+        'Renter is ready for pickup',
+        `The renter of ${b.title} confirmed they're here. You can hand over the vehicle now.`,
+        'booking',
+        '/dashboard/booking-requests'
+      ).catch(() => {});
+    }
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const handOverVehicle = async (req, res, next) => {
   try {
     const booking = await query(
@@ -723,6 +765,13 @@ const handOverVehicle = async (req, res, next) => {
     }
     if (!b.is_pickup_day) {
       return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
+    }
+    if (!b.customer_ready_at && req.user.role !== 'admin') {
+      return res.status(400).json({
+        success: false,
+        code: 'RENTER_NOT_READY',
+        message: "The renter hasn't confirmed they're here yet. Ask them to tap \"I'm here — ready for pickup\" in My Bookings.",
+      });
     }
     let cashDue = parseFloat(b.cash_due) || 0;
     // Part of the booking is still unpaid and isn't set to be paid in cash: the owner collects it in cash at
@@ -981,5 +1030,5 @@ const bookingValidation = [
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, getExtensionOptions,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, markReadyForPickup, getExtensionOptions,
 };

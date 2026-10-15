@@ -124,6 +124,18 @@ function MyBookingsContent() {
     }
   };
 
+  // On the pickup date the renter confirms they're with the owner, which lets the owner hand the vehicle over.
+  const markReady = async (bookingId: string) => {
+    try {
+      await api.post(`/bookings/${bookingId}/ready`);
+      toast.success("Thanks! The owner can now hand over the vehicle.");
+      fetchBookings();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      toast.error(error.response?.data?.message || 'Could not confirm pickup');
+    }
+  };
+
   // A paid booking can be cancelled until pickup time; the refund depends on how close that is.
   const cancelPaidBooking = async (bookingId: string) => {
     try {
@@ -330,6 +342,17 @@ function MyBookingsContent() {
                 >
                   Cancel Booking
                 </button>
+              )}
+              {b.status === 'approved' && !b.handed_over_at && b.payment_status !== 'pending' && b.is_pickup_day && (
+                b.customer_ready_at ? (
+                  <p className="w-full text-xs text-green-600 dark:text-green-400">
+                    You confirmed you&apos;re ready. Waiting for the owner to hand over the vehicle.
+                  </p>
+                ) : (
+                  <button className="btn-primary text-sm" onClick={() => markReady(b.id)}>
+                    I&apos;m here — ready for pickup
+                  </button>
+                )
               )}
               {b.payment_status !== 'pending' && b.payment_status !== 'refunded' && b.status === 'approved' && !b.handed_over_at && (
                 <button

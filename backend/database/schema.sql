@@ -136,6 +136,8 @@ CREATE TABLE bookings (
   -- the fee is included in total_amount and end_date/dropoff_time already include the extra hours.
   extended_hours INTEGER NOT NULL DEFAULT 0,
   extension_fee DECIMAL(12,2) NOT NULL DEFAULT 0,
+  -- The renter confirmed they're at the pickup; the owner can hand over only after this.
+  customer_ready_at TIMESTAMPTZ,
   -- Rental agreement accepted by the renter when booking (typed full name as signature).
   agreement_signed_name VARCHAR(255),
   agreement_signed_at TIMESTAMPTZ,

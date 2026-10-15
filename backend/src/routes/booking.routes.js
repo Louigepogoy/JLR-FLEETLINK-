@@ -5,7 +5,7 @@ const { uploadDisputeEvidence } = require('../middleware/upload');
 const {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, getExtensionOptions,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, markReadyForPickup, getExtensionOptions,
 } = require('../controllers/bookingController');
 const { getBookingReport } = require('../controllers/bookingReportController');
 const { getBookingDocuments } = require('../controllers/bookingDocumentsController');
@@ -23,6 +23,7 @@ router.get('/:id/cancel-quote', authenticate, authorize('user', 'admin'), getCan
 router.patch('/:id/cancel', authenticate, authorize('user', 'admin'), cancelMyBooking);
 router.post('/:id/handover', authenticate, authorize('user', 'admin'), handOverVehicle);
 router.post('/:id/cash-payment', authenticate, authorize('user', 'admin'), recordCashPayment);
+router.post('/:id/ready', authenticate, authorize('user'), markReadyForPickup);
 router.post('/:id/pay-rest-cash', authenticate, authorize('user'), payRestInCash);
 router.post('/:id/inspection/accept', authenticate, authorize('user', 'admin'), acceptVehicle);
 router.post('/:id/inspection/reject', authenticate, authorize('user', 'admin'), uploadDisputeEvidence, rejectVehicle);
