@@ -164,16 +164,19 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen flex">
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
       <aside className={cn(
-        'fixed lg:static inset-y-0 left-0 z-40 w-64 glass-card lg:glass-card-none lg:bg-transparent border-r border-[var(--card-border)] transform transition-transform lg:translate-x-0',
+        // Solid background on phones so page content doesn't show through the open drawer.
+        'fixed lg:static inset-y-0 left-0 z-40 flex h-screen w-64 max-w-[80vw] shrink-0 flex-col bg-[var(--background)] lg:bg-transparent border-r border-[var(--card-border)] transform transition-transform lg:translate-x-0 lg:sticky lg:top-0',
         sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
-        <div className="p-6 border-b border-[var(--card-border)]">
+        <div className="shrink-0 p-6 border-b border-[var(--card-border)]">
           <Link href="/" className="flex items-center gap-2.5"><BrandLogo className="h-9 w-9" /><span className="text-xl font-bold gradient-text">JLR Fleetlink</span></Link>
           <p className="text-xs text-[var(--muted)] mt-1">{dashboardLabel}</p>
         </div>
-        {/* pb-24 keeps the last menu items clear of the Logout button pinned to the bottom. */}
-        <nav className="p-4 pb-24 space-y-1">
+        <nav className="min-h-0 flex-1 overflow-y-auto p-4 space-y-1">
           {navItems.map((item) => {
             // The page being viewed right now never shows its badge — it's being seen.
             const count = item.showUnread ? unreadMessages : item.href === pathname ? 0 : badges[item.href] || 0;
@@ -203,7 +206,7 @@ export default function DashboardLayout({
             );
           })}
         </nav>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-[var(--card-border)]">
+        <div className="shrink-0 p-4 border-t border-[var(--card-border)]">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-500 hover:bg-red-500/10 w-full"
