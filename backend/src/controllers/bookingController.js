@@ -24,9 +24,17 @@ const CONTACT_SHARED_SQL = `b.status IN ('approved', 'active', 'completed')`;
 const RENTAL_AGREEMENT_VERSION = '2026-10';
 
 const IS_PICKUP_DAY_SQL = `(b.start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date)`;
+// The renter's "I'm here" and the owner's handover open HANDOVER_OPENS_HOURS_BEFORE hours before the pickup time
+// (Philippine time), on the pickup date only. It is decided on the server so a wrong phone clock can't change it.
+const HANDOVER_OPENS_HOURS_BEFORE = 1;
+const HANDOVER_OPENS_AT_SQL = `GREATEST(b.start_date::timestamp, b.start_date + COALESCE(b.pickup_time, '09:00'::time) - INTERVAL '${HANDOVER_OPENS_HOURS_BEFORE} hour')`;
+const HANDOVER_OPEN_SQL = `(${IS_PICKUP_DAY_SQL} AND NOW() >= (${HANDOVER_OPENS_AT_SQL}) AT TIME ZONE 'Asia/Manila')`;
+const HANDOVER_OPENS_LABEL_SQL = `TO_CHAR(${HANDOVER_OPENS_AT_SQL}, 'FMHH12:MI AM')`;
 // Started hours between the agreed return (end date + drop-off time, Philippine time) and now; 0 if on time.
 const LATE_HOURS_SQL = `GREATEST(0, CEIL(EXTRACT(EPOCH FROM (NOW() - ((b.end_date + COALESCE(b.dropoff_time, '17:00'::time)) AT TIME ZONE 'Asia/Manila'))) / 3600))::int`;
 const PICKUP_LABEL_SQL = `TO_CHAR(b.start_date, 'FMMonth FMDD, YYYY')`;
+const handoverNotOpenMessage = (label) =>
+  `It's too early. You can hand over the vehicle from ${label} on the pickup date (${HANDOVER_OPENS_HOURS_BEFORE} hour before the pickup time).`;
 const notPickupDayMessage = (label) =>
   `You can only hand over the vehicle on the pickup date the renter booked (${label}).`;
 
@@ -36,6 +44,8 @@ const INSPECTION_SELECT = `
   GREATEST(0, EXTRACT(EPOCH FROM (b.inspection_deadline - NOW())))::int AS inspection_seconds_left,
   ${PAYMENT_SECONDS_LEFT_SQL} AS payment_seconds_left,
   ${IS_PICKUP_DAY_SQL} AS is_pickup_day,
+  ${HANDOVER_OPEN_SQL} AS handover_open,
+  ${HANDOVER_OPENS_LABEL_SQL} AS handover_opens_label,
   ${AUTO_HANDOVER_AT_SQL} AS auto_handover_at,
   d.id AS dispute_id, d.status AS dispute_status, d.reason AS dispute_reason,
   d.refund_amount AS dispute_refund_amount, d.admin_notes AS dispute_admin_notes,
@@ -719,7 +729,8 @@ const payRestInCash = async (req, res, next) => {
 const markReadyForPickup = async (req, res, next) => {
   try {
     const found = await query(
-      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${HANDOVER_OPEN_SQL} AS handover_open,
+              ${HANDOVER_OPENS_LABEL_SQL} AS handover_opens_label, ${PICKUP_LABEL_SQL} AS pickup_label
        FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
       [req.params.id]
     );
@@ -735,6 +746,9 @@ const markReadyForPickup = async (req, res, next) => {
         code: 'NOT_PICKUP_DAY',
         message: `You can confirm you're ready on your pickup date (${b.pickup_label}).`,
       });
+    }
+    if (!b.handover_open) {
+      return res.status(400).json({ success: false, code: 'TOO_EARLY', message: handoverNotOpenMessage(b.handover_opens_label) });
     }
     const result = await query(
       `UPDATE bookings SET customer_ready_at = COALESCE(customer_ready_at, NOW()), updated_at = NOW()
@@ -759,7 +773,8 @@ const markReadyForPickup = async (req, res, next) => {
 const handOverVehicle = async (req, res, next) => {
   try {
     const booking = await query(
-      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${PICKUP_LABEL_SQL} AS pickup_label
+      `SELECT b.*, v.owner_id, v.title, ${IS_PICKUP_DAY_SQL} AS is_pickup_day, ${HANDOVER_OPEN_SQL} AS handover_open,
+              ${HANDOVER_OPENS_LABEL_SQL} AS handover_opens_label, ${PICKUP_LABEL_SQL} AS pickup_label
        FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`,
       [req.params.id]
     );
@@ -777,6 +792,9 @@ const handOverVehicle = async (req, res, next) => {
     }
     if (!b.is_pickup_day) {
       return res.status(400).json({ success: false, code: 'NOT_PICKUP_DAY', message: notPickupDayMessage(b.pickup_label) });
+    }
+    if (!b.handover_open) {
+      return res.status(400).json({ success: false, code: 'TOO_EARLY', message: handoverNotOpenMessage(b.handover_opens_label) });
     }
     if (!b.customer_ready_at && req.user.role !== 'admin') {
       return res.status(400).json({

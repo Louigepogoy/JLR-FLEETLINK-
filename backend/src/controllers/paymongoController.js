@@ -138,24 +138,29 @@ const createBookingPaymentCheckout = async (req, res, next) => {
     // Cash still to be collected at pickup isn't paid online.
     const remaining = Math.round((parseFloat(booking.total_amount) - parseFloat(booking.paid_amount)
       - parseFloat(booking.cash_due || 0)) * 100) / 100;
-    if (booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0 && amount < remaining) {
+    // Online payments are made in full: the whole balance at once (for a cash booking, the whole reservation fee).
+    if (amount < remaining - 0.005) {
       return res.status(400).json({
         success: false,
-        message: `Pay the full ₱${remaining.toFixed(2)} reservation fee to confirm your cash booking.`,
+        message: booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0
+          ? `Pay the full ₱${remaining.toFixed(2)} reservation fee to confirm your cash booking.`
+          : `Pay the full balance of ₱${remaining.toFixed(2)}. Partial online payments aren't accepted.`,
       });
     }
-    if (amount > remaining) {
+    if (amount > remaining + 0.005) {
       return res.status(400).json({
         success: false,
         message: `Payment exceeds remaining balance of ₱${remaining.toFixed(2)}`,
       });
     }
 
+    // The amount is the whole balance (checked above); charge the exact rounded figure.
+    const payAmount = remaining;
     const externalId = `booking-${bookingId}-${Date.now()}`;
 
     const session = await createCheckoutSession({
       referenceNumber: externalId,
-      amount,
+      amount: payAmount,
       description: `Payment for ${booking.title}`,
       payerEmail: req.user.email,
       successUrl: `${FRONTEND_URL}/dashboard/bookings?payment=success`,
@@ -165,7 +170,7 @@ const createBookingPaymentCheckout = async (req, res, next) => {
     await query(
       `INSERT INTO payment_intents (external_id, gateway_session_id, purpose, user_id, amount, payload, checkout_url)
        VALUES ($1, $2, 'booking_payment', $3, $4, $5, $6)`,
-      [externalId, session.id, req.user.id, amount, JSON.stringify({ bookingId }), session.checkoutUrl]
+      [externalId, session.id, req.user.id, payAmount, JSON.stringify({ bookingId }), session.checkoutUrl]
     );
 
     res.status(201).json({ success: true, data: { checkoutUrl: session.checkoutUrl } });

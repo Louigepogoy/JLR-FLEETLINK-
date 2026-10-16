@@ -33,13 +33,13 @@ export default function PaymentModal({ booking, isOpen, onClose, restInCash }: P
   }
 
   const handleCheckout = async () => {
-    if (amount <= 0 || amount > remaining) {
-      toast.error(`Amount must be between ₱1 and ${formatCurrency(remaining)}`);
+    if (!(remaining > 0)) {
+      toast.error('There is nothing left to pay.');
       return;
     }
     setLoading(true);
     try {
-      const res = await api.post('/paymongo/bookings/checkout', { bookingId: booking.id, amount });
+      const res = await api.post('/paymongo/bookings/checkout', { bookingId: booking.id, amount: remaining });
       window.location.href = res.data.data.checkoutUrl;
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -107,26 +107,9 @@ export default function PaymentModal({ booking, isOpen, onClose, restInCash }: P
 
             <div className="mb-6">
               <label className="text-sm font-medium mb-2 block">Payment Amount</label>
-              <input
-                type="number"
-                className="input-field"
-                value={amount}
-                min={1}
-                max={remaining}
-                onChange={(e) => setAmount(Number(e.target.value))}
-              />
-              <div className="flex gap-2 mt-2">
-                {[0.3, 0.5, 1].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setAmount(Math.round(remaining * pct * 100) / 100)}
-                    className="text-xs px-3 py-1 rounded-lg border border-[var(--card-border)] hover:bg-[var(--primary)]/10"
-                  >
-                    {pct === 1 ? 'Full' : `${pct * 100}%`}
-                  </button>
-                ))}
-              </div>
+              {/* The whole balance is paid at once: no partial amounts. */}
+              <input type="text" readOnly className="input-field cursor-not-allowed opacity-80" value={formatCurrency(amount)} />
+              <p className="mt-1 text-xs text-[var(--muted)]">The full amount is paid online.</p>
             </div>
 
             <p className="flex items-center gap-2 text-xs text-[var(--muted)] mb-4 p-3 rounded-lg bg-[var(--primary)]/5">

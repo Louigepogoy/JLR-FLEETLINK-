@@ -7,7 +7,7 @@ import {
 
 const features = [
   { icon: SmartSearchIllo, title: 'Smart Search & Filters', desc: 'Find the perfect vehicle by type, price, location, and more.' },
-  { icon: PayPhoneIllo, title: 'GCash & Card Payments', desc: 'Pay securely with GCash or Visa/Mastercard. Support partial payments.' },
+  { icon: PayPhoneIllo, title: 'GCash & Card Payments', desc: 'Pay securely with GCash or Visa/Mastercard, or reserve online and pay the rest in cash at pickup.' },
   { icon: SecureShieldIllo, title: 'Verified & Secure', desc: 'JWT authentication, role-based access, and double-booking prevention.' },
   { icon: AnalyticsIllo, title: 'Owner Analytics', desc: 'Track earnings, bookings, and transactions in real-time.' },
   { icon: NotifyBellIllo, title: 'Smart Notifications', desc: 'Stay updated on bookings, payments, and platform alerts.' },

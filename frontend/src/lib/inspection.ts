@@ -18,6 +18,10 @@ export type InspectionFields = {
   payment_seconds_left?: number | null;
   // True only on the booking's pickup date (Philippine time) — the one day the owner can hand it over.
   is_pickup_day?: boolean;
+  // True from 1 hour before the pickup time (on the pickup date): when "I'm here" and the handover open.
+  handover_open?: boolean;
+  // When they open, e.g. "8:00 AM".
+  handover_opens_label?: string;
   // When the renter confirmed they're at the pickup; the owner can hand over only after this.
   customer_ready_at?: string | null;
   // When a paid booking that still hasn't been handed over is handed over automatically

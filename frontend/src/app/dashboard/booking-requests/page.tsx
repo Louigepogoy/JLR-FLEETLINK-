@@ -233,11 +233,17 @@ export default function BookingRequestsPage() {
               <PaymentDeadlineNotice secondsLeft={b.payment_seconds_left} onExpired={fetchBookings} />
             )}
             <OwnerInspectionStatus booking={b} onChanged={fetchBookings} />
-            {b.status === 'approved' && !b.handed_over_at && b.is_pickup_day && !b.customer_ready_at && (
+            {b.status === 'approved' && !b.handed_over_at && b.handover_open && !b.customer_ready_at && (
               <p className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
                 <Clock className="h-4 w-4 shrink-0" />
                 Waiting for the renter to confirm they&apos;re here. You can hand over the vehicle once they tap
                 &quot;I&apos;m here — ready for pickup&quot;; otherwise it is handed over automatically after the pickup time.
+              </p>
+            )}
+            {b.status === 'approved' && !b.handed_over_at && b.is_pickup_day && !b.handover_open && (
+              <p className="mt-4 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                <CalendarClock className="h-4 w-4 shrink-0" />
+                Too early to hand over. It opens from {b.handover_opens_label || 'an hour before the pickup time'} (1 hour before the pickup time).
               </p>
             )}
             {b.status === 'approved' && !b.handed_over_at && !b.is_pickup_day && (
@@ -279,8 +285,10 @@ export default function BookingRequestsPage() {
                 {b.status === 'approved' && b.payment_status !== 'pending' && (
                   <button
                     onClick={() => handOver(b.id, cashToCollect(b))}
-                    disabled={!b.is_pickup_day || !b.customer_ready_at || (onlineDue(b) > 0 && !meetsMinOnline(b))}
-                    title={!b.customer_ready_at
+                    disabled={!b.handover_open || !b.customer_ready_at || (onlineDue(b) > 0 && !meetsMinOnline(b))}
+                    title={!b.handover_open
+                      ? `Opens from ${b.handover_opens_label || 'an hour before the pickup time'}`
+                      : !b.customer_ready_at
                       ? 'Waiting for the renter to confirm they are here'
                       : onlineDue(b) > 0 && !meetsMinOnline(b)
                       ? 'The renter has not paid the minimum online share yet'

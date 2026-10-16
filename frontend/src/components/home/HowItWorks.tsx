@@ -17,7 +17,7 @@ const steps = [
   {
     icon: PayPhoneIllo,
     title: 'Pay Securely',
-    desc: 'Book with GCash or card, with support for partial down payments before pickup.',
+    desc: 'Pay online with GCash or card, or reserve with 15% online and pay the rest in cash at pickup.',
   },
   {
     icon: RideEarnIllo,

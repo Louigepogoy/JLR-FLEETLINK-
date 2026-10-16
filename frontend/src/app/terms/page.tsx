@@ -21,7 +21,7 @@ const sections = [
   },
   {
     title: '5. Payments',
-    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. A booking can be paid in full online, or partly online (at least 10% of the total, or the platform commission rate if higher) with the rest paid in cash to the owner at pickup. Cash paid to the owner is not held or refundable through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
+    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. A booking can be paid in full online, or reserved with "Cash at pickup": at least 15% of the total (or the platform commission rate if higher) is paid online and the rest in cash to the owner at pickup. Online payments are made in full. Cash paid to the owner is not held or refundable through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
   },
   {
     title: '6. Owner Subscriptions & Commission',

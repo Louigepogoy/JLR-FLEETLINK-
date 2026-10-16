@@ -16,8 +16,8 @@ const sections = [
     body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded less only the platform commission, which the platform keeps as a service fee. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
   },
   {
-    title: '4. Partial Payments and Cash',
-    body: 'You can pay part of your booking online and the rest in cash to the owner at pickup. At least 10% of the total (or the platform commission rate, if higher) must be paid online to confirm your booking and reserve the vehicle. The owner collects the remaining cash when handing over the vehicle and confirms it in the app. Cash paid to the owner is not held by JLR Fleetlink and cannot be refunded through the platform, so only pay it when you have the vehicle in front of you.',
+    title: '4. Reserving with Cash at Pickup',
+    body: 'Choose "Pay online" to pay the whole booking online, or "Cash at pickup" to pay a reservation online and the rest in cash to the owner at pickup. For "Cash at pickup", at least 15% of the total (or the platform commission rate, if higher) must be paid online to confirm your booking and reserve the vehicle. The owner collects the remaining cash when handing over the vehicle and confirms it in the app. Cash paid to the owner is not held by JLR Fleetlink and cannot be refunded through the platform, so only pay it when you have the vehicle in front of you.',
   },
   {
     title: '5. Unpaid Balance and No-Shows',

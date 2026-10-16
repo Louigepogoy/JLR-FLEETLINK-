@@ -357,15 +357,15 @@ function MyBookingsContent() {
                   <div className="flex flex-col items-start gap-1">
                     <button
                       className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={!b.is_pickup_day}
-                      title={b.is_pickup_day ? undefined : `Available on your pickup date: ${formatDate(b.start_date)}`}
+                      disabled={!b.handover_open}
+                      title={b.handover_open ? undefined : `Available on ${formatDate(b.start_date)} from ${b.handover_opens_label || 'the pickup time'}`}
                       onClick={() => markReady(b.id)}
                     >
                       I&apos;m here — ready for pickup
                     </button>
-                    {!b.is_pickup_day && (
+                    {!b.handover_open && (
                       <span className="text-xs text-[var(--muted)]">
-                        Available on {formatDate(b.start_date)}{b.pickup_time ? ` at ${formatTime(b.pickup_time)}` : ''}
+                        Available on {formatDate(b.start_date)} from {b.handover_opens_label || formatTime(b.pickup_time || '09:00')} (1 hour before pickup)
                       </span>
                     )}
                   </div>
