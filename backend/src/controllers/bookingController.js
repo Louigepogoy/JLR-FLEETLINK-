@@ -10,7 +10,7 @@ const {
   AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly,
 } = require('../services/inspectionService');
 const { autoPayoutOwner } = require('../services/payoutService');
-const { sendPaymongoRefunds } = require('./disputeController');
+const { sendPaymongoRefunds, autoResolveDispute, AUTO_REFUND_PERCENT } = require('./disputeController');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
 const { getExtensionQuote, extensionOnlineAmount, round2 } = require('../services/extensionService');
 
@@ -951,25 +951,48 @@ const rejectVehicle = async (req, res, next) => {
     );
     await client.query('COMMIT');
 
-    await createNotification(
-      b.owner_id,
-      'Renter reported a problem with your vehicle',
-      `The renter rejected ${b.title} at pickup: "${reason.slice(0, 120)}". The booking was cancelled and your payout is on hold while an admin reviews it.`,
-      'alert',
-      '/dashboard/booking-requests'
-    ).catch(() => {});
-    const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
-    for (const admin of admins.rows) {
+    // The renter is refunded a fixed share right away. Only if that can't be sent does the dispute stay open
+    // for an admin to decide (and the owner's payout stays on hold until then).
+    const auto = await autoResolveDispute(dispute.rows[0].id);
+    if (auto.resolved) {
+      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'Renter rejected a vehicle',
+          `A renter rejected ${b.title} at pickup and was refunded ${AUTO_REFUND_PERCENT}% automatically. See Pickup Disputes for the evidence.`,
+          'alert',
+          '/dashboard/admin/disputes'
+        ).catch(() => {});
+      }
+    } else {
       await createNotification(
-        admin.id,
-        'New pickup dispute',
-        `A renter rejected ${b.title} at pickup. Review the evidence and resolve it.`,
+        b.owner_id,
+        'Renter reported a problem with your vehicle',
+        `The renter rejected ${b.title} at pickup: "${reason.slice(0, 120)}". The booking was cancelled and your payout is on hold while an admin reviews it.`,
         'alert',
-        '/dashboard/admin/disputes'
+        '/dashboard/booking-requests'
       ).catch(() => {});
+      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'New pickup dispute',
+          `A renter rejected ${b.title} at pickup, and the automatic ${AUTO_REFUND_PERCENT}% refund could not be sent${auto.error ? ` (${auto.error})` : ''}. Review the evidence and resolve it.`,
+          'alert',
+          '/dashboard/admin/disputes'
+        ).catch(() => {});
+      }
     }
 
-    res.status(201).json({ success: true, data: { booking: b, dispute: dispute.rows[0] } });
+    res.status(201).json({
+      success: true,
+      data: {
+        booking: b,
+        dispute: dispute.rows[0],
+        autoRefund: auto.resolved ? { amount: auto.refundAmount, percent: AUTO_REFUND_PERCENT } : null,
+      },
+    });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     await removeUploads();

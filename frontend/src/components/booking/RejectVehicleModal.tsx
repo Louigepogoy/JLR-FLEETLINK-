@@ -5,6 +5,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
+import { formatCurrency } from '@/lib/utils';
 import EvidencePicker, { type Evidence } from './EvidencePicker';
 
 const MAX_FILES = 5;
@@ -35,10 +36,13 @@ export default function RejectVehicleModal({ bookingId, vehicleTitle, onClose, o
       const data = new FormData();
       data.append('reason', reason.trim());
       evidence.forEach((e) => data.append('evidence', e.file));
-      await api.post(`/bookings/${bookingId}/inspection/reject`, data, {
+      const res = await api.post(`/bookings/${bookingId}/inspection/reject`, data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success('Problem reported. Your payment is on hold while an admin reviews it.');
+      const refund = res.data.data?.autoRefund as { amount: number; percent: number } | null;
+      toast.success(refund
+        ? `Vehicle rejected. ${refund.percent}% of your payment (${formatCurrency(refund.amount)}) is being refunded.`
+        : 'Problem reported. Your payment is on hold while an admin reviews it.');
       onRejected();
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not report the problem'));
@@ -58,7 +62,7 @@ export default function RejectVehicleModal({ bookingId, vehicleTitle, onClose, o
             <div>
               <h3 className="text-lg font-semibold">Reject {vehicleTitle}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Your booking will be cancelled — give the keys back to the owner. The owner won&apos;t be paid while an admin reviews it, and you may get a full or partial refund.
+                Your booking will be cancelled — give the keys back to the owner. You will get 50% of your online payment back automatically; the other 50% goes to the owner for holding the vehicle. If the refund can&apos;t be sent automatically, an admin will review your report.
               </p>
             </div>
           </div>

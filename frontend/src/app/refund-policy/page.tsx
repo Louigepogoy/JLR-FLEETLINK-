@@ -29,11 +29,11 @@ const sections = [
   },
   {
     title: '7. Rejecting a Vehicle',
-    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately, frees the dates, and keeps your payment on hold while an administrator reviews your report. Please return the keys to the owner.',
+    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately and frees the dates. 50% of your online payment is refunded to you automatically; the other 50% goes to the owner (less the platform commission) for holding the vehicle. If the automatic refund cannot be sent, your payment stays on hold while an administrator reviews your report. Please return the keys to the owner.',
   },
   {
     title: '8. How Disputes Are Decided',
-    body: 'An administrator compares the listing with your report and decides on one of three outcomes: a full refund, a partial refund (the owner receives the rest), or no refund if the report is not supported. Both you and the owner are notified of the decision.',
+    body: 'When you reject a vehicle with proof, the automatic 50% refund applies. If the automatic refund cannot be sent, or you contact us about a problem during your trip, an administrator compares the listing with your report and decides on one of three outcomes: a full refund, a partial refund (the owner receives the rest), or no refund if the report is not supported. Both you and the owner are notified of the decision.',
   },
   {
     title: '9. How You Receive a Refund',

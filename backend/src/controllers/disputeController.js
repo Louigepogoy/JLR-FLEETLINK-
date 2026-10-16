@@ -78,6 +78,131 @@ const sendPaymongoRefunds = async (client, bookingId, amount, notes) => {
 };
 
 /**
+ * Books a partial refund: takes it out of the owner's and the platform's shares in the same ratio they were
+ * split when the customer paid. Negative amounts offset the owner's pending payout.
+ */
+const recordPartialRefund = async (client, d, refundAmount, description) => {
+  const shares = await client.query(
+    `SELECT COALESCE(SUM(total_amount), 0) AS total, COALESCE(SUM(platform_amount), 0) AS platform
+     FROM transactions WHERE booking_id = $1 AND type = 'payment'`,
+    [d.booking_id]
+  );
+  const total = parseFloat(shares.rows[0].total);
+  const platformRatio = total > 0 ? parseFloat(shares.rows[0].platform) / total : 0;
+  const platformPart = Math.round(refundAmount * platformRatio * 100) / 100;
+  const ownerPart = Math.round((refundAmount - platformPart) * 100) / 100;
+  await client.query(
+    `INSERT INTO transactions (booking_id, user_id, type, total_amount, commission_amount, owner_amount,
+       platform_amount, commission_percentage, status, invoice_number, description)
+     VALUES ($1, $2, 'refund', $3, $4, $5, $4, $6, 'refunded', $7, $8)`,
+    [
+      d.booking_id, d.owner_id, refundAmount, -platformPart, -ownerPart,
+      Math.round(platformRatio * 10000) / 100, generateInvoiceNumber(), description,
+    ]
+  );
+};
+
+// A renter who rejects the vehicle (with proof) gets this share of their online payment back right away,
+// without waiting for an admin; the owner keeps the rest (less the platform commission). The frontend
+// texts and the refund policy mention the same number.
+const AUTO_REFUND_PERCENT = 50;
+
+/**
+ * Resolves a just-opened pickup dispute as a partial refund of AUTO_REFUND_PERCENT of the online payment.
+ * If the refund can't be sent at all (e.g. PayMongo not configured or the refund window passed) nothing is
+ * saved and the dispute stays open for an admin. Never throws.
+ * Returns { resolved: true, refundAmount, manualRemaining } or { resolved: false, error }.
+ */
+const autoResolveDispute = async (disputeId) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      `SELECT d.*, b.paid_amount, b.cash_collected, v.owner_id, v.title
+       FROM booking_disputes d
+       JOIN bookings b ON d.booking_id = b.id
+       JOIN vehicles v ON b.vehicle_id = v.id
+       WHERE d.id = $1 FOR UPDATE OF d, b`,
+      [disputeId]
+    );
+    const d = found.rows[0];
+    // Cash paid to the owner at pickup isn't refundable here; only the online payments are.
+    const paid = d ? round2(parseFloat(d.paid_amount) - parseFloat(d.cash_collected || 0)) : 0;
+    if (!d || d.status !== 'open' || !(paid > 0)) {
+      await client.query('ROLLBACK');
+      return { resolved: false, error: 'Nothing to refund automatically' };
+    }
+
+    const refundAmount = round2(paid * AUTO_REFUND_PERCENT / 100);
+    const result = await sendPaymongoRefunds(
+      client, d.booking_id, refundAmount, `Pickup dispute refund (automatic ${AUTO_REFUND_PERCENT}%): ${d.title}`
+    );
+    if (!result.refundIds.length) {
+      await client.query('ROLLBACK');
+      return { resolved: false, error: result.error };
+    }
+    const manualRemaining = result.remaining;
+    const refundMethod = manualRemaining > 0 ? 'partly_manual' : 'paymongo';
+    const refundReference = result.refundIds.join(', ')
+      + (manualRemaining > 0 ? ` — ${peso(manualRemaining)} still to send manually (${result.error})` : '');
+
+    await recordPartialRefund(
+      client, d, refundAmount, `Automatic ${AUTO_REFUND_PERCENT}% refund for ${d.title} (rejected at pickup)`
+    );
+    await client.query(
+      `UPDATE booking_disputes SET status = 'partially_refunded', refund_amount = $2, admin_notes = $3,
+         resolved_at = NOW(), refund_method = $4, refund_reference = $5 WHERE id = $1`,
+      [d.id, refundAmount, `Automatic ${AUTO_REFUND_PERCENT}% refund when the renter rejected the vehicle.`, refundMethod, refundReference]
+    );
+    try {
+      await client.query('COMMIT');
+    } catch (err) {
+      // Money already went back through PayMongo but couldn't be recorded — make it traceable.
+      console.error(`Dispute ${d.id}: PayMongo refunds ${refundReference} sent but not saved:`, err.message);
+      throw err;
+    }
+
+    await createNotification(
+      d.customer_id,
+      'Refund sent',
+      `${AUTO_REFUND_PERCENT}% of your payment for ${d.title} (${peso(refundAmount)}) was refunded automatically. `
+        + (manualRemaining > 0
+          ? `${peso(refundAmount - manualRemaining)} is on its way back to the account you paid with; the remaining ${peso(manualRemaining)} will be sent to you separately.`
+          : 'It goes back to the account you paid with: GCash/Maya within 24 hours, cards within 30 days.'),
+      'payment',
+      '/dashboard/bookings'
+    ).catch(() => {});
+    await createNotification(
+      d.owner_id,
+      'Renter rejected your vehicle',
+      `The renter rejected ${d.title} at pickup and was refunded ${AUTO_REFUND_PERCENT}% of the online payment. Your share of the remaining payment is eligible for payout.`,
+      'payment',
+      '/dashboard/earnings'
+    ).catch(() => {});
+    await autoPayoutOwner(d.owner_id, 'dispute');
+    if (manualRemaining > 0) {
+      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+      for (const admin of admins.rows) {
+        await createNotification(
+          admin.id,
+          'Manual refund needed',
+          `Send ${peso(manualRemaining)} back to the renter of ${d.title} yourself (GCash/bank). It wasn't refunded automatically.`,
+          'alert',
+          '/dashboard/admin/disputes'
+        ).catch(() => {});
+      }
+    }
+    return { resolved: true, refundAmount, manualRemaining };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Automatic dispute refund failed:', error.message);
+    return { resolved: false, error: error.message };
+  } finally {
+    client.release();
+  }
+};
+
+/**
  * Admin decision on a pickup dispute. Refunds are sent automatically through PayMongo; if that
  * isn't possible (e.g. low PayMongo balance or past the refund window) the admin can instead record
  * it as a manual refund (`manual: true`) and send the money themselves.
@@ -187,27 +312,7 @@ const resolveDispute = async (req, res, next) => {
         [d.booking_id]
       );
     } else if (action === 'refund_partial') {
-      // Take the refund out of the owner's and the platform's shares in the same ratio they were
-      // split when the customer paid. Negative amounts offset the owner's pending payout.
-      const shares = await client.query(
-        `SELECT COALESCE(SUM(total_amount), 0) AS total, COALESCE(SUM(platform_amount), 0) AS platform
-         FROM transactions WHERE booking_id = $1 AND type = 'payment'`,
-        [d.booking_id]
-      );
-      const total = parseFloat(shares.rows[0].total);
-      const platformRatio = total > 0 ? parseFloat(shares.rows[0].platform) / total : 0;
-      const platformPart = Math.round(refundAmount * platformRatio * 100) / 100;
-      const ownerPart = Math.round((refundAmount - platformPart) * 100) / 100;
-      await client.query(
-        `INSERT INTO transactions (booking_id, user_id, type, total_amount, commission_amount, owner_amount,
-           platform_amount, commission_percentage, status, invoice_number, description)
-         VALUES ($1, $2, 'refund', $3, $4, $5, $4, $6, 'refunded', $7, $8)`,
-        [
-          d.booking_id, d.owner_id, refundAmount, -platformPart, -ownerPart,
-          Math.round(platformRatio * 10000) / 100, generateInvoiceNumber(),
-          `Partial refund for ${d.title} (pickup dispute)`,
-        ]
-      );
+      await recordPartialRefund(client, d, refundAmount, `Partial refund for ${d.title} (pickup dispute)`);
     }
 
     const updated = await client.query(
@@ -354,4 +459,5 @@ const resolveDisputeValidation = [
 
 module.exports = {
   getDisputes, resolveDispute, resolveDisputeValidation, requestEvidence, addDisputeEvidence, sendPaymongoRefunds,
+  autoResolveDispute, AUTO_REFUND_PERCENT,
 };
