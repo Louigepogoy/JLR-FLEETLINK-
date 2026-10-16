@@ -10,6 +10,11 @@ const MESSAGE_PAGE_SIZE = 200;
 const MAX_FORWARD_TARGETS = 5;
 const REACTION_EMOJIS = ['👍', '❤️', '😆', '😮', '😢', '😡'];
 const POLICY_MESSAGE = 'Message blocked: bad words are not allowed in chat (Chat Policy).';
+const CHAT_CLOSED_MESSAGE = 'This chat is closed. Renters and owners can message each other only while they have an open booking together.';
+const NO_BOOKING_MESSAGE = 'You can message this person only while you have an open booking together.';
+
+// Bookings that keep a renter/owner chat open: not yet finished or cancelled.
+const OPEN_BOOKING_SQL = `bk.status IN ('pending', 'approved', 'active')`;
 
 const sendValidationErrors = (req, res) => {
   const errors = validationResult(req);
@@ -32,6 +37,13 @@ const CONVERSATION_SELECT = `
   SELECT c.id, c.vehicle_id, c.last_message_at, c.created_at,
          o.id AS other_id, o.full_name AS other_name, o.avatar_url AS other_avatar_url, o.role AS other_role,
          ((u1.role = 'admin') <> (u2.role = 'admin')) AS is_support,
+         -- Renters and owners can write to each other only while they have an open booking together;
+         -- chats with an admin (support) are always open.
+         (((u1.role = 'admin') <> (u2.role = 'admin')) OR me.role = 'admin' OR EXISTS (
+           SELECT 1 FROM bookings bk JOIN vehicles bv ON bv.id = bk.vehicle_id
+           WHERE bk.status IN ('pending', 'approved', 'active')
+             AND ((bk.customer_id = $1 AND bv.owner_id = o.id) OR (bk.customer_id = o.id AND bv.owner_id = $1))
+         )) AS can_message,
          v.title AS vehicle_title,
          CASE
            WHEN lm.deleted_at IS NOT NULL THEN 'Message unsent'
@@ -155,11 +167,16 @@ const searchUsers = async (req, res, next) => {
   try {
     if (sendValidationErrors(req, res)) return;
     const term = `%${req.query.q.replace(/[%_\\]/g, '\\$&')}%`;
+    // Admins can find anyone; everyone else only the people they have an open booking with.
     const result = await query(
-      `SELECT id, full_name, avatar_url, role FROM users
-       WHERE is_active = true AND id <> $1 AND full_name ILIKE $2
-       ORDER BY full_name ASC LIMIT 10`,
-      [req.user.id, term]
+      `SELECT u.id, u.full_name, u.avatar_url, u.role FROM users u
+       WHERE u.is_active = true AND u.id <> $1 AND u.full_name ILIKE $2
+         AND ($3::boolean OR EXISTS (
+           SELECT 1 FROM bookings bk JOIN vehicles bv ON bv.id = bk.vehicle_id
+           WHERE ${OPEN_BOOKING_SQL}
+             AND ((bk.customer_id = $1 AND bv.owner_id = u.id) OR (bk.customer_id = u.id AND bv.owner_id = $1))))
+       ORDER BY u.full_name ASC LIMIT 10`,
+      [req.user.id, term, req.user.role === 'admin']
     );
     res.json({ success: true, data: result.rows });
   } catch (error) {
@@ -191,6 +208,17 @@ const startConversation = async (req, res, next) => {
 
     const other = await query('SELECT id, role FROM users WHERE id = $1 AND is_active = true', [userId]);
     if (!other.rows[0]) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Renters and owners can only start (or reopen) a chat while they have an open booking together.
+    if (req.user.role !== 'admin' && other.rows[0].role !== 'admin') {
+      const booking = await query(
+        `SELECT 1 FROM bookings bk JOIN vehicles bv ON bv.id = bk.vehicle_id
+         WHERE ${OPEN_BOOKING_SQL}
+           AND ((bk.customer_id = $1 AND bv.owner_id = $2) OR (bk.customer_id = $2 AND bv.owner_id = $1)) LIMIT 1`,
+        [req.user.id, userId]
+      );
+      if (!booking.rows[0]) return res.status(403).json({ success: false, message: NO_BOOKING_MESSAGE });
+    }
 
     // An admin messaging a user joins that user's existing support chat instead of opening a second one.
     if (req.user.role === 'admin' && other.rows[0].role !== 'admin' && !vehicleId) {
@@ -356,6 +384,7 @@ const sendMessage = async (req, res, next) => {
 
     const conversation = await getConversationForUser(req.user.id, req.params.id);
     if (!conversation) return res.status(404).json({ success: false, message: 'Conversation not found' });
+    if (!conversation.can_message) return res.status(403).json({ success: false, message: CHAT_CLOSED_MESSAGE, chatClosed: true });
 
     const reply = await resolveReplyTarget(conversation.id, req.body.replyToId);
     if (!reply.ok) return res.status(400).json({ success: false, message: 'The message you replied to is no longer available' });
@@ -392,6 +421,10 @@ const sendMedia = async (req, res, next) => {
     if (!conversation) {
       removeUpload();
       return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+    if (!conversation.can_message) {
+      removeUpload();
+      return res.status(403).json({ success: false, message: CHAT_CLOSED_MESSAGE, chatClosed: true });
     }
 
     const reply = await resolveReplyTarget(conversation.id, req.body.replyToId);
@@ -465,6 +498,9 @@ const forwardMessage = async (req, res, next) => {
     const targetIds = [...new Set(req.body.conversationIds)];
     const targets = await Promise.all(targetIds.map((id) => getConversationForUser(req.user.id, id)));
     if (targets.some((t) => !t)) return res.status(404).json({ success: false, message: 'One of the chats was not found' });
+    if (targets.some((t) => !t.can_message)) {
+      return res.status(403).json({ success: false, message: 'One of the chats is closed, so the message can\'t be forwarded there.', chatClosed: true });
+    }
 
     const forwarded = [];
     for (const target of targets) {

@@ -141,14 +141,15 @@ function MyBookingsContent() {
     try {
       const { data } = await api.get(`/bookings/${bookingId}/cancel-quote`);
       const q = data.data as {
-        canCancel: boolean; freeCancelHours: number; percent: number; refundAmount: number; retainedAmount: number;
+        canCancel: boolean; freeCancelHours: number; early: boolean; percent: number; platformFee: number;
+        refundAmount: number; retainedAmount: number;
       };
       if (!q.canCancel) {
         toast.error('This booking can no longer be cancelled. Please contact the owner or support.');
         return;
       }
-      const message = q.percent === 100
-        ? `Cancel this booking? You will get your full ${formatCurrency(q.refundAmount)} back.`
+      const message = q.early
+        ? `Cancel this booking? You will get ${formatCurrency(q.refundAmount)} back. The platform keeps a ${formatCurrency(q.platformFee)} service fee (its commission).`
         : `Cancel this booking? It is less than ${q.freeCancelHours} hours before pickup, so you will get ${q.percent}% back `
           + `(${formatCurrency(q.refundAmount)}). The other ${formatCurrency(q.retainedAmount)} goes to the owner for holding the vehicle.`;
       if (!confirm(message)) return;
@@ -290,9 +291,12 @@ function MyBookingsContent() {
                   <Star className="h-4 w-4" /> Rate this Trip
                 </button>
               )}
-              <button className="btn-outline text-sm flex items-center gap-2" onClick={() => messageOwner(b)}>
-                <MessageCircle className="h-4 w-4" /> Message Owner
-              </button>
+              {/* Chat with the owner is open only while the booking is (a finished or cancelled one closes it). */}
+              {['pending', 'approved', 'active'].includes(b.status) && (
+                <button className="btn-outline text-sm flex items-center gap-2" onClick={() => messageOwner(b)}>
+                  <MessageCircle className="h-4 w-4" /> Message Owner
+                </button>
+              )}
               {['approved', 'active', 'completed'].includes(b.status) && (
                 <Link href={`/dashboard/bookings/${b.id}/documents`} className="btn-outline text-sm flex items-center gap-2">
                   <FileText className="h-4 w-4" /> Documents

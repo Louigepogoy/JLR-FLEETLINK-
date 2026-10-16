@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BadgeCheck, Calendar, Car, Clock, Fuel, Hash, Loader2, MapPin, MessageCircle, Phone, ShieldCheck, Settings2, User, Users } from 'lucide-react';
+import { BadgeCheck, Calendar, Car, Clock, Fuel, Hash, MapPin, Phone, ShieldCheck, Settings2, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -16,7 +16,7 @@ import ImageGallery from '@/components/vehicles/ImageGallery';
 import api from '@/lib/api';
 import { canRent, useAuthStore } from '@/store/authStore';
 import { addRentalDays, BOOKING_GAP_HOURS, formatCurrency, formatDate, formatTime, localDateString, CASH_RESERVATION_PERCENT, onlineDue } from '@/lib/utils';
-import { apiErrorMessage, messagesPath, profilePath, startConversation } from '@/lib/chat';
+import { profilePath } from '@/lib/chat';
 import { formatPlace, getProvince, PHILIPPINES_CENTER } from '@/lib/philippines';
 import { PickupMap } from '@/components/maps';
 import type { ReviewSummary } from '@/lib/reviews';
@@ -46,7 +46,6 @@ export default function VehicleDetailPage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
   const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string; extended_hours?: number }[]>([]);
-  const [messagingOwner, setMessagingOwner] = useState(false);
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
 
   useEffect(() => {
@@ -83,22 +82,6 @@ export default function VehicleDetailPage() {
   const driverFeePerDay = vehicle ? parseFloat(String(vehicle.driver_fee_per_day || 0)) : 0;
   const driverFee = withDriver && vehicle?.driver_available ? days * driverFeePerDay : 0;
   const total = vehicle ? days * parseFloat(String(vehicle.price_per_day)) + driverFee : 0;
-
-  const handleMessageOwner = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please sign in to message the owner');
-      router.push('/auth/login');
-      return;
-    }
-    setMessagingOwner(true);
-    try {
-      const conversation = await startConversation({ vehicleId: String(id) });
-      router.push(messagesPath(user?.role, conversation.id));
-    } catch (err) {
-      toast.error(apiErrorMessage(err, 'Could not start chat'));
-      setMessagingOwner(false);
-    }
-  };
 
   const handleBook = async () => {
     if (!isAuthenticated) {
@@ -280,16 +263,7 @@ export default function VehicleDetailPage() {
                       <p className="text-xs text-[var(--primary)]">View profile</p>
                     </div>
                   </Link>
-                  {!isOwner && (
-                    <button
-                      onClick={handleMessageOwner}
-                      disabled={messagingOwner}
-                      className="btn-outline mt-4 flex w-full items-center justify-center gap-2 py-2 text-sm disabled:opacity-50"
-                    >
-                      {messagingOwner ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                      Message Owner
-                    </button>
-                  )}
+                  {/* Chatting with the owner opens once the renter has a booking: My Bookings → Message Owner. */}
                 </div>
                 <div className="mt-5 overflow-hidden rounded-xl border border-[var(--card-border)]">
                   <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 bg-[var(--primary)]/10 text-sm">

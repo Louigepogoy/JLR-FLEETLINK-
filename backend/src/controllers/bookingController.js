@@ -366,24 +366,29 @@ const updateBookingStatus = async (req, res, next) => {
   }
 };
 
-// Cancelling a paid booking before pickup: the full online payment comes back when it's cancelled at least
-// FREE_CANCEL_HOURS before the pickup time, otherwise LATE_CANCEL_REFUND_PERCENT of it (the rest goes to the
-// owner, less the platform commission, for holding the vehicle). Once pickup time has passed, there's no cancel.
+// Cancelling a paid booking before pickup. At least FREE_CANCEL_HOURS before the pickup time the renter gets
+// the online payment back less only the platform commission (nothing goes to the owner); closer than that,
+// LATE_CANCEL_REFUND_PERCENT of it comes back and the rest is split between the owner (for holding the
+// vehicle) and the platform commission. Once pickup time has passed, there's no cancel.
 const FREE_CANCEL_HOURS = 24;
 const LATE_CANCEL_REFUND_PERCENT = 50;
 const HOURS_TO_PICKUP_SQL = `EXTRACT(EPOCH FROM (((b.start_date + COALESCE(b.pickup_time, '09:00'::time)) AT TIME ZONE 'Asia/Manila') - NOW())) / 3600`;
 
-const cancellationQuote = (b) => {
+const cancellationQuote = (b, commissionPct) => {
   const hoursToPickup = parseFloat(b.hours_to_pickup);
   const onlinePaid = round2(parseFloat(b.paid_amount) - parseFloat(b.cash_collected || 0));
-  const percent = hoursToPickup >= FREE_CANCEL_HOURS ? 100 : LATE_CANCEL_REFUND_PERCENT;
-  const refundAmount = round2(onlinePaid * percent / 100);
+  const early = hoursToPickup >= FREE_CANCEL_HOURS;
+  // Early: only the platform's commission is kept. Late: half is kept.
+  const platformFee = early ? round2(onlinePaid * commissionPct / 100) : 0;
+  const refundAmount = early ? round2(onlinePaid - platformFee) : round2(onlinePaid * LATE_CANCEL_REFUND_PERCENT / 100);
   return {
     canCancel: b.status === 'approved' && !b.handed_over_at && hoursToPickup > 0 && onlinePaid > 0,
     freeCancelHours: FREE_CANCEL_HOURS,
     hoursToPickup,
+    early,
     onlinePaid,
-    percent,
+    percent: onlinePaid > 0 ? Math.round(refundAmount / onlinePaid * 100) : 0,
+    platformFee,
     refundAmount,
     retainedAmount: round2(onlinePaid - refundAmount),
   };
@@ -392,13 +397,18 @@ const cancellationQuote = (b) => {
 const BOOKING_FOR_CANCEL_SQL = `SELECT b.*, v.owner_id, v.title, ${HOURS_TO_PICKUP_SQL} AS hours_to_pickup
   FROM bookings b JOIN vehicles v ON b.vehicle_id = v.id WHERE b.id = $1`;
 
+const getCommissionPct = async (run) => {
+  const settings = await run('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
+  return parseFloat(settings.rows[0]?.commission_percentage || 10);
+};
+
 const getCancellationQuote = async (req, res, next) => {
   try {
     const found = await query(BOOKING_FOR_CANCEL_SQL, [req.params.id]);
     const b = found.rows[0];
     if (!b) return res.status(404).json({ success: false, message: 'Booking not found' });
     if (b.customer_id !== req.user.id) return res.status(403).json({ success: false, message: 'Access denied' });
-    res.json({ success: true, data: cancellationQuote(b) });
+    res.json({ success: true, data: cancellationQuote(b, await getCommissionPct(query)) });
   } catch (error) {
     next(error);
   }
@@ -410,7 +420,8 @@ const cancelPaidBooking = async (req, res, next) => {
     await client.query('BEGIN');
     const found = await client.query(`${BOOKING_FOR_CANCEL_SQL} FOR UPDATE OF b`, [req.params.id]);
     const b = found.rows[0];
-    const quote = b && cancellationQuote(b);
+    const commissionPct = await getCommissionPct((text) => client.query(text));
+    const quote = b && cancellationQuote(b, commissionPct);
     if (!b || b.customer_id !== req.user.id || !quote.canCancel) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -420,8 +431,6 @@ const cancelPaidBooking = async (req, res, next) => {
       });
     }
 
-    const settings = await client.query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
-    const commissionPct = parseFloat(settings.rows[0]?.commission_percentage || 10);
     const fullRefund = quote.retainedAmount <= 0;
 
     // Send the money back before recording anything. If PayMongo can't, the cancellation still goes
@@ -439,14 +448,14 @@ const cancelPaidBooking = async (req, res, next) => {
         [b.id, b.owner_id, quote.refundAmount, generateInvoiceNumber(), `Full refund for ${b.title} (cancelled before pickup)`]
       );
     } else {
-      // The retained part is split owner/platform by the commission rate; the refund row takes the rest
-      // out of the shares recorded when the renter paid.
+      // What's kept: early, all of it is the platform's commission; late, it is split owner/platform by the
+      // commission rate. The refund row takes the rest out of the shares recorded when the renter paid.
       const shares = await client.query(
         `SELECT COALESCE(SUM(platform_amount), 0) AS platform, COALESCE(SUM(owner_amount), 0) AS owner
          FROM transactions WHERE booking_id = $1 AND type = 'payment'`,
         [b.id]
       );
-      const platformKept = round2(quote.retainedAmount * commissionPct / 100);
+      const platformKept = quote.early ? quote.retainedAmount : round2(quote.retainedAmount * commissionPct / 100);
       const ownerKept = round2(quote.retainedAmount - platformKept);
       await client.query(
         `INSERT INTO transactions (booking_id, user_id, type, total_amount, commission_amount, owner_amount,
@@ -456,7 +465,8 @@ const cancelPaidBooking = async (req, res, next) => {
           b.id, b.owner_id, quote.refundAmount,
           -round2(parseFloat(shares.rows[0].platform) - platformKept),
           -round2(parseFloat(shares.rows[0].owner) - ownerKept),
-          commissionPct, generateInvoiceNumber(), `Partial refund for ${b.title} (late cancellation)`,
+          commissionPct, generateInvoiceNumber(),
+          quote.early ? `Refund less platform fee for ${b.title} (cancelled before pickup)` : `Partial refund for ${b.title} (late cancellation)`,
         ]
       );
     }
@@ -477,16 +487,18 @@ const cancelPaidBooking = async (req, res, next) => {
     await createNotification(
       b.customer_id,
       'Booking cancelled',
-      `Your booking for ${b.title} was cancelled. ₱${quote.refundAmount.toFixed(2)} ${manualRemaining > 0 ? 'will be sent back to you.' : `has been refunded. ${timing}`}`,
+      `Your booking for ${b.title} was cancelled. ₱${quote.refundAmount.toFixed(2)} ${manualRemaining > 0 ? 'will be sent back to you.' : `has been refunded. ${timing}`}`
+        + (quote.early && quote.platformFee > 0 ? ` The platform keeps a ₱${quote.platformFee.toFixed(2)} service fee (its commission).` : ''),
       'payment',
       '/dashboard/bookings'
     ).catch(() => {});
+    const ownerKeeps = quote.early ? 0 : round2(quote.retainedAmount - round2(quote.retainedAmount * commissionPct / 100));
     await createNotification(
       b.owner_id,
       'Booking Cancelled',
-      fullRefund
-        ? `The customer cancelled their booking for ${b.title} before pickup. The dates are free again.`
-        : `The customer cancelled their booking for ${b.title} close to pickup. You keep ₱${round2(quote.retainedAmount - round2(quote.retainedAmount * commissionPct / 100)).toFixed(2)} for holding the vehicle.`,
+      ownerKeeps > 0
+        ? `The customer cancelled their booking for ${b.title} close to pickup. You keep ₱${ownerKeeps.toFixed(2)} for holding the vehicle.`
+        : `The customer cancelled their booking for ${b.title} before pickup. The dates are free again.`,
       'booking',
       '/dashboard/booking-requests'
     ).catch(() => {});

@@ -317,12 +317,15 @@ export default function BookingRequestsPage() {
                   <Star className="h-4 w-4" /> Rate Customer
                 </button>
               )}
-              <button
-                onClick={() => messageCustomer(b.customer_id)}
-                className="btn-outline text-sm py-2 flex items-center gap-2"
-              >
-                <MessageCircle className="h-4 w-4" /> Message Customer
-              </button>
+              {/* Chat with the renter is open only while the booking is (a finished or cancelled one closes it). */}
+              {['pending', 'approved', 'active'].includes(b.status) && (
+                <button
+                  onClick={() => messageCustomer(b.customer_id)}
+                  className="btn-outline text-sm py-2 flex items-center gap-2"
+                >
+                  <MessageCircle className="h-4 w-4" /> Message Customer
+                </button>
+              )}
               <button
                 onClick={() => setReportBooking(b)}
                 className="btn-outline text-sm py-2 text-red-500"

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft, Car, Check, Copy, CornerUpLeft, EyeOff, Forward, Headset, ImagePlus, Loader2, MapPin,
+  ArrowLeft, Car, Check, Copy, CornerUpLeft, EyeOff, Forward, Headset, ImagePlus, Loader2, Lock, MapPin,
   MessageCircle, MoreHorizontal, Search, Send, ShieldCheck, SmilePlus, Trash2, Undo2, UserPlus, X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -754,6 +754,12 @@ function ChatThread({
         </div>
       )}
 
+      {conversation && !conversation.can_message ? (
+        <div className="flex items-center gap-2 border-t border-[var(--card-border)] p-4 text-sm text-[var(--muted)]">
+          <Lock className="h-4 w-4 shrink-0" />
+          This chat is closed. You can message each other only while you have an open booking together.
+        </div>
+      ) : (
       <form onSubmit={send} className="flex items-end gap-2 border-t border-[var(--card-border)] p-3">
         <input
           ref={fileInputRef}
@@ -806,6 +812,7 @@ function ChatThread({
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
       </form>
+      )}
 
       {/* Keyed by message so the chosen chats reset each time the dialog opens. */}
       <ForwardModal key={forwarding?.id ?? 'closed'} message={forwarding} onClose={() => setForwarding(null)} onForwarded={onActivity} />

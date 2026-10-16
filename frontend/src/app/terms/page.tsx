@@ -17,7 +17,7 @@ const sections = [
   },
   {
     title: '4. Cancellations',
-    body: 'Unpaid bookings may be cancelled from My Bookings at any time. Paid bookings may be cancelled until the pickup time: a full refund of the online payment if cancelled at least 24 hours before pickup, or 50% if cancelled less than 24 hours before pickup (the rest goes to the owner). After the pickup time, or once the vehicle is handed over, bookings can no longer be cancelled from your account. A booking that is left partly unpaid and not picked up within 3 hours of the pickup time is cancelled automatically and what was paid is kept by the owner. Repeated no-shows or cancellations may affect your ability to book on the platform. See the Refund & Dispute Policy for details.',
+    body: 'Unpaid bookings may be cancelled from My Bookings at any time. Paid bookings may be cancelled until the pickup time: a refund of the online payment less the platform commission if cancelled at least 24 hours before pickup, or 50% if cancelled less than 24 hours before pickup (the rest goes to the owner). After the pickup time, or once the vehicle is handed over, bookings can no longer be cancelled from your account. A booking that is left partly unpaid and not picked up within 3 hours of the pickup time is cancelled automatically and what was paid is kept by the owner. Repeated no-shows or cancellations may affect your ability to book on the platform. See the Refund & Dispute Policy for details.',
   },
   {
     title: '5. Payments',

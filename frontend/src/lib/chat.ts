@@ -11,6 +11,8 @@ export type Conversation = {
   other_role: 'user' | 'admin';
   // Chat between an admin and a user. Every admin shares these as one support inbox.
   is_support: boolean;
+  // False once the renter/owner booking that allowed this chat is finished: the history stays, new messages can't be sent.
+  can_message: boolean;
   last_message: string | null;
   last_message_type: ChatMessage['message_type'] | null;
   last_message_sender_id: string | null;

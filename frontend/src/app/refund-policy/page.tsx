@@ -13,7 +13,7 @@ const sections = [
   },
   {
     title: '3. Cancelling a Booking',
-    body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded in full. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
+    body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded less only the platform commission, which the platform keeps as a service fee. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
   },
   {
     title: '4. Partial Payments and Cash',
