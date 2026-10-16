@@ -2,6 +2,7 @@ const { query } = require('../config/db');
 const { createCheckoutSession, getCheckoutSession, verifyWebhookEvent } = require('../services/paymongoService');
 const { finalizeBookingPayment, finalizeExtensionPayment } = require('./paymentController');
 const { getExtensionQuote, extensionOnlineAmount } = require('../services/extensionService');
+const { HALF_PAYMENT_PERCENT } = require('../utils/helpers');
 const {
   PLANS, activateSubscription, isFirstPaidSubscription, priceForUser, rejectNonOwner,
   EXTRA_VEHICLE_SLOT_PRICE, MAX_EXTRA_SLOTS_PER_PURCHASE, getActivePaidSubscription, addExtraVehicleSlots,
@@ -138,13 +139,21 @@ const createBookingPaymentCheckout = async (req, res, next) => {
     // Cash still to be collected at pickup isn't paid online.
     const remaining = Math.round((parseFloat(booking.total_amount) - parseFloat(booking.paid_amount)
       - parseFloat(booking.cash_due || 0)) * 100) / 100;
-    // Online payments are made in full: the whole balance at once (for a cash booking, the whole reservation fee).
-    if (amount < remaining - 0.005) {
+    // Online payments are made in full (for a cash booking, the whole reservation fee). The only exception: a
+    // new online booking can be started with half of the total; the platform still takes its whole commission
+    // from that first payment, and the rest is paid later online or in cash at pickup.
+    const halfAmount = Math.round(parseFloat(booking.total_amount) * HALF_PAYMENT_PERCENT) / 100;
+    const canPayHalf = booking.payment_option === 'online' && booking.status === 'pending'
+      && parseFloat(booking.paid_amount) === 0 && parseFloat(booking.cash_due || 0) === 0;
+    const isHalf = canPayHalf && Math.abs(amount - halfAmount) <= 0.005;
+    if (amount < remaining - 0.005 && !isHalf) {
       return res.status(400).json({
         success: false,
         message: booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0
           ? `Pay the full ₱${remaining.toFixed(2)} reservation fee to confirm your cash booking.`
-          : `Pay the full balance of ₱${remaining.toFixed(2)}. Partial online payments aren't accepted.`,
+          : canPayHalf
+            ? `Pay the full ₱${remaining.toFixed(2)} or half (₱${halfAmount.toFixed(2)}).`
+            : `Pay the full balance of ₱${remaining.toFixed(2)}. Partial online payments aren't accepted.`,
       });
     }
     if (amount > remaining + 0.005) {
@@ -155,7 +164,7 @@ const createBookingPaymentCheckout = async (req, res, next) => {
     }
 
     // The amount is the whole balance (checked above); charge the exact rounded figure.
-    const payAmount = remaining;
+    const payAmount = isHalf ? halfAmount : remaining;
     const externalId = `booking-${bookingId}-${Date.now()}`;
 
     const session = await createCheckoutSession({
@@ -164,7 +173,7 @@ const createBookingPaymentCheckout = async (req, res, next) => {
       description: `Payment for ${booking.title}`,
       payerEmail: req.user.email,
       successUrl: `${FRONTEND_URL}/dashboard/bookings?payment=success`,
-      cancelUrl: `${FRONTEND_URL}/dashboard/bookings?payment=failed`,
+      cancelUrl: `${FRONTEND_URL}/vehicles/${booking.vehicle_id}?payment=failed&bookingId=${bookingId}`,
     });
 
     await query(

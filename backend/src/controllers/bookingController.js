@@ -10,7 +10,7 @@ const {
   AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly,
 } = require('../services/inspectionService');
 const { autoPayoutOwner } = require('../services/payoutService');
-const { sendPaymongoRefunds, autoResolveDispute, AUTO_REFUND_PERCENT } = require('./disputeController');
+const { sendPaymongoRefunds } = require('./disputeController');
 const { PAYMENT_SECONDS_LEFT_SQL, PAYMENT_WINDOW_MINUTES } = require('../services/bookingExpiryService');
 const { getExtensionQuote, extensionOnlineAmount, round2 } = require('../services/extensionService');
 
@@ -21,7 +21,7 @@ const CONTACT_SHARED_SQL = `b.status IN ('approved', 'active', 'completed')`;
 // True when today (Philippine time) is the booking's pickup date — the only day the owner may hand
 // the vehicle over. Expects `b` = bookings.
 // Bump when the agreement wording changes (the frontend shows the same version in lib/rentalAgreement.ts).
-const RENTAL_AGREEMENT_VERSION = '2026-10';
+const RENTAL_AGREEMENT_VERSION = '2026-11';
 
 const IS_PICKUP_DAY_SQL = `(b.start_date = (NOW() AT TIME ZONE 'Asia/Manila')::date)`;
 // The renter's "I'm here" and the owner's handover open HANDOVER_OPENS_HOURS_BEFORE hours before the pickup time
@@ -115,6 +115,40 @@ const createBooking = async (req, res, next) => {
         message: 'This vehicle is unavailable during the selected dates (owner maintenance).',
       });
     }
+
+    // A renter can't be in two rentals at once: a paid booking (for any vehicle) that overlaps these dates and
+    // times blocks the new one.
+    const ownOverlap = await query(
+      `SELECT v.title,
+              TO_CHAR(b.start_date + COALESCE(b.pickup_time, '09:00'::time), 'Mon FMDD, FMHH12:MI AM') AS starts,
+              TO_CHAR(b.end_date + COALESCE(b.dropoff_time, '17:00'::time), 'Mon FMDD, FMHH12:MI AM') AS ends
+       FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id
+       WHERE b.customer_id = $1 AND b.status IN ('approved', 'active')
+         AND (b.start_date + COALESCE(b.pickup_time, '09:00'::time)) < ($3::date + $5::time)
+         AND (b.end_date + COALESCE(b.dropoff_time, '17:00'::time)) > ($2::date + $4::time)
+       LIMIT 1`,
+      [req.user.id, startDate, endDate, pickup, dropoff]
+    );
+    if (ownOverlap.rows[0]) {
+      const o = ownOverlap.rows[0];
+      return res.status(409).json({
+        success: false,
+        code: 'OVERLAPPING_BOOKING',
+        message: `You already have a booking for ${o.title} (${o.starts} – ${o.ends}). You can't book another vehicle for overlapping dates.`,
+      });
+    }
+
+    // Starting a new attempt replaces this renter's own unpaid booking(s) for this vehicle, or that overlap these
+    // dates on another vehicle, so an abandoned checkout never blocks them (it would only hold the dates until
+    // the payment window ends).
+    await query(
+      `UPDATE bookings SET status = 'cancelled', updated_at = NOW()
+       WHERE customer_id = $1 AND status = 'pending' AND payment_status = 'pending'
+         AND (vehicle_id = $2
+              OR ((start_date + COALESCE(pickup_time, '09:00'::time)) < ($4::date + $6::time)
+                  AND (end_date + COALESCE(dropoff_time, '17:00'::time)) > ($3::date + $5::time)))`,
+      [req.user.id, vehicleId, startDate, endDate, pickup, dropoff]
+    );
 
     const bookingConflict = await query(
       `SELECT id FROM bookings
@@ -225,6 +259,7 @@ const getOwnerBookings = async (req, res, next) => {
        JOIN users c ON b.customer_id = c.id
        LEFT JOIN booking_disputes d ON d.booking_id = b.id
        WHERE v.owner_id = $1
+         AND NOT (b.status = 'pending' AND b.payment_status = 'pending')
        ORDER BY b.created_at DESC`,
       [req.user.id]
     );
@@ -388,14 +423,18 @@ const cancellationQuote = (b, commissionPct) => {
   const hoursToPickup = parseFloat(b.hours_to_pickup);
   const onlinePaid = round2(parseFloat(b.paid_amount) - parseFloat(b.cash_collected || 0));
   const early = hoursToPickup >= FREE_CANCEL_HOURS;
+  // A cash booking's online reservation is non-refundable: it stays with the platform.
+  const nonRefundable = b.payment_option === 'cash';
   // Early: only the platform's commission is kept. Late: half is kept.
-  const platformFee = early ? round2(onlinePaid * commissionPct / 100) : 0;
-  const refundAmount = early ? round2(onlinePaid - platformFee) : round2(onlinePaid * LATE_CANCEL_REFUND_PERCENT / 100);
+  const platformFee = nonRefundable ? onlinePaid : early ? Math.min(onlinePaid, round2(parseFloat(b.total_amount) * commissionPct / 100)) : 0;
+  const refundAmount = nonRefundable ? 0
+    : early ? round2(onlinePaid - platformFee) : round2(onlinePaid * LATE_CANCEL_REFUND_PERCENT / 100);
   return {
     canCancel: b.status === 'approved' && !b.handed_over_at && hoursToPickup > 0 && onlinePaid > 0,
     freeCancelHours: FREE_CANCEL_HOURS,
     hoursToPickup,
     early,
+    nonRefundable,
     onlinePaid,
     percent: onlinePaid > 0 ? Math.round(refundAmount / onlinePaid * 100) : 0,
     platformFee,
@@ -439,6 +478,35 @@ const cancelPaidBooking = async (req, res, next) => {
         message: 'This booking can no longer be cancelled. Once the pickup time has passed or the vehicle was handed over, '
           + 'please contact the owner or support.',
       });
+    }
+
+    if (quote.nonRefundable) {
+      // The reservation is non-refundable and stays with the platform: nothing goes to the owner.
+      await client.query(
+        `UPDATE transactions SET commission_amount = total_amount, platform_amount = total_amount, owner_amount = 0
+         WHERE booking_id = $1 AND type = 'payment'`,
+        [b.id]
+      );
+      const kept = await client.query(
+        `UPDATE bookings SET status = 'cancelled', cash_due = 0, updated_at = NOW() WHERE id = $1 RETURNING *`,
+        [b.id]
+      );
+      await client.query('COMMIT');
+      await createNotification(
+        b.customer_id,
+        'Booking cancelled',
+        `Your booking for ${b.title} was cancelled. The ₱${quote.onlinePaid.toFixed(2)} reservation fee is non-refundable.`,
+        'payment',
+        '/dashboard/bookings'
+      ).catch(() => {});
+      await createNotification(
+        b.owner_id,
+        'Booking Cancelled',
+        `The customer cancelled their booking for ${b.title}. The dates are free again.`,
+        'booking',
+        '/dashboard/booking-requests'
+      ).catch(() => {});
+      return res.json({ success: true, data: { ...kept.rows[0], refundAmount: 0, manualRefund: false, nonRefundable: true } });
     }
 
     const fullRefund = quote.retainedAmount <= 0;
@@ -531,6 +599,22 @@ const cancelPaidBooking = async (req, res, next) => {
     next(error);
   } finally {
     client.release();
+  }
+};
+
+// The renter left or failed the PayMongo checkout: drop the booking that was never paid so its dates are free
+// again right away. A paid booking is never touched here (those go through Cancel & Refund).
+const abandonUnpaidBooking = async (req, res, next) => {
+  try {
+    const result = await query(
+      `UPDATE bookings SET status = 'cancelled', updated_at = NOW()
+       WHERE id = $1 AND customer_id = $2 AND status = 'pending' AND payment_status = 'pending'
+       RETURNING id`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true, data: { cancelled: result.rows.length > 0 } });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -981,48 +1065,27 @@ const rejectVehicle = async (req, res, next) => {
     );
     await client.query('COMMIT');
 
-    // The renter is refunded a fixed share right away. Only if that can't be sent does the dispute stay open
-    // for an admin to decide (and the owner's payout stays on hold until then).
-    const auto = await autoResolveDispute(dispute.rows[0].id);
-    if (auto.resolved) {
-      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
-      for (const admin of admins.rows) {
-        await createNotification(
-          admin.id,
-          'Renter rejected a vehicle',
-          `A renter rejected ${b.title} at pickup and was refunded ${AUTO_REFUND_PERCENT}% automatically. See Pickup Disputes for the evidence.`,
-          'alert',
-          '/dashboard/admin/disputes'
-        ).catch(() => {});
-      }
-    } else {
+    // Rejecting never refunds by itself: the owner's payout stays on hold and an admin reviews the evidence,
+    // then decides on a full refund, a partial refund or none.
+    await createNotification(
+      b.owner_id,
+      'Renter reported a problem with your vehicle',
+      `The renter rejected ${b.title} at pickup: "${reason.slice(0, 120)}". The booking was cancelled and your payout is on hold while an admin reviews it.`,
+      'alert',
+      '/dashboard/booking-requests'
+    ).catch(() => {});
+    const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
+    for (const admin of admins.rows) {
       await createNotification(
-        b.owner_id,
-        'Renter reported a problem with your vehicle',
-        `The renter rejected ${b.title} at pickup: "${reason.slice(0, 120)}". The booking was cancelled and your payout is on hold while an admin reviews it.`,
+        admin.id,
+        'New pickup dispute',
+        `A renter rejected ${b.title} at pickup. Review the evidence and resolve it.`,
         'alert',
-        '/dashboard/booking-requests'
+        '/dashboard/admin/disputes'
       ).catch(() => {});
-      const admins = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = true");
-      for (const admin of admins.rows) {
-        await createNotification(
-          admin.id,
-          'New pickup dispute',
-          `A renter rejected ${b.title} at pickup, and the automatic ${AUTO_REFUND_PERCENT}% refund could not be sent${auto.error ? ` (${auto.error})` : ''}. Review the evidence and resolve it.`,
-          'alert',
-          '/dashboard/admin/disputes'
-        ).catch(() => {});
-      }
     }
 
-    res.status(201).json({
-      success: true,
-      data: {
-        booking: b,
-        dispute: dispute.rows[0],
-        autoRefund: auto.resolved ? { amount: auto.refundAmount, percent: AUTO_REFUND_PERCENT } : null,
-      },
-    });
+    res.status(201).json({ success: true, data: { booking: b, dispute: dispute.rows[0] } });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     await removeUploads();
@@ -1083,5 +1146,5 @@ const bookingValidation = [
 module.exports = {
   createBooking, getMyBookings, getOwnerBookings, getAllBookings,
   updateBookingStatus, cancelMyBooking, getBookingById, bookingValidation,
-  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, markReadyForPickup, getExtensionOptions,
+  handOverVehicle, acceptVehicle, rejectVehicle, recordCashPayment, payRestInCash, getCancellationQuote, markReadyForPickup, abandonUnpaidBooking, getExtensionOptions,
 };

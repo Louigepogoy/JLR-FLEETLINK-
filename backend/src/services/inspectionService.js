@@ -64,8 +64,8 @@ const runInspectionSweep = async () => {
     ).catch(() => {});
   }
 
-  // Cash booking nobody showed up for (cash still due at pickup): same cancellation, and the reservation
-  // fee goes entirely to the owner as compensation — the platform gives up its commission on it.
+  // Cash booking nobody showed up for (cash still due at pickup): same cancellation. The reservation is
+  // non-refundable and stays with the platform (nothing is payable to the owner).
   const cashNoShows = await query(
     `WITH cancelled AS (
        UPDATE bookings b
@@ -78,7 +78,7 @@ const runInspectionSweep = async () => {
        RETURNING b.id, b.customer_id, b.paid_amount, v.owner_id, v.title
      ), owner_share AS (
        UPDATE transactions t
-       SET commission_amount = 0, platform_amount = 0, owner_amount = t.total_amount
+       SET commission_amount = t.total_amount, platform_amount = t.total_amount, owner_amount = 0
        FROM cancelled c WHERE t.booking_id = c.id AND t.type = 'payment'
        RETURNING t.id
      )
@@ -88,14 +88,14 @@ const runInspectionSweep = async () => {
     await createNotification(
       b.customer_id,
       'Booking cancelled',
-      `Your booking for ${b.title} was cancelled: the vehicle wasn't picked up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} reservation fee you paid is kept by the owner.`,
+      `Your booking for ${b.title} was cancelled: the vehicle wasn't picked up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} reservation fee you paid is non-refundable.`,
       'alert',
       '/dashboard/bookings'
     ).catch(() => {});
     await createNotification(
       b.owner_id,
       'Booking cancelled',
-      `${b.title} was cancelled because the renter didn't pick it up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} reservation fee is yours and will be sent to you by the admin.`,
+      `${b.title} was cancelled because the renter didn't pick it up within ${AUTO_HANDOVER_HOURS} hours of the pickup time. The ₱${parseFloat(b.paid_amount).toFixed(2)} The dates are free again.`,
       'payment',
       '/dashboard/earnings'
     ).catch(() => {});

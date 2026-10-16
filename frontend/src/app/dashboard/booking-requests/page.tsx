@@ -326,7 +326,7 @@ export default function BookingRequestsPage() {
                 </button>
               )}
               {/* Chat with the renter is open only while the booking is (a finished or cancelled one closes it). */}
-              {['pending', 'approved', 'active'].includes(b.status) && (
+              {['approved', 'active'].includes(b.status) && (
                 <button
                   onClick={() => messageCustomer(b.customer_id)}
                   className="btn-outline text-sm py-2 flex items-center gap-2"

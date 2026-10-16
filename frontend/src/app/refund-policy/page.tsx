@@ -13,15 +13,15 @@ const sections = [
   },
   {
     title: '3. Cancelling a Booking',
-    body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded less only the platform commission, which the platform keeps as a service fee. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
+    body: 'You can cancel an unpaid booking from My Bookings at any time. A paid booking can be cancelled with "Cancel & Refund" until the pickup time. If you cancel at least 24 hours before the pickup time, your online payment is refunded less only the platform commission, which the platform keeps as a service fee. If you cancel less than 24 hours before the pickup time, 50% of your online payment is refunded and the other 50% goes to the owner (less the platform commission) for holding the vehicle. The reservation fee of a "Cash at pickup" booking is non-refundable, so cancelling it refunds nothing, but it frees the vehicle for other renters. Once the pickup time has passed or the vehicle has been handed over, the booking can no longer be cancelled from your account.',
   },
   {
     title: '4. Reserving with Cash at Pickup',
-    body: 'Choose "Pay online" to pay the whole booking online, or "Cash at pickup" to pay a reservation online and the rest in cash to the owner at pickup. For "Cash at pickup", at least 15% of the total (or the platform commission rate, if higher) must be paid online to confirm your booking and reserve the vehicle. The owner collects the remaining cash when handing over the vehicle and confirms it in the app. Cash paid to the owner is not held by JLR Fleetlink and cannot be refunded through the platform, so only pay it when you have the vehicle in front of you.',
+    body: 'Choose "Pay online" to pay the whole booking online (or 50% now and the rest later online or in cash at pickup), or "Cash at pickup" to pay a reservation online and the rest in cash to the owner at pickup. For "Cash at pickup", at least 15% of the total (or the platform commission rate, if higher) must be paid online to confirm your booking and reserve the vehicle. This reservation fee is non-refundable. The owner collects the remaining cash when handing over the vehicle and confirms it in the app. Cash paid to the owner is not held by JLR Fleetlink and cannot be refunded through the platform, so only pay it when you have the vehicle in front of you.',
   },
   {
     title: '5. Unpaid Balance and No-Shows',
-    body: 'If part of your booking is still unpaid and you do not pay it (online or in cash) and pick up the vehicle within 3 hours of the pickup time, the booking is cancelled automatically so the vehicle is available again. What you already paid is kept by the owner for holding the vehicle, and is not refunded. This also applies to a cash booking you do not pick up within 3 hours of the pickup time: the reservation fee you paid online goes to the owner. If a booking is fully paid and you do not pick up the vehicle, it is handed over automatically 3 hours after the pickup time, and the inspection time and payout steps below apply.',
+    body: 'If part of your booking is still unpaid and you do not pay it (online or in cash) and pick up the vehicle within 3 hours of the pickup time, the booking is cancelled automatically so the vehicle is available again. What you already paid is kept by the owner for holding the vehicle, and is not refunded. This also applies to a cash booking you do not pick up within 3 hours of the pickup time: the reservation fee you paid online is non-refundable and stays with the platform. If a booking is fully paid and you do not pick up the vehicle, it is handed over automatically 3 hours after the pickup time, and the inspection time and payout steps below apply.',
   },
   {
     title: '6. Pickup Inspection',
@@ -29,11 +29,11 @@ const sections = [
   },
   {
     title: '7. Rejecting a Vehicle',
-    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately and frees the dates. 50% of your online payment is refunded to you automatically; the other 50% goes to the owner (less the platform commission) for holding the vehicle. If the automatic refund cannot be sent, your payment stays on hold while an administrator reviews your report. Please return the keys to the owner.',
+    body: 'If the vehicle does not match its listing or is not safe to use, reject it before the inspection time ends and explain what is wrong. You must attach at least one photo or video showing the problem — refunds are only given with proof, and the administrator may ask you for more. Rejecting cancels the booking immediately and frees the dates, and keeps your payment on hold while an administrator reviews your report. For a "Cash at pickup" booking the reservation fee is non-refundable. Please return the keys to the owner.',
   },
   {
     title: '8. How Disputes Are Decided',
-    body: 'When you reject a vehicle with proof, the automatic 50% refund applies. If the automatic refund cannot be sent, or you contact us about a problem during your trip, an administrator compares the listing with your report and decides on one of three outcomes: a full refund, a partial refund (the owner receives the rest), or no refund if the report is not supported. Both you and the owner are notified of the decision.',
+    body: 'An administrator compares the listing with your report and decides on one of three outcomes: a full refund, a partial refund (the owner receives the rest), or no refund if the report is not supported. Both you and the owner are notified of the decision.',
   },
   {
     title: '9. How You Receive a Refund',

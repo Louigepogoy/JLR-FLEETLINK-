@@ -34,8 +34,18 @@ const finalizeBookingPayment = async ({ bookingId, amount, paymentMethod, refere
     let { platformAmount, ownerAmount } = calculateCommission(amount, commissionPct);
     // Cash booking reservation: the owner gets the cash at pickup, so the platform takes its commission on
     // the whole booking from this online reservation fee.
-    if (booking.payment_option === 'cash' && parseFloat(booking.paid_amount) === 0) {
-      platformAmount = Math.min(amount, Math.round(parseFloat(booking.total_amount) * commissionPct) / 100);
+    const wholeCommission = Math.round(parseFloat(booking.total_amount) * commissionPct) / 100;
+    const paidBefore = parseFloat(booking.paid_amount);
+    // An online booking started with a partial payment works the same way: the whole commission comes out of
+    // the first payment, and a later payment only carries what is still owed.
+    if ((booking.payment_option === 'cash' || amount < parseFloat(booking.total_amount) - 0.005) && paidBefore === 0) {
+      platformAmount = Math.min(amount, wholeCommission);
+      ownerAmount = Math.round((amount - platformAmount) * 100) / 100;
+    } else if (booking.payment_option === 'online' && paidBefore > 0 && ['pending', 'approved', 'active'].includes(booking.status)) {
+      const taken = await client.query(
+        "SELECT COALESCE(SUM(platform_amount), 0)::float AS s FROM transactions WHERE booking_id = $1 AND type = 'payment'", [bookingId]
+      );
+      platformAmount = Math.min(amount, Math.max(0, Math.round((wholeCommission - taken.rows[0].s) * 100) / 100));
       ownerAmount = Math.round((amount - platformAmount) * 100) / 100;
     }
 

@@ -244,15 +244,15 @@ const getVehicles = async (req, res, next) => {
     }
     if (islandGroup && !province) {
       const names = PH_PROVINCES.filter((p) => p.group === islandGroup).map((p) => p.name);
-      sql += ` AND v.province = ANY(${idx++}::text[])`;
+      sql += ` AND v.province = ANY($${idx++}::text[])`;
       params.push(names);
     }
     if (city) {
-      sql += ` AND v.city ILIKE ${idx++}`;
+      sql += ` AND v.city ILIKE $${idx++}`;
       params.push(`%${String(city).replace(/s+city$/i, '').replace(/^city ofs+/i, '').trim()}%`);
     }
     if (barangay) {
-      sql += ` AND v.barangay ILIKE ${idx++}`;
+      sql += ` AND v.barangay ILIKE $${idx++}`;
       params.push(`%${String(barangay).trim()}%`);
     }
     if (location) {
@@ -260,13 +260,22 @@ const getVehicles = async (req, res, next) => {
       params.push(`%${location}%`);
       idx++;
     }
-    if (minPrice) {
+    // Price range: only real, non-negative numbers count; if min is above max they are swapped.
+    const toPrice = (value) => {
+      if (value === undefined || value === null || String(value).trim() === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    let min = toPrice(minPrice);
+    let max = toPrice(maxPrice);
+    if (min !== null && max !== null && min > max) [min, max] = [max, min];
+    if (min !== null) {
       sql += ` AND v.price_per_day >= $${idx++}`;
-      params.push(minPrice);
+      params.push(min);
     }
-    if (maxPrice) {
+    if (max !== null) {
       sql += ` AND v.price_per_day <= $${idx++}`;
-      params.push(maxPrice);
+      params.push(max);
     }
 
     sql += useDistance ? ' ORDER BY distance_km ASC NULLS LAST, v.created_at DESC' : ' ORDER BY v.created_at DESC';
@@ -611,11 +620,16 @@ const getMaintenanceDates = async (req, res, next) => {
  */
 const getBookedDates = async (req, res, next) => {
   try {
+    // A renter's own unpaid booking isn't listed for them; someone else's unpaid booking is only a short hold
+    // (it expires if they don't pay), so it is flagged as awaiting payment.
     const result = await query(
-      `SELECT id, start_date, end_date, pickup_time, dropoff_time, extended_hours FROM bookings
+      `SELECT id, start_date, end_date, pickup_time, dropoff_time, extended_hours,
+              (status = 'pending' AND payment_status = 'pending') AS awaiting_payment
+       FROM bookings
        WHERE vehicle_id = $1 AND status IN ('pending', 'approved', 'active')
+         AND NOT (status = 'pending' AND payment_status = 'pending' AND COALESCE(customer_id = $2::uuid, false))
        ORDER BY start_date ASC`,
-      [req.params.id]
+      [req.params.id, req.user?.id || null]
     );
     res.json({ success: true, data: result.rows });
   } catch (error) {

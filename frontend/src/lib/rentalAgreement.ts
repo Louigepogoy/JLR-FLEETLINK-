@@ -1,6 +1,6 @@
 // The Rental Agreement every renter accepts before booking. Keep RENTAL_AGREEMENT_VERSION in step with
 // the backend (bookingController.js) and bump both whenever the wording changes.
-export const RENTAL_AGREEMENT_VERSION = '2026-10';
+export const RENTAL_AGREEMENT_VERSION = '2026-11';
 
 export const rentalAgreementTerms: { title: string; body: string }[] = [
   {
@@ -29,7 +29,7 @@ export const rentalAgreementTerms: { title: string; body: string }[] = [
   },
   {
     title: 'Payment and cash',
-    body: 'Online payments are held by JLR Fleetlink until the renter accepts the vehicle. For cash bookings, the reservation fee is paid online and the rest in cash to the owner at pickup; only online payments can be refunded through JLR Fleetlink.',
+    body: 'Online payments are held by JLR Fleetlink until the renter accepts the vehicle. For cash bookings, the reservation fee is paid online and is non-refundable; the rest is paid in cash to the owner at pickup. Cash is not refundable through JLR Fleetlink.',
   },
   {
     title: 'Cancellations and refunds',

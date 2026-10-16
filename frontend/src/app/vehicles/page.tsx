@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Search, Filter, MapPin, SearchX, LayoutGrid, Map as MapIcon, LocateFixed, Loader2, X } from 'lucide-react';
@@ -13,12 +13,21 @@ import ProvinceSelect from '@/components/ui/ProvinceSelect';
 import { VehicleCardSkeleton } from '@/components/ui/Skeleton';
 import { PhilippinesVehicleMap, type MapVehicle } from '@/components/maps';
 import api from '@/lib/api';
-import { cn, vehicleTypes } from '@/lib/utils';
+import { cn, formatCurrency, vehicleTypes } from '@/lib/utils';
 import { getProvince, islandGroups, type IslandGroup } from '@/lib/philippines';
 import { useBarangayOptions, useCityOptions } from '@/lib/usePlaceOptions';
 import OptionCombobox from '@/components/ui/OptionCombobox';
 
 type Filters = { search: string; type: string; islandGroup: string; province: string; city: string; barangay: string; location: string; minPrice: string; maxPrice: string };
+
+// Quick price ranges (per day) shown under the filters.
+const PRICE_PRESETS: { label: string; min: string; max: string }[] = [
+  { label: 'Any price', min: '', max: '' },
+  { label: 'Under ₱3,000', min: '', max: '2999' },
+  { label: '₱3,000 – ₱5,000', min: '3000', max: '5000' },
+  { label: '₱5,000 – ₱7,000', min: '5000', max: '7000' },
+  { label: '₱7,000 and up', min: '7000', max: '' },
+];
 
 // The renter's current location for "nearest first". Only sent with the search, never saved.
 type Near = { lat: number; lng: number } | null;
@@ -67,18 +76,49 @@ function VehiclesContent() {
   // Starts true: the page asks for the location automatically on load.
   const [locating, setLocating] = useState(true);
 
-  const fetchVehicles = async (nearOverride: Near = near) => {
+  // The location answer and the price typing both call fetchVehicles later, so it reads the latest filters from
+  // refs instead of the (possibly outdated) ones of the render that created it.
+  const filtersRef = useRef(filters);
+  const nearRef = useRef<Near>(null);
+  const latestRequest = useRef(0);
+  useEffect(() => { filtersRef.current = filters; }, [filters]);
+  useEffect(() => { nearRef.current = near; }, [near]);
+
+  const fetchVehicles = async (nearOverride: Near = nearRef.current) => {
+    const current = filtersRef.current;
+    const requestId = ++latestRequest.current;
     setLoading(true);
-    setPlaceFiltered(Boolean(filters.islandGroup || filters.province || filters.city || filters.barangay || filters.location));
+    setPlaceFiltered(Boolean(current.islandGroup || current.province || current.city || current.barangay || current.location));
     try {
-      const res = await api.get('/vehicles', { params: toParams(filters, nearOverride) });
-      setVehicles(res.data.data);
+      const res = await api.get('/vehicles', { params: toParams(current, nearOverride) });
+      if (requestId === latestRequest.current) setVehicles(res.data.data);
     } catch {
-      setVehicles([]);
+      if (requestId === latestRequest.current) setVehicles([]);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   };
+
+  // Price range: typed values are checked, and the list refreshes by itself shortly after typing stops.
+  const minNum = filters.minPrice === '' ? null : Number(filters.minPrice);
+  const maxNum = filters.maxPrice === '' ? null : Number(filters.maxPrice);
+  const priceError = (minNum !== null && minNum < 0) || (maxNum !== null && maxNum < 0)
+    ? "Prices can't be negative."
+    : minNum !== null && maxNum !== null && minNum > maxNum
+      ? "The minimum price can't be higher than the maximum."
+      : '';
+  const firstPriceRun = useRef(true);
+  useEffect(() => {
+    if (firstPriceRun.current) { firstPriceRun.current = false; return; }
+    if (priceError) return;
+    const timer = setTimeout(() => { fetchVehicles(); }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.minPrice, filters.maxPrice]);
+  const priceActive = filters.minPrice !== '' || filters.maxPrice !== '';
+  const priceLabel = filters.minPrice !== '' && filters.maxPrice !== ''
+    ? `${formatCurrency(Number(filters.minPrice))} – ${formatCurrency(Number(filters.maxPrice))}`
+    : filters.minPrice !== '' ? `${formatCurrency(Number(filters.minPrice))} and up` : `up to ${formatCurrency(Number(filters.maxPrice))}`;
 
   // Asks the browser for the renter's location; on success lists vehicles nearest first with their distance.
   // `silent` (the automatic request on page load) skips error toasts: the normal list just stays.
@@ -194,14 +234,39 @@ function VehiclesContent() {
                 <option value="">All Types</option>
                 {vehicleTypes.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
-              <input className="input-field" type="number" min="0" placeholder="Min ₱"
+              <input className={cn('input-field', priceError && 'ring-2 ring-red-500/60')} type="number" min="0" step="100" inputMode="numeric"
+                placeholder="Min ₱ / day" aria-label="Minimum price per day"
                 value={filters.minPrice} onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })} />
-              <input className="input-field" type="number" min="0" placeholder="Max ₱"
+              <input className={cn('input-field', priceError && 'ring-2 ring-red-500/60')} type="number" min="0" step="100" inputMode="numeric"
+                placeholder="Max ₱ / day" aria-label="Maximum price per day"
                 value={filters.maxPrice} onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })} />
-              <button onClick={() => fetchVehicles()} className="btn-primary flex items-center justify-center gap-2 !px-3 md:col-span-4 lg:col-span-1">
+              <button onClick={() => fetchVehicles()} disabled={Boolean(priceError)} className="btn-primary flex items-center justify-center gap-2 !px-3 disabled:opacity-60 md:col-span-4 lg:col-span-1">
                 <Filter className="w-4 h-4" /> Filter
               </button>
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Price range">
+              <span className="text-xs font-medium text-[var(--muted)]">Price per day:</span>
+              {PRICE_PRESETS.map((p) => {
+                const selected = filters.minPrice === p.min && filters.maxPrice === p.max;
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setFilters({ ...filters, minPrice: p.min, maxPrice: p.max })}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                      selected
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]'
+                        : 'border-[var(--card-border)] text-[var(--muted)] hover:border-[var(--primary)]/50 hover:text-[var(--foreground)]'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            {priceError && <p className="mt-2 text-xs font-medium text-red-500">{priceError}</p>}
           </div>
 
           {filters.location && (
@@ -214,6 +279,14 @@ function VehiclesContent() {
           )}
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
+              {priceActive && !priceError && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--primary)]/10 py-1 pl-3 pr-1 text-xs font-semibold text-[var(--primary)]">
+                  Price: {priceLabel} / day
+                  <button onClick={() => setFilters({ ...filters, minPrice: '', maxPrice: '' })} className="rounded-full p-0.5 hover:bg-[var(--primary)]/15" aria-label="Clear price range">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
               <p className="text-sm text-[var(--muted)]">
                 {loading ? 'Searching...' : `${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} found${filters.city ? ` in ${filters.barangay ? `${filters.barangay}, ` : ''}${filters.city}` : filters.province ? ` in ${filters.province}` : filters.islandGroup ? ` in ${filters.islandGroup}` : ' across the Philippines'}`}
               </p>
@@ -271,7 +344,7 @@ function VehiclesContent() {
                     <EmptyState
                       icon={SearchX}
                       title="No vehicles found"
-                      description="Try another province or city, or adjust your filters."
+                      description={priceActive ? 'Try a wider price range, another province or city, or adjust your filters.' : 'Try another province or city, or adjust your filters.'}
                     />
                   </div>
                 )}

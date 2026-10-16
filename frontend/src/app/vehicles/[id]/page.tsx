@@ -45,8 +45,32 @@ export default function VehicleDetailPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [maintenanceDates, setMaintenanceDates] = useState<{ id: string; start_date: string; end_date: string }[]>([]);
-  const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string; extended_hours?: number }[]>([]);
+  const [bookedDates, setBookedDates] = useState<{ id: string; start_date: string; end_date: string; pickup_time?: string; dropoff_time?: string; extended_hours?: number; awaiting_payment?: boolean }[]>([]);
   const [reviews, setReviews] = useState<ReviewSummary | null>(null);
+
+  // Back from a cancelled PayMongo checkout: bring the unpaid booking back so the renter can pay again.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') !== 'failed') return;
+    const bookingId = params.get('bookingId');
+    router.replace(`/vehicles/${id}`);
+    if (!bookingId) {
+      toast.error('Payment was not completed');
+      return;
+    }
+    api.get(`/bookings/${bookingId}`)
+      .then((res) => {
+        const b = res.data.data as Record<string, unknown>;
+        if (b.status === 'pending' && b.payment_status === 'pending') {
+          setBooking(b);
+          toast.error('Payment was not completed. You can try again below.');
+        } else {
+          toast.error('Payment was not completed, and the 30-minute payment window has ended. Please book again.');
+        }
+      })
+      .catch(() => toast.error('Payment was not completed'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   useEffect(() => {
     api.get(`/vehicles/${id}`).then((res) => setVehicle(res.data.data)).catch(() => toast.error('Vehicle not found')).finally(() => setLoading(false));
@@ -348,6 +372,7 @@ export default function VehicleDetailPage() {
                         <p key={b.id}>
                           {formatDate(b.start_date)}, {formatTime(b.pickup_time)} - {formatDate(b.end_date)}, {formatTime(b.dropoff_time)}
                           {b.extended_hours ? ` (extended +${b.extended_hours}h)` : ''}
+                          {b.awaiting_payment ? ' (on hold, waiting for payment)' : ''}
                         </p>
                       ))}
                     </div>
@@ -473,7 +498,7 @@ export default function VehicleDetailPage() {
                       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment option">
                         {([
                           { value: 'online', title: 'Pay online', sub: 'GCash, Maya, or card' },
-                          { value: 'cash', title: 'Cash at pickup', sub: `${CASH_RESERVATION_PERCENT}% online to reserve` },
+                          { value: 'cash', title: 'Cash at pickup', sub: `${CASH_RESERVATION_PERCENT}% online, non-refundable` },
                         ] as const).map((o) => (
                           <button
                             key={o.value}
@@ -503,8 +528,8 @@ export default function VehicleDetailPage() {
                             <span>{formatCurrency(total - Math.round(total * CASH_RESERVATION_PERCENT) / 100)}</span>
                           </p>
                           <p className="mt-1">
-                            Only the online reservation fee is protected by JLR Fleetlink refunds. Pay the cash only when you
-                            meet the owner, and inspect the vehicle before you drive off.
+                            The reservation fee is non-refundable. Cash isn&apos;t refundable through JLR Fleetlink either, so pay
+                            the cash only when you meet the owner, and inspect the vehicle before you drive off.
                           </p>
                         </div>
                       )}
@@ -544,7 +569,9 @@ export default function VehicleDetailPage() {
                 </>
               ) : (
                 <div>
-                  <h3 className="font-semibold mb-1 text-green-500">Booking Created</h3>
+                  <h3 className={`font-semibold mb-1 ${booking.payment_status === 'pending' ? 'text-amber-500' : 'text-green-500'}`}>
+                    {booking.payment_status === 'pending' ? 'Booking Not Paid Yet' : 'Booking Created'}
+                  </h3>
                   {booking.payment_status === 'pending' && (
                     <p className="mb-4 text-sm text-amber-500">
                       Pay within {PAYMENT_WINDOW_MINUTES} minutes to confirm it, or it will be cancelled automatically.
@@ -591,6 +618,24 @@ export default function VehicleDetailPage() {
                       View Receipt
                     </button>
                   )}
+                  {booking.payment_status === 'pending' && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Cancel this booking? Nothing was charged.')) return;
+                        try {
+                          await api.patch(`/bookings/${booking.id}/abandon`);
+                          setBooking(null);
+                          setShowPayment(false);
+                          toast.success('Booking cancelled');
+                        } catch {
+                          toast.error('Could not cancel the booking');
+                        }
+                      }}
+                      className="btn-outline w-full mb-3 text-red-500"
+                    >
+                      Cancel this booking
+                    </button>
+                  )}
                   <button onClick={() => router.push('/dashboard/bookings')} className="btn-outline w-full">
                     View My Bookings
                   </button>
@@ -612,6 +657,7 @@ export default function VehicleDetailPage() {
           booking={{ id: String(booking.id), total_amount: Number(booking.total_amount) - Number(booking.cash_due || 0), paid_amount: Number(booking.paid_amount || 0), title: String(vehicle.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
+          allowHalf={booking.payment_option === 'online' && booking.status === 'pending'}
         />
       )}
     </>

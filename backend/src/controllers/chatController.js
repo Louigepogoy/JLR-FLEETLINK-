@@ -13,8 +13,8 @@ const POLICY_MESSAGE = 'Message blocked: bad words are not allowed in chat (Chat
 const CHAT_CLOSED_MESSAGE = 'This chat is closed. Renters and owners can message each other only while they have an open booking together.';
 const NO_BOOKING_MESSAGE = 'You can message this person only while you have an open booking together.';
 
-// Bookings that keep a renter/owner chat open: not yet finished or cancelled.
-const OPEN_BOOKING_SQL = `bk.status IN ('pending', 'approved', 'active')`;
+// Bookings that keep a renter/owner chat open: paid and confirmed, not yet finished or cancelled.
+const OPEN_BOOKING_SQL = `bk.status IN ('approved', 'active')`;
 
 const sendValidationErrors = (req, res) => {
   const errors = validationResult(req);
@@ -41,7 +41,7 @@ const CONVERSATION_SELECT = `
          -- chats with an admin (support) are always open.
          (((u1.role = 'admin') <> (u2.role = 'admin')) OR me.role = 'admin' OR EXISTS (
            SELECT 1 FROM bookings bk JOIN vehicles bv ON bv.id = bk.vehicle_id
-           WHERE bk.status IN ('pending', 'approved', 'active')
+           WHERE bk.status IN ('approved', 'active')
              AND ((bk.customer_id = $1 AND bv.owner_id = o.id) OR (bk.customer_id = o.id AND bv.owner_id = $1))
          )) AS can_message,
          v.title AS vehicle_title,

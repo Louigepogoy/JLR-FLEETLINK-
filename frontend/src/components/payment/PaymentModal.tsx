@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, HALF_PAYMENT_PERCENT } from '@/lib/utils';
 
 interface PaymentModalProps {
   booking: {
@@ -16,13 +16,17 @@ interface PaymentModalProps {
   };
   isOpen: boolean;
   onClose: () => void;
+  // A new online booking can be started with half of the total instead of the whole amount.
+  allowHalf?: boolean;
   // Online bookings can settle the rest in cash with the owner once this much has been paid online.
   restInCash?: { minOnline: number; onDone: () => void };
 }
 
-export default function PaymentModal({ booking, isOpen, onClose, restInCash }: PaymentModalProps) {
+export default function PaymentModal({ booking, isOpen, onClose, restInCash, allowHalf }: PaymentModalProps) {
   const remaining = parseFloat(String(booking.total_amount)) - parseFloat(String(booking.paid_amount || 0));
   const [amount, setAmount] = useState(remaining);
+  const half = Math.round(remaining * HALF_PAYMENT_PERCENT) / 100;
+  const halfAvailable = !!allowHalf && parseFloat(String(booking.paid_amount || 0)) === 0 && remaining > 0;
   const [loading, setLoading] = useState(false);
   const [prev, setPrev] = useState({ isOpen, remaining });
 
@@ -39,7 +43,7 @@ export default function PaymentModal({ booking, isOpen, onClose, restInCash }: P
     }
     setLoading(true);
     try {
-      const res = await api.post('/paymongo/bookings/checkout', { bookingId: booking.id, amount: remaining });
+      const res = await api.post('/paymongo/bookings/checkout', { bookingId: booking.id, amount });
       window.location.href = res.data.data.checkoutUrl;
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -107,9 +111,34 @@ export default function PaymentModal({ booking, isOpen, onClose, restInCash }: P
 
             <div className="mb-6">
               <label className="text-sm font-medium mb-2 block">Payment Amount</label>
-              {/* The whole balance is paid at once: no partial amounts. */}
-              <input type="text" readOnly className="input-field cursor-not-allowed opacity-80" value={formatCurrency(amount)} />
-              <p className="mt-1 text-xs text-[var(--muted)]">The full amount is paid online.</p>
+              {halfAvailable ? (
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { label: 'Full payment', value: remaining },
+                    { label: `${HALF_PAYMENT_PERCENT}% now`, value: half },
+                  ].map((o) => (
+                    <button
+                      key={o.label}
+                      type="button"
+                      onClick={() => setAmount(o.value)}
+                      aria-pressed={Math.abs(amount - o.value) < 0.005}
+                      className={`rounded-xl border p-3 text-left text-sm transition-colors ${Math.abs(amount - o.value) < 0.005
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                        : 'border-[var(--card-border)] hover:border-[var(--primary)]/50'}`}
+                    >
+                      <span className="block font-semibold">{o.label}</span>
+                      <span className="text-[var(--primary)]">{formatCurrency(o.value)}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <input type="text" readOnly className="input-field cursor-not-allowed opacity-80" value={formatCurrency(amount)} />
+              )}
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {halfAvailable && amount < remaining - 0.005
+                  ? `With ${HALF_PAYMENT_PERCENT}% now, the rest (${formatCurrency(remaining - amount)}) is paid later online or in cash to the owner at pickup. The platform commission is taken in full from this first payment.`
+                  : 'The full amount is paid online.'}
+              </p>
             </div>
 
             <p className="flex items-center gap-2 text-xs text-[var(--muted)] mb-4 p-3 rounded-lg bg-[var(--primary)]/5">

@@ -5,7 +5,6 @@ import { AlertTriangle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { apiErrorMessage } from '@/lib/chat';
-import { formatCurrency } from '@/lib/utils';
 import EvidencePicker, { type Evidence } from './EvidencePicker';
 
 const MAX_FILES = 5;
@@ -13,11 +12,13 @@ const MAX_FILES = 5;
 type RejectVehicleModalProps = {
   bookingId: string;
   vehicleTitle: string;
+  // Cash booking: the reservation fee is non-refundable, so there is no automatic refund.
+  nonRefundable?: boolean;
   onClose: () => void;
   onRejected: () => void;
 };
 
-export default function RejectVehicleModal({ bookingId, vehicleTitle, onClose, onRejected }: RejectVehicleModalProps) {
+export default function RejectVehicleModal({ bookingId, vehicleTitle, nonRefundable, onClose, onRejected }: RejectVehicleModalProps) {
   const [reason, setReason] = useState('');
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -36,13 +37,10 @@ export default function RejectVehicleModal({ bookingId, vehicleTitle, onClose, o
       const data = new FormData();
       data.append('reason', reason.trim());
       evidence.forEach((e) => data.append('evidence', e.file));
-      const res = await api.post(`/bookings/${bookingId}/inspection/reject`, data, {
+      await api.post(`/bookings/${bookingId}/inspection/reject`, data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const refund = res.data.data?.autoRefund as { amount: number; percent: number } | null;
-      toast.success(refund
-        ? `Vehicle rejected. ${refund.percent}% of your payment (${formatCurrency(refund.amount)}) is being refunded.`
-        : 'Problem reported. Your payment is on hold while an admin reviews it.');
+      toast.success('Problem reported. Your payment is on hold while an admin reviews it.');
       onRejected();
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Could not report the problem'));
@@ -62,7 +60,9 @@ export default function RejectVehicleModal({ bookingId, vehicleTitle, onClose, o
             <div>
               <h3 className="text-lg font-semibold">Reject {vehicleTitle}</h3>
               <p className="text-sm text-[var(--muted)]">
-                Your booking will be cancelled — give the keys back to the owner. You will get 50% of your online payment back automatically; the other 50% goes to the owner for holding the vehicle. If the refund can&apos;t be sent automatically, an admin will review your report.
+                {nonRefundable
+                  ? 'Your booking will be cancelled — give the keys back to the owner. The reservation fee is non-refundable, but an admin will review your report.'
+                  : 'Your booking will be cancelled — give the keys back to the owner. The owner won’t be paid while an admin reviews your report, and you may get a full or partial refund.'}
               </p>
             </div>
           </div>

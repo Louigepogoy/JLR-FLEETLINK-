@@ -38,6 +38,8 @@ const calculateRentalPeriod = (startDate, pickupTime, endDate, dropoffTime) => {
 
 // Cash bookings pay this share of the total online to reserve (never less than the commission).
 const CASH_RESERVATION_PERCENT = 15;
+// An online booking can also be started with this share of the total (the rest is paid later, online or in cash).
+const HALF_PAYMENT_PERCENT = 50;
 const cashReservationAmount = (total, commissionPct) =>
   Math.round(total * Math.max(CASH_RESERVATION_PERCENT, commissionPct)) / 100;
 
@@ -66,5 +68,6 @@ module.exports = {
   canRent,
   canList,
   CASH_RESERVATION_PERCENT,
+  HALF_PAYMENT_PERCENT,
   cashReservationAmount,
 };

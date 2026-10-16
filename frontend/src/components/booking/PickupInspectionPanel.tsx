@@ -13,7 +13,7 @@ import AddDisputeEvidence from './AddDisputeEvidence';
 import RejectVehicleModal from './RejectVehicleModal';
 
 type Props = {
-  booking: InspectionFields & { id: string; title: string };
+  booking: InspectionFields & { id: string; title: string; payment_option?: 'online' | 'cash' };
   onChanged: () => void;
 };
 
@@ -49,7 +49,10 @@ export default function PickupInspectionPanel({ booking, onChanged }: Props) {
         <p>
           <span className="font-semibold">Your payment is held safely by JLR Fleetlink.</span> The owner is only paid after
           you check the vehicle at pickup. When the owner hands it over, you&apos;ll get time to accept it or report a
-          problem. Don&apos;t pay the owner in cash.
+          problem.{' '}
+          {booking.payment_option === 'cash'
+            ? 'Pay the owner only the cash balance shown on your booking, at pickup.'
+            : "Don&apos;t pay the owner in cash."}
           {booking.auto_handover_at && (
             <span className="mt-1 block text-xs text-[var(--muted)]">
               Please pick it up on time: if it isn&apos;t handed over by {formatTimestamp(booking.auto_handover_at)} ({AUTO_HANDOVER_HOURS} hours
@@ -95,6 +98,7 @@ export default function PickupInspectionPanel({ booking, onChanged }: Props) {
           <RejectVehicleModal
             bookingId={booking.id}
             vehicleTitle={booking.title}
+            nonRefundable={booking.payment_option === 'cash'}
             onClose={() => setRejecting(false)}
             onRejected={() => { setRejecting(false); onChanged(); }}
           />

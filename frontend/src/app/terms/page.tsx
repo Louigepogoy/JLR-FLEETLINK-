@@ -17,15 +17,15 @@ const sections = [
   },
   {
     title: '4. Cancellations',
-    body: 'Unpaid bookings may be cancelled from My Bookings at any time. Paid bookings may be cancelled until the pickup time: a refund of the online payment less the platform commission if cancelled at least 24 hours before pickup, or 50% if cancelled less than 24 hours before pickup (the rest goes to the owner). After the pickup time, or once the vehicle is handed over, bookings can no longer be cancelled from your account. A booking that is left partly unpaid and not picked up within 3 hours of the pickup time is cancelled automatically and what was paid is kept by the owner. Repeated no-shows or cancellations may affect your ability to book on the platform. See the Refund & Dispute Policy for details.',
+    body: 'Unpaid bookings may be cancelled from My Bookings at any time. Paid bookings may be cancelled until the pickup time: a refund of the online payment less the platform commission if cancelled at least 24 hours before pickup, or 50% if cancelled less than 24 hours before pickup (the rest goes to the owner). After the pickup time, or once the vehicle is handed over, bookings can no longer be cancelled from your account. A booking that is left partly unpaid and not picked up within 3 hours of the pickup time is cancelled automatically and what was paid is kept by the owner. Repeated no-shows or cancellations may affect your ability to book on the platform. The reservation fee of a "Cash at pickup" booking is non-refundable. See the Refund & Dispute Policy for details.',
   },
   {
     title: '5. Payments',
-    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. A booking can be paid in full online, or reserved with "Cash at pickup": at least 15% of the total (or the platform commission rate if higher) is paid online and the rest in cash to the owner at pickup. Online payments are made in full. Cash paid to the owner is not held or refundable through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
+    body: 'Bookings and owner subscriptions can be paid via GCash or card through the platform. A booking can be paid in full online, started with 50% online (the platform commission is taken in full from that first payment; the rest is paid later online or in cash at pickup), or reserved with "Cash at pickup": at least 15% of the total (or the platform commission rate if higher) is paid online and the rest in cash to the owner at pickup. Cash paid to the owner is not held or refundable through the platform. Amounts charged reflect the price set by the vehicle owner (or the subscription plan selected) at time of booking. All prices are in Philippine Pesos (PHP).',
   },
   {
     title: '6. Owner Subscriptions & Commission',
-    body: 'Vehicle owners must maintain an active subscription plan to publish listings, with vehicle limits based on plan tier (Basic, Pro, or Premium). The platform deducts a commission from completed bookings before owner payouts, at the rate published in your dashboard at time of booking.',
+    body: 'Vehicle owners must maintain an active subscription plan to publish listings, with vehicle limits based on plan tier (Basic, Pro, or Premium). The platform deducts a commission (10% by default) from the rental price you set, so renters pay exactly the listed price and owners receive the rest before payouts.',
   },
   {
     title: '7. Vehicle Listings',

@@ -83,7 +83,11 @@ function MyBookingsContent() {
   }, []);
 
   const fetchBookings = () => {
-    api.get('/bookings/my').then((res) => setBookings(res.data.data)).catch(() => {}).finally(() => setLoading(false));
+    // A booking appears here only once its payment went through; an unpaid one isn't shown (it expires on its own).
+    api.get('/bookings/my')
+      .then((res) => setBookings((res.data.data as CustomerBooking[]).filter((b) => b.payment_status !== 'pending')))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchBookings(); }, []);
@@ -141,20 +145,22 @@ function MyBookingsContent() {
     try {
       const { data } = await api.get(`/bookings/${bookingId}/cancel-quote`);
       const q = data.data as {
-        canCancel: boolean; freeCancelHours: number; early: boolean; percent: number; platformFee: number;
-        refundAmount: number; retainedAmount: number;
+        canCancel: boolean; freeCancelHours: number; early: boolean; nonRefundable: boolean; onlinePaid: number; percent: number;
+        platformFee: number; refundAmount: number; retainedAmount: number;
       };
       if (!q.canCancel) {
         toast.error('This booking can no longer be cancelled. Please contact the owner or support.');
         return;
       }
-      const message = q.early
+      const message = q.nonRefundable
+        ? `Cancel this booking? The ${formatCurrency(q.onlinePaid)} reservation fee is non-refundable.`
+        : q.early
         ? `Cancel this booking? You will get ${formatCurrency(q.refundAmount)} back. The platform keeps a ${formatCurrency(q.platformFee)} service fee (its commission).`
         : `Cancel this booking? It is less than ${q.freeCancelHours} hours before pickup, so you will get ${q.percent}% back `
           + `(${formatCurrency(q.refundAmount)}). The other ${formatCurrency(q.retainedAmount)} goes to the owner for holding the vehicle.`;
       if (!confirm(message)) return;
       await api.patch(`/bookings/${bookingId}/cancel`);
-      toast.success(`Booking cancelled. ${formatCurrency(q.refundAmount)} will be refunded.`);
+      toast.success(q.nonRefundable ? 'Booking cancelled.' : `Booking cancelled. ${formatCurrency(q.refundAmount)} will be refunded.`);
       fetchBookings();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
@@ -292,7 +298,7 @@ function MyBookingsContent() {
                 </button>
               )}
               {/* Chat with the owner is open only while the booking is (a finished or cancelled one closes it). */}
-              {['pending', 'approved', 'active'].includes(b.status) && (
+              {['approved', 'active'].includes(b.status) && (
                 <button className="btn-outline text-sm flex items-center gap-2" onClick={() => messageOwner(b)}>
                   <MessageCircle className="h-4 w-4" /> Message Owner
                 </button>
@@ -408,6 +414,7 @@ function MyBookingsContent() {
           booking={{ id: String(selected.id), total_amount: Number(selected.total_amount) - Number(selected.cash_due || 0), paid_amount: Number(selected.paid_amount || 0), title: String(selected.title) }}
           isOpen={showPayment}
           onClose={() => setShowPayment(false)}
+          allowHalf={selected.payment_option === 'online' && selected.status === 'pending'}
           restInCash={
             selected.payment_option === 'online' && selected.status === 'approved' && !selected.handed_over_at
               ? { minOnline: Math.round(Number(selected.total_amount) * CASH_RESERVATION_PERCENT) / 100, onDone: fetchBookings }
