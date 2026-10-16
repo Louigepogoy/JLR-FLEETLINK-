@@ -3,7 +3,8 @@
 // 2. For Gmail, the mail server is asked about the mailbox itself (SMTP RCPT TO); Gmail answers
 //    "550 5.1.1 NoSuchUser" for accounts that don't exist.
 // Anything inconclusive (port 25 blocked by the network/host, timeouts, other providers) returns
-// 'domain_ok' (the domain can receive mail, the mailbox just couldn't be confirmed) so sign-up continues —
+// 'unknown' for Gmail (mailbox couldn't be confirmed) or 'domain_ok' for other providers (the domain can
+// receive mail, the mailbox isn't probed) so sign-up continues —
 // the emailed verification code is still the final proof.
 const dns = require('dns').promises;
 const net = require('net');
@@ -11,6 +12,13 @@ const net = require('net');
 const PROBE_TIMEOUT_MS = 7000;
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
 const CACHE_MS = 10 * 60 * 1000;
+
+// Gmail usernames: letters, numbers and periods only, no leading/trailing/double periods, up to 30
+// characters (a "+tag" suffix is delivery-only and ignored). Catches addresses that can't be real.
+const isValidGmailLocalPart = (local) => {
+  const base = local.split('+')[0];
+  return base.length >= 3 && base.length <= 30 && /^[a-z0-9](?:[a-z0-9]|\.(?!\.))*[a-z0-9]$/.test(base);
+};
 const cache = new Map();
 
 const lookupMx = async (domain) => {
@@ -63,12 +71,14 @@ const checkEmailDeliverable = async (email) => {
 
   let result = 'unknown';
   try {
-    const domain = key.split('@')[1];
+    const [local, domain] = key.split('@');
     const mx = await lookupMx(domain);
     if (!mx.length) result = 'invalid_domain';
+    else if (GMAIL_DOMAINS.has(domain) && !isValidGmailLocalPart(local)) result = 'invalid_gmail';
     else if (GMAIL_DOMAINS.has(domain)) {
-      const probed = await probeMailbox(mx[0], key);
-      result = probed === 'unknown' ? 'domain_ok' : probed;
+      // 'unknown' here means the mailbox couldn't be checked (e.g. the host blocks port 25): don't claim
+      // the address looks fine, just leave the plain "we'll send a code" hint.
+      result = await probeMailbox(mx[0], key);
     } else result = 'domain_ok';
   } catch {
     result = 'unknown';
@@ -79,6 +89,7 @@ const checkEmailDeliverable = async (email) => {
 
 const EMAIL_PROBLEM_MESSAGES = {
   not_found: 'This Gmail address doesn\'t exist. Check the spelling, or use another email.',
+  invalid_gmail: 'This isn\'t a valid Gmail address. Gmail names use only letters, numbers and periods.',
   invalid_domain: 'This email domain can\'t receive email. Check the part after "@" for typos.',
 };
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, Car, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import AuthShell from '@/components/auth/AuthShell';
@@ -21,7 +21,7 @@ export default function RegisterPage() {
   const [emailCheck, setEmailCheck] = useState<{ email: string; status: string; message: string | null } | null>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
 
-  const BAD_EMAIL_STATUSES = ['not_found', 'invalid_domain', 'registered', 'invalid'];
+  const BAD_EMAIL_STATUSES = ['not_found', 'invalid_gmail', 'invalid_domain', 'registered', 'invalid'];
 
   const checkEmail = async (email: string) => {
     const value = email.trim();
@@ -177,6 +177,11 @@ export default function RegisterPage() {
                 {emailCheck.status === 'exists'
                   ? "Email address found. We'll send a code to verify it's yours."
                   : "Email looks valid. We'll send a code to verify it's yours."}
+              </p>
+            ) : emailCheck?.email === form.email.trim() && emailCheck.status === 'unknown' ? (
+              <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                We couldn&apos;t confirm this email exists. Double-check the spelling — the verification code is sent to this address.
               </p>
             ) : (
               <p className="mt-1 text-xs text-[var(--muted)]">We&apos;ll send a code to this email to verify it&apos;s yours.</p>
