@@ -347,15 +347,28 @@ function MyBookingsContent() {
                   Cancel Booking
                 </button>
               )}
-              {b.status === 'approved' && !b.handed_over_at && b.payment_status !== 'pending' && b.is_pickup_day && (
+              {/* Always visible once the booking is confirmed, but it only works on the pickup date. */}
+              {b.status === 'approved' && !b.handed_over_at && b.payment_status !== 'pending' && (
                 b.customer_ready_at ? (
                   <p className="w-full text-xs text-green-600 dark:text-green-400">
                     You confirmed you&apos;re ready. Waiting for the owner to hand over the vehicle.
                   </p>
                 ) : (
-                  <button className="btn-primary text-sm" onClick={() => markReady(b.id)}>
-                    I&apos;m here — ready for pickup
-                  </button>
+                  <div className="flex flex-col items-start gap-1">
+                    <button
+                      className="btn-primary text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!b.is_pickup_day}
+                      title={b.is_pickup_day ? undefined : `Available on your pickup date: ${formatDate(b.start_date)}`}
+                      onClick={() => markReady(b.id)}
+                    >
+                      I&apos;m here — ready for pickup
+                    </button>
+                    {!b.is_pickup_day && (
+                      <span className="text-xs text-[var(--muted)]">
+                        Available on {formatDate(b.start_date)}{b.pickup_time ? ` at ${formatTime(b.pickup_time)}` : ''}
+                      </span>
+                    )}
+                  </div>
                 )
               )}
               {b.payment_status !== 'pending' && b.payment_status !== 'refunded' && b.status === 'approved' && !b.handed_over_at && (
