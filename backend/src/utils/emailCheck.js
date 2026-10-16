@@ -63,7 +63,36 @@ const probeMailbox = (host, email) => new Promise((resolve) => {
   });
 });
 
-/** Returns 'exists' | 'not_found' | 'invalid_domain' | 'domain_ok' | 'unknown' (couldn't check at all). */
+// Fallback for hosts that block outbound port 25 (e.g. Railway on non-Pro plans): Abstract's Email Reputation
+// API runs the mailbox check from its own servers. Only used when ABSTRACT_EMAIL_API_KEY is set and the
+// direct probe was inconclusive, so the free quota isn't spent on addresses we can already answer.
+const API_TIMEOUT_MS = 8000;
+const apiMailboxCheck = async (email) => {
+  const apiKey = process.env.ABSTRACT_EMAIL_API_KEY;
+  if (!apiKey) return 'unknown';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `https://emailreputation.abstractapi.com/v1/?email=${encodeURIComponent(email)}`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, signal: controller.signal }
+    );
+    if (!response.ok) return 'unknown'; // quota reached, rate limited, bad key... just don't claim anything
+    const { email_deliverability: d } = await response.json();
+    if (d?.status === 'deliverable') return 'exists';
+    if (d?.status === 'undeliverable') {
+      if (d.status_detail === 'invalid_mailbox') return 'not_found';
+      if (d.status_detail === 'full_mailbox') return 'exists'; // the mailbox is there, just full
+    }
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/** Returns 'exists' | 'not_found' | 'invalid_gmail' | 'invalid_domain' | 'domain_ok' | 'unknown' (couldn't check). */
 const checkEmailDeliverable = async (email) => {
   const key = String(email).toLowerCase();
   const cached = cache.get(key);
@@ -79,11 +108,13 @@ const checkEmailDeliverable = async (email) => {
       // 'unknown' here means the mailbox couldn't be checked (e.g. the host blocks port 25): don't claim
       // the address looks fine, just leave the plain "we'll send a code" hint.
       result = await probeMailbox(mx[0], key);
+      if (result === 'unknown') result = await apiMailboxCheck(key);
     } else result = 'domain_ok';
   } catch {
     result = 'unknown';
   }
-  cache.set(key, { result, expires: Date.now() + CACHE_MS });
+  // An inconclusive answer is only remembered briefly, so a quota reset or a retry can still resolve it.
+  cache.set(key, { result, expires: Date.now() + (result === 'unknown' ? 60 * 1000 : CACHE_MS) });
   return result;
 };
 
