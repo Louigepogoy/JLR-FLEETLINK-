@@ -12,7 +12,7 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const result = await query(
-      `SELECT id, email, full_name, phone, role, avatar_url, is_active, approval_status, account_type
+      `SELECT id, email, full_name, phone, role, avatar_url, is_active, approval_status, account_type, sessions_invalidated_at
        FROM users WHERE id = $1`,
       [decoded.userId]
     );
@@ -25,6 +25,11 @@ const authenticate = async (req, res, next) => {
     if (!user.is_active) {
       return res.status(401).json({ success: false, message: 'Account inactive' });
     }
+
+    if (user.sessions_invalidated_at && decoded.iat < Math.floor(new Date(user.sessions_invalidated_at).getTime() / 1000)) {
+      return res.status(401).json({ success: false, message: 'Session ended by an administrator' });
+    }
+    delete user.sessions_invalidated_at;
 
     req.user = user;
     next();

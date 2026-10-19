@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { withCloudStorage } = require('../utils/cloudStorage');
 
 const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -87,7 +88,19 @@ const uploadDisputeEvidence = multer({
   fileFilter: chatMediaFilter,
 }).array('evidence', MAX_DISPUTE_EVIDENCE_FILES);
 
+const uploadWalkInProof = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter,
+}).single('walkInProof');
+
+// Each upload is moved to Cloudinary after multer saves it (when CLOUDINARY_URL is set), see utils/cloudStorage.
 module.exports = {
-  uploadRegistrationDocs, uploadVehicleImages, uploadProfileAvatar, uploadChatMedia, uploadDisputeEvidence,
+  uploadRegistrationDocs: withCloudStorage(uploadRegistrationDocs),
+  uploadVehicleImages: withCloudStorage(uploadVehicleImages),
+  uploadProfileAvatar: withCloudStorage(uploadProfileAvatar),
+  uploadWalkInProof: withCloudStorage(uploadWalkInProof),
+  uploadChatMedia: withCloudStorage(uploadChatMedia),
+  uploadDisputeEvidence: withCloudStorage(uploadDisputeEvidence),
   uploadDir, CHAT_IMAGE_MAX_BYTES,
 };

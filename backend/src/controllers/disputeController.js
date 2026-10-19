@@ -6,6 +6,8 @@ const { createNotification } = require('../utils/notifications');
 const { createRefund } = require('../services/paymongoService');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const { autoPayoutOwner } = require('../services/payoutService');
+const { recordAudit } = require('../utils/auditLog');
+const { uploadedUrl } = require('../utils/cloudStorage');
 
 const RESOLUTIONS = ['refund_full', 'refund_partial', 'dismiss'];
 // Total photos/videos a dispute can hold (sent at rejection plus later uploads).
@@ -229,6 +231,11 @@ const resolveDispute = async (req, res, next) => {
       throw err;
     }
 
+    await recordAudit(req, 'dispute_resolved', {
+      target: { type: 'dispute', id: d.id, label: d.title },
+      details: { decision: disputeStatus, refundAmount, refundMethod, notes: notes?.trim() || null },
+    });
+
     const refundTiming = 'It goes back to the account you paid with: GCash/Maya within 24 hours, cards within 30 days.';
     const refundLine = !refundAmount ? ''
       : refundMethod === 'paymongo' ? `${peso(refundAmount)} has been refunded. ${refundTiming}`
@@ -309,7 +316,7 @@ const addDisputeEvidence = async (req, res, next) => {
     }
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
     const added = files.map((f) => ({
-      url: `${baseUrl}/uploads/${f.filename}`,
+      url: uploadedUrl(f, baseUrl),
       type: f.mimetype.startsWith('video/') ? 'video' : 'image',
     }));
 

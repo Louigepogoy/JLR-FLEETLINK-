@@ -11,13 +11,21 @@ import { VehicleCardSkeleton } from '@/components/ui/Skeleton';
 export default function VehicleShowcase() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
+  const fetchVehicles = () =>
     api.get('/vehicles', { params: { status: 'available' } })
       .then((res) => setVehicles(res.data.data.slice(0, 3)))
-      .catch(() => setVehicles([]))
+      .catch(() => { setVehicles([]); setFailed(true); })
       .finally(() => setLoading(false));
-  }, []);
+
+  const retry = () => {
+    setLoading(true);
+    setFailed(false);
+    fetchVehicles();
+  };
+
+  useEffect(() => { fetchVehicles(); }, []);
 
   return (
     <section className="py-12 sm:py-20">
@@ -43,6 +51,13 @@ export default function VehicleShowcase() {
                 <VehicleCard vehicle={v as never} index={i} />
               </div>
             ))
+            : failed
+            ? (
+              <div className="w-full col-span-3 text-center py-12 glass-card">
+                <p className="text-[var(--muted)]">Couldn&apos;t load vehicles right now. Please try again.</p>
+                <button onClick={retry} className="btn-primary inline-block mt-4 text-sm">Retry</button>
+              </div>
+            )
             : (
               <div className="w-full col-span-3 text-center py-12 glass-card">
                 <p className="text-[var(--muted)]">No vehicles available yet. Check back soon!</p>

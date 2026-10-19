@@ -5,6 +5,7 @@ const {
   calculateRentalPeriod, canRent, cashReservationAmount, BOOKING_GAP_HOURS, generateInvoiceNumber,
 } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
+const { uploadedUrl } = require('../utils/cloudStorage');
 const { CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
 const {
   AUTO_HANDOVER_AT_SQL, getInspectionWindowMinutes, runInspectionSweep, sweepQuietly,
@@ -112,7 +113,7 @@ const createBooking = async (req, res, next) => {
     if (maintenanceConflict.rows.length) {
       return res.status(409).json({
         success: false,
-        message: 'This vehicle is unavailable during the selected dates (owner maintenance).',
+        message: 'This vehicle is unavailable during the selected dates (blocked by the owner).',
       });
     }
 
@@ -1038,7 +1039,7 @@ const rejectVehicle = async (req, res, next) => {
 
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
     const evidence = files.map((f) => ({
-      url: `${baseUrl}/uploads/${f.filename}`,
+      url: uploadedUrl(f, baseUrl),
       type: f.mimetype.startsWith('video/') ? 'video' : 'image',
     }));
 

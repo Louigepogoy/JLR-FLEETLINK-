@@ -3,15 +3,31 @@ const bcrypt = require('bcryptjs');
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
 const { passwordProblem } = require('../utils/passwordPolicy');
+const { recordAudit } = require('../utils/auditLog');
+const { uploadedUrl } = require('../utils/cloudStorage');
 
 const getAllUsers = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT id, email, full_name, phone, role, is_active, approval_status,
+      `SELECT id, email, full_name, phone, role, is_active, approval_status, email_verified,
               license_number, created_at, approved_at
        FROM users ORDER BY created_at DESC`
     );
     res.json({ success: true, data: result.rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const forceLogoutUser = async (req, res, next) => {
+  try {
+    const result = await query(
+      'UPDATE users SET sessions_invalidated_at = NOW() WHERE id = $1 RETURNING id, email',
+      [req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ success: false, message: 'User not found' });
+    await recordAudit(req, 'force_logout', { target: { type: 'user', id: result.rows[0].id, label: result.rows[0].email } });
+    res.json({ success: true, message: 'User logged out of all sessions' });
   } catch (error) {
     next(error);
   }
@@ -201,7 +217,7 @@ const updateProfile = async (req, res, next) => {
   try {
     const avatarFile = req.files?.avatar?.[0];
     const avatarUrl = avatarFile
-      ? `${req.protocol}://${req.get('host')}/uploads/${avatarFile.filename}`
+      ? uploadedUrl(avatarFile, `${req.protocol}://${req.get('host')}`)
       : req.body.avatarUrl;
     const { fullName, phone } = req.body;
     const result = await query(
@@ -256,6 +272,9 @@ const toggleUserStatus = async (req, res, next) => {
     if (!result.rows[0]) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
+    await recordAudit(req, isActive ? 'user_activated' : 'user_deactivated', {
+      target: { type: 'user', id: result.rows[0].id, label: result.rows[0].email },
+    });
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     next(error);
@@ -268,10 +287,17 @@ const updateUserRole = async (req, res, next) => {
     if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role' });
     }
+    const previous = await query('SELECT role FROM users WHERE id = $1', [req.params.id]);
     const result = await query(
       'UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 RETURNING id, email, role',
       [role, req.params.id]
     );
+    if (result.rows[0]) {
+      await recordAudit(req, 'role_changed', {
+        target: { type: 'user', id: result.rows[0].id, label: result.rows[0].email },
+        details: { from: previous.rows[0]?.role, to: role },
+      });
+    }
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     next(error);
@@ -332,6 +358,7 @@ const getPublicProfile = async (req, res, next) => {
 
 module.exports = {
   getAllUsers,
+  forceLogoutUser,
   getPendingRegistrations,
   approveRegistration,
   rejectRegistration,

@@ -22,6 +22,8 @@ CREATE TABLE users (
   -- Sign-in lockout: 5 wrong passwords in a row lock the account until locked_until.
   failed_login_attempts INTEGER NOT NULL DEFAULT 0,
   locked_until TIMESTAMPTZ,
+  -- Admin force logout: tokens issued before this time are rejected (migration 044).
+  sessions_invalidated_at TIMESTAMPTZ,
   password_hash VARCHAR(255),
   full_name VARCHAR(255) NOT NULL,
   phone VARCHAR(50),
@@ -175,7 +177,12 @@ CREATE TABLE vehicle_maintenance_dates (
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   reason VARCHAR(255),
+  -- 'walk_in' = owner-reported offline rental (migration 045), with the renter's name and a proof photo.
+  block_type VARCHAR(20) NOT NULL DEFAULT 'maintenance',
+  renter_name VARCHAR(255),
+  proof_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT vehicle_block_type_check CHECK (block_type IN ('maintenance', 'walk_in')),
   CONSTRAINT valid_maintenance_dates CHECK (end_date >= start_date)
 );
 
@@ -476,6 +483,22 @@ CREATE TABLE login_logs (
 );
 CREATE INDEX idx_login_logs_email ON login_logs(email);
 CREATE INDEX idx_login_logs_created_at ON login_logs(created_at DESC);
+
+-- Central audit trail of admin actions (migration 046)
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  admin_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  admin_name VARCHAR(255),
+  action VARCHAR(50) NOT NULL,
+  target_type VARCHAR(30),
+  target_id UUID,
+  target_label VARCHAR(255),
+  details JSONB,
+  ip_address VARCHAR(64),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 
 -- One-time login verification codes emailed to the user's address (migration 004)
 CREATE TABLE login_otps (

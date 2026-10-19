@@ -3,7 +3,7 @@ const router = express.Router();
 const { authenticate, optionalAuthenticate, authorize } = require('../middleware/auth');
 const { uploadProfileAvatar } = require('../middleware/upload');
 const {
-  getAllUsers, getPendingRegistrations, approveRegistration, rejectRegistration, requestMoreInfo,
+  getAllUsers, forceLogoutUser, getPendingRegistrations, approveRegistration, rejectRegistration, requestMoreInfo,
   updateProfile, changePassword, toggleUserStatus, updateUserRole, getPublicProfile,
 } = require('../controllers/userController');
 
@@ -19,6 +19,7 @@ router.get('/', authenticate, authorize('admin'), getAllUsers);
 router.put('/profile', authenticate, uploadProfileAvatar, updateProfile);
 router.put('/profile/password', authenticate, changePassword);
 router.patch('/:id/status', authenticate, authorize('admin'), toggleUserStatus);
+router.post('/:id/force-logout', authenticate, authorize('admin'), forceLogoutUser);
 router.patch('/:id/role', authenticate, authorize('admin'), updateUserRole);
 
 module.exports = router;

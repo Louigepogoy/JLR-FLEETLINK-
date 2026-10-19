@@ -1,5 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
+const { uploadedUrl } = require('../utils/cloudStorage');
 const { canList } = require('../utils/helpers');
 const { createNotification } = require('../utils/notifications');
 const { ACTIVE_SUBSCRIPTION_SQL } = require('./subscriptionController');
@@ -125,7 +126,7 @@ const enforceOwnerVehicleLimit = async (ownerId) => {
   }
 };
 
-const getFileUrl = (req, file) => `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+const getFileUrl = (req, file) => uploadedUrl(file, `${req.protocol}://${req.get('host')}`);
 
 const getProofPhotosFromRequest = (req, existingProof = {}) => {
   const proof = { ...(existingProof || {}) };
@@ -190,7 +191,7 @@ const getPublicStats = async (req, res, next) => {
 
 const getVehicles = async (req, res, next) => {
   try {
-    const { search, type, minPrice, maxPrice, location, province, islandGroup, city, barangay, status = 'available' } = req.query;
+    const { search, brand, model, type, minPrice, maxPrice, location, province, islandGroup, city, barangay, status = 'available' } = req.query;
     const params = [];
     let idx = 1;
 
@@ -228,6 +229,14 @@ const getVehicles = async (req, res, next) => {
     if (status) {
       sql += ` AND v.status = $${idx++}`;
       params.push(status);
+    }
+    if (brand) {
+      sql += ` AND LOWER(TRIM(v.brand)) = LOWER($${idx++})`;
+      params.push(String(brand).trim());
+    }
+    if (model) {
+      sql += ` AND LOWER(TRIM(v.model)) = LOWER($${idx++})`;
+      params.push(String(model).trim());
     }
     if (search) {
       sql += ` AND (v.title ILIKE $${idx} OR v.brand ILIKE $${idx} OR v.model ILIKE $${idx})`;
@@ -602,13 +611,51 @@ const recordVehicleVerification = async (req, res, next) => {
   }
 };
 
+// Brands and their models across the listed vehicles, for the Browse Vehicles dropdowns.
+const getBrandOptions = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT MIN(TRIM(brand)) AS brand, MIN(TRIM(model)) AS model
+       FROM vehicles
+       WHERE verification_status <> 'rejected' AND deleted_at IS NULL
+         AND brand IS NOT NULL AND TRIM(brand) <> '' AND model IS NOT NULL AND TRIM(model) <> ''
+       GROUP BY LOWER(TRIM(brand)), LOWER(TRIM(model))
+       ORDER BY 1, 2`
+    );
+    // Owners type brands freely ("toyota", "TOYOTA"), so merge them case-insensitively under one label.
+    const merged = new Map();
+    for (const { brand, model } of result.rows) {
+      const key = brand.toLowerCase();
+      if (!merged.has(key)) {
+        const label = brand === brand.toLowerCase() ? brand.charAt(0).toUpperCase() + brand.slice(1) : brand;
+        merged.set(key, { label, models: [] });
+      }
+      merged.get(key).models.push(model);
+    }
+    const byBrand = {};
+    for (const { label, models } of [...merged.values()].sort((a, b) => a.label.localeCompare(b.label))) {
+      byBrand[label] = models;
+    }
+    res.json({ success: true, data: byBrand });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMaintenanceDates = async (req, res, next) => {
   try {
     const result = await query(
-      `SELECT * FROM vehicle_maintenance_dates WHERE vehicle_id = $1 ORDER BY start_date ASC`,
+      `SELECT vmd.*, v.owner_id FROM vehicle_maintenance_dates vmd
+       JOIN vehicles v ON v.id = vmd.vehicle_id
+       WHERE vmd.vehicle_id = $1 ORDER BY vmd.start_date ASC`,
       [req.params.id]
     );
-    res.json({ success: true, data: result.rows });
+    // The renter's name and proof photo are only for the owner and admins; the public just sees the dates.
+    const canSeeProof = req.user && (req.user.role === 'admin' || req.user.id === result.rows[0]?.owner_id);
+    const data = result.rows.map(({ owner_id, renter_name, proof_url, ...block }) => (
+      canSeeProof ? { ...block, renter_name, proof_url } : block
+    ));
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }
@@ -648,8 +695,16 @@ const addMaintenanceDate = async (req, res, next) => {
     }
 
     const { startDate, endDate, reason } = req.body;
+    const isWalkIn = req.body.blockType === 'walk_in';
+    const renterName = req.body.renterName?.trim();
     if (!startDate || !endDate) {
       return res.status(400).json({ success: false, message: 'Start and end date are required' });
+    }
+    if (isWalkIn && (!renterName || !req.file)) {
+      return res.status(400).json({
+        success: false,
+        message: "A walk-in rental needs the renter's name and a proof photo (license, agreement or receipt)",
+      });
     }
     if (new Date(endDate) < new Date(startDate)) {
       return res.status(400).json({ success: false, message: 'End date must be on or after start date' });
@@ -669,11 +724,35 @@ const addMaintenanceDate = async (req, res, next) => {
     }
 
     const result = await query(
-      `INSERT INTO vehicle_maintenance_dates (vehicle_id, start_date, end_date, reason)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [req.params.id, startDate, endDate, reason?.trim() || 'Maintenance']
+      `INSERT INTO vehicle_maintenance_dates (vehicle_id, start_date, end_date, reason, block_type, renter_name, proof_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        req.params.id, startDate, endDate,
+        reason?.trim() || (isWalkIn ? 'Walk-in rental' : 'Maintenance'),
+        isWalkIn ? 'walk_in' : 'maintenance',
+        isWalkIn ? renterName : null,
+        isWalkIn ? getFileUrl(req, req.file) : null,
+      ]
     );
     res.status(201).json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin audit of owner-reported walk-in rentals.
+const getWalkInBlocks = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT vmd.id, vmd.start_date, vmd.end_date, vmd.reason, vmd.renter_name, vmd.proof_url, vmd.created_at,
+              v.id AS vehicle_id, v.title AS vehicle_title, u.id AS owner_id, u.full_name AS owner_name
+       FROM vehicle_maintenance_dates vmd
+       JOIN vehicles v ON v.id = vmd.vehicle_id
+       JOIN users u ON u.id = v.owner_id
+       WHERE vmd.block_type = 'walk_in'
+       ORDER BY vmd.created_at DESC`
+    );
+    res.json({ success: true, data: result.rows });
   } catch (error) {
     next(error);
   }
@@ -719,6 +798,6 @@ const vehicleValidation = [
 module.exports = {
   getVehicles, getVehicleById, createVehicle, updateVehicle,
   deleteVehicle, getOwnerVehicles, getPublicStats, vehicleValidation,
-  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate, getBookedDates,
+  getMaintenanceDates, addMaintenanceDate, deleteMaintenanceDate, getBookedDates, getWalkInBlocks, getBrandOptions,
   getPendingVehicleVerifications, recordVehicleVerification, getDeletedVehicles,
 };

@@ -3,6 +3,7 @@ const path = require('path');
 const { body, param, query: queryParam, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 const { uploadDir, CHAT_IMAGE_MAX_BYTES } = require('../middleware/upload');
+const { uploadedUrl, deleteCloudFile } = require('../utils/cloudStorage');
 const { createNotification } = require('../utils/notifications');
 const { containsProfanity } = require('../utils/profanity');
 
@@ -132,8 +133,13 @@ const upsertConversation = async (userId, otherId, vehicleId = null) => {
 const removeChatImageIfUnused = async (imageUrl) => {
   if (!imageUrl) return;
   const stillUsed = await query('SELECT 1 FROM messages WHERE image_url = $1 LIMIT 1', [imageUrl]);
+  if (stillUsed.rows.length) return;
+  if (imageUrl.includes('res.cloudinary.com')) {
+    if (imageUrl.split('/').pop().startsWith('chatImage-')) await deleteCloudFile(imageUrl);
+    return;
+  }
   const filename = imageUrl.split('/uploads/')[1];
-  if (stillUsed.rows.length || !filename || !filename.startsWith('chatImage-')) return;
+  if (!filename || !filename.startsWith('chatImage-')) return;
   await fs.promises.unlink(path.join(uploadDir, path.basename(filename))).catch(() => {});
 };
 
@@ -441,7 +447,7 @@ const sendMedia = async (req, res, next) => {
 
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
     const message = await createMessage(req.user, conversation, {
-      type, body: caption, imageUrl: `${baseUrl}/uploads/${req.file.filename}`, replyToId: reply.id,
+      type, body: caption, imageUrl: uploadedUrl(req.file, baseUrl), replyToId: reply.id,
     });
     res.status(201).json({ success: true, data: message });
   } catch (error) {

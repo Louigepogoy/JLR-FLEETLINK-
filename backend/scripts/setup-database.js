@@ -75,6 +75,9 @@ async function setup() {
     const bookingExtensionsMigrationPath = path.join(__dirname, '../database/migrations/040_booking_extensions.sql');
     const vehicleSoftDeleteMigrationPath = path.join(__dirname, '../database/migrations/042_vehicle_soft_delete.sql');
     const customerReadyMigrationPath = path.join(__dirname, '../database/migrations/043_customer_ready_at.sql');
+    const forceLogoutMigrationPath = path.join(__dirname, '../database/migrations/044_force_logout.sql');
+    const walkInBlocksMigrationPath = path.join(__dirname, '../database/migrations/045_walk_in_blocks.sql');
+    const auditLogsMigrationPath = path.join(__dirname, '../database/migrations/046_audit_logs.sql');
     const seedPath = path.join(__dirname, '../database/seed-users.sql');
 
     const tableCheck = await pool.query(
@@ -178,6 +181,9 @@ async function setup() {
       await runSqlFile(vehicleSoftDeleteMigrationPath);
       console.log('Vehicle soft-delete migration applied.');
       await runSqlFile(customerReadyMigrationPath);
+      await runSqlFile(forceLogoutMigrationPath);
+      await runSqlFile(walkInBlocksMigrationPath);
+      await runSqlFile(auditLogsMigrationPath);
       console.log('Customer ready-for-pickup migration applied.');
     }
 

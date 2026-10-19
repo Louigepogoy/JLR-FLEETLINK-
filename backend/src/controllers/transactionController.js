@@ -1,6 +1,7 @@
 const { query } = require('../config/db');
 const { PAYOUT_ELIGIBLE_SQL, sweepQuietly } = require('../services/inspectionService');
 const { autoPayoutOwner, recordPayout } = require('../services/payoutService');
+const { recordAudit } = require('../utils/auditLog');
 
 // Rows that count toward an owner's earnings: successful payments, plus refund rows (their negative
 // owner_amount takes a partial refund back out). Fully refunded payments are marked 'refunded'.
@@ -197,6 +198,11 @@ const markOwnerPayoutPaid = async (req, res, next) => {
     // Only what passed pickup inspection — payments still held or under dispute stay pending. Recorded
     // in the payout history like the automatic payouts.
     const { paid, payout } = await recordPayout({ ownerId, source: 'manual', paidBy: req.user.id });
+    const owner = await query('SELECT email FROM users WHERE id = $1', [ownerId]);
+    await recordAudit(req, 'payout_marked_paid', {
+      target: { type: 'user', id: ownerId, label: owner.rows[0]?.email },
+      details: { amount: paid, reference: payout?.reference || null },
+    });
     res.json({ success: true, data: { totalPaid: paid, reference: payout?.reference || null } });
   } catch (error) {
     next(error);
