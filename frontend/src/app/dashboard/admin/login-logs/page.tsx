@@ -81,7 +81,7 @@ export default function LoginLogsPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder="Search by email, reason or IP"
-          className="input-field pl-9 w-full"
+          className="input-field !pl-10 w-full"
         />
       </div>
       {filtered.length === 0 ? (
