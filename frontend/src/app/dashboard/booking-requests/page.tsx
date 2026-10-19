@@ -22,6 +22,7 @@ import {
   fetchPendingReviews, notifyReviewsChanged, REVIEWS_CHANGED_EVENT, type PendingReview,
 } from '@/lib/reviews';
 import BookingId from '@/components/booking/BookingId';
+import Pagination, { usePagination } from '@/components/ui/Pagination';
 
 type OwnerBooking = InspectionFields & {
   id: string;
@@ -62,6 +63,7 @@ export default function BookingRequestsPage() {
   const [bookings, setBookings] = useState<OwnerBooking[]>([]);
   const [tab, setTab] = useState<BookingTab>('all');
   const visibleBookings = bookings.filter((b) => matchesBookingTab(tab, b.status));
+  const pager = usePagination(visibleBookings);
   const [reportBooking, setReportBooking] = useState<OwnerBooking | null>(null);
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
   const [ratingFor, setRatingFor] = useState<PendingReview | null>(null);
@@ -156,9 +158,9 @@ export default function BookingRequestsPage() {
   return (
     <DashboardLayout role="user">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={RequestsIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />Booking Requests</h2>
-      {bookings.length > 0 && <BookingStatusTabs bookings={bookings} tab={tab} onChange={setTab} />}
+      {bookings.length > 0 && <BookingStatusTabs bookings={bookings} tab={tab} onChange={(t) => { setTab(t); pager.setPage(1); }} />}
       <div className="space-y-4">
-        {visibleBookings.map((b) => (
+        {pager.pageItems.map((b) => (
           <div key={b.id} className={`glass-card p-6 ${needsHandover(b) ? 'border-2 border-amber-500/50' : ''}`}>
             {needsHandover(b) && (
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-amber-500">
@@ -354,6 +356,7 @@ export default function BookingRequestsPage() {
           <p className="py-8 text-center text-sm text-[var(--muted)]">No bookings in this category.</p>
         )}
       </div>
+      <Pagination pager={pager} />
       <ReviewModal
         pending={ratingFor}
         onClose={() => setRatingFor(null)}
