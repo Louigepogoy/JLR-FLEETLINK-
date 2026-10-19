@@ -22,6 +22,7 @@ import type { InspectionFields } from '@/lib/inspection';
 import { fetchPendingReviews, REVIEWS_CHANGED_EVENT, type PendingReview } from '@/lib/reviews';
 import BookingId from '@/components/booking/BookingId';
 import ExtendBookingModal from '@/components/booking/ExtendBookingModal';
+import Pagination, { usePagination } from '@/components/ui/Pagination';
 
 type CustomerBooking = InspectionFields & {
   id: string;
@@ -68,6 +69,7 @@ function MyBookingsContent() {
   const [bookings, setBookings] = useState<CustomerBooking[]>([]);
   const [tab, setTab] = useState<BookingTab>('all');
   const visibleBookings = bookings.filter((b) => matchesBookingTab(tab, b.status));
+  const pager = usePagination(visibleBookings);
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
   const [reportBooking, setReportBooking] = useState<CustomerBooking | null>(null);
   const [showPayment, setShowPayment] = useState(false);
@@ -205,9 +207,9 @@ function MyBookingsContent() {
   return (
     <DashboardLayout role="user">
       <h2 className="text-2xl font-bold flex items-center gap-3 mb-6"><IconChip icon={CalendarCheckIcon} className="h-10 w-10 rounded-xl" iconClassName="h-7 w-7" />My Bookings</h2>
-      {bookings.length > 0 && <BookingStatusTabs bookings={bookings} tab={tab} onChange={setTab} />}
+      {bookings.length > 0 && <BookingStatusTabs bookings={bookings} tab={tab} onChange={(t) => { setTab(t); pager.setPage(1); }} />}
       <div className="space-y-4">
-        {visibleBookings.map((b) => (
+        {pager.pageItems.map((b) => (
           <div key={b.id} className="glass-card p-6">
             <div className="flex flex-wrap justify-between gap-4">
               <div className="flex gap-4">
@@ -407,6 +409,7 @@ function MyBookingsContent() {
           <p className="py-8 text-center text-sm text-[var(--muted)]">No bookings in this category.</p>
         )}
       </div>
+      <Pagination pager={pager} />
 
       {selected && (
         <PaymentModal

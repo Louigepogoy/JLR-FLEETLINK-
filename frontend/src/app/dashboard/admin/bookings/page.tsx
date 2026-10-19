@@ -6,6 +6,7 @@ import { Calendar, CalendarClock, Clock, Search } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, CalendarCheckIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination, { usePagination } from '@/components/ui/Pagination';
 import api from '@/lib/api';
 import { profilePath } from '@/lib/chat';
 import { bookingCode, bookingStatusColors, bookingStatusLabel, formatCurrency, formatDate, formatTime, formatTimestamp } from '@/lib/utils';
@@ -32,6 +33,7 @@ export default function AdminBookingsPage() {
     ? bookings.filter((b) => [bookingCode(b.id), b.id, b.title, b.customer_name, b.customer_email, b.owner_name]
       .some((v) => v?.toLowerCase().includes(term)))
     : bookings;
+  const pager = usePagination(filtered);
 
   if (loading) {
     return (
@@ -50,17 +52,18 @@ export default function AdminBookingsPage() {
       <div className="relative mb-4 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
         <input
-          className="input-field pl-9"
+          className="input-field !pl-10"
           placeholder="Search by booking ID (BK-...), vehicle, or customer"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); pager.setPage(1); }}
         />
       </div>
       {filtered.length === 0 ? (
         <EmptyState icon={Calendar} title="No bookings found" />
       ) : (
+      <>
       <div className="space-y-3">
-        {filtered.map((b) => (
+        {pager.pageItems.map((b) => (
           <div key={b.id} className="glass-card p-4 flex flex-wrap justify-between gap-4">
             <div className="space-y-1">
               <p className="font-medium">{b.title}</p>
@@ -97,6 +100,8 @@ export default function AdminBookingsPage() {
           </div>
         ))}
       </div>
+      <Pagination pager={pager} />
+      </>
       )}
     </DashboardLayout>
   );
