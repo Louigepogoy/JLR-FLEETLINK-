@@ -6,11 +6,13 @@ import { FileText, Receipt } from 'lucide-react';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, ReceiptIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination, { usePagination } from '@/components/ui/Pagination';
 import api from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 type Transaction = {
   id: string;
+  type?: string;
   invoice_number: string;
   vehicle_title: string;
   total_amount: number;
@@ -23,6 +25,7 @@ export default function TransactionsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const pager = usePagination(transactions);
 
   useEffect(() => {
     api.get('/transactions').then((res) => setTransactions(res.data.data)).catch(() => {}).finally(() => setLoading(false));
@@ -43,6 +46,7 @@ export default function TransactionsPage() {
       {transactions.length === 0 ? (
         <EmptyState icon={Receipt} title="No transactions yet" description="Your renter payments and provider earnings will show up here." />
       ) : (
+      <>
       <div className="glass-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -57,7 +61,7 @@ export default function TransactionsPage() {
             </tr>
           </thead>
           <tbody>
-            {transactions.map((t) => (
+            {pager.pageItems.map((t) => (
               <tr key={t.id} className="border-b border-[var(--card-border)] hover:bg-[var(--primary)]/5">
                 <td className="p-4 font-mono text-xs">{t.invoice_number}</td>
                 <td className="p-4">{t.vehicle_title}</td>
@@ -71,7 +75,11 @@ export default function TransactionsPage() {
                   )}
                 </td>
                 <td className="p-4 font-semibold">{formatCurrency(t.total_amount)}</td>
-                <td className="p-4 capitalize">{t.status?.replace('_', ' ')}</td>
+                <td className="p-4 capitalize">
+                  {t.type === 'refund' ? (
+                    <span className="rounded-full bg-red-500/15 px-2 py-0.5 text-xs text-red-500">Refund</span>
+                  ) : t.status?.replace('_', ' ')}
+                </td>
                 <td className="p-4 text-[var(--muted)]">{formatDate(t.created_at)}</td>
                 <td className="p-4">
                   <button
@@ -86,6 +94,8 @@ export default function TransactionsPage() {
           </tbody>
         </table>
       </div>
+      <Pagination pager={pager} />
+      </>
       )}
     </DashboardLayout>
   );

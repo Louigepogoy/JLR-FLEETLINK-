@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, Filter, MapPin, SearchX, LayoutGrid, Map as MapIcon, LocateFixed, Loader2, X } from 'lucide-react';
+import { Filter, MapPin, SearchX, LayoutGrid, Map as MapIcon, LocateFixed, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -18,7 +18,7 @@ import { getProvince, islandGroups, type IslandGroup } from '@/lib/philippines';
 import { useBarangayOptions, useCityOptions } from '@/lib/usePlaceOptions';
 import OptionCombobox from '@/components/ui/OptionCombobox';
 
-type Filters = { search: string; type: string; islandGroup: string; province: string; city: string; barangay: string; location: string; minPrice: string; maxPrice: string };
+type Filters = { brand: string; model: string; type: string; islandGroup: string; province: string; city: string; barangay: string; location: string; minPrice: string; maxPrice: string };
 
 // Quick price ranges (per day) shown under the filters.
 const PRICE_PRESETS: { label: string; min: string; max: string }[] = [
@@ -38,7 +38,8 @@ const toParams = (filters: Filters, near: Near) => {
     params.nearLat = String(near.lat);
     params.nearLng = String(near.lng);
   }
-  if (filters.search) params.search = filters.search;
+  if (filters.brand) params.brand = filters.brand;
+  if (filters.model) params.model = filters.model;
   if (filters.type) params.type = filters.type;
   if (filters.province) params.province = filters.province;
   else if (filters.islandGroup) params.islandGroup = filters.islandGroup;
@@ -56,7 +57,8 @@ function VehiclesContent() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'map'>(searchParams.get('view') === 'map' ? 'map' : 'list');
   const [filters, setFilters] = useState<Filters>({
-    search: '',
+    brand: '',
+    model: '',
     type: searchParams.get('type') || '',
     islandGroup: '',
     province: searchParams.get('province') || '',
@@ -72,6 +74,14 @@ function VehiclesContent() {
   const { options: barangayOptions, loading: barangaysLoading } = useBarangayOptions(filters.province, filters.city);
 
   const [placeFiltered, setPlaceFiltered] = useState(Boolean(filters.islandGroup || filters.province || filters.city || filters.barangay || filters.location));
+  const [brandOptions, setBrandOptions] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    api.get('/vehicles/brands').then((res) => setBrandOptions(res.data.data)).catch(() => {});
+  }, []);
+  // With a brand picked, only its models; otherwise every model, without duplicates.
+  const modelChoices = filters.brand
+    ? brandOptions[filters.brand] || []
+    : Array.from(new Set(Object.values(brandOptions).flat())).sort();
   const [near, setNear] = useState<Near>(null);
   // Starts true: the page asks for the location automatically on load.
   const [locating, setLocating] = useState(true);
@@ -181,15 +191,24 @@ function VehiclesContent() {
           <div className="glass-card p-4 mb-6">
             {/* !pl-10: .input-field sets its own padding, which would otherwise win over pl-10. */}
             <div className="grid md:grid-cols-4 lg:grid-cols-12 gap-4">
-              <div className="md:col-span-2 lg:col-span-3 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--muted)]" />
-                <input
-                  className="input-field !pl-10"
-                  placeholder="Search brand, model..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                />
-              </div>
+              <select
+                className="input-field md:col-span-2 lg:col-span-2"
+                value={filters.brand}
+                aria-label="Brand"
+                onChange={(e) => setFilters({ ...filters, brand: e.target.value, model: '' })}
+              >
+                <option value="">All Brands</option>
+                {Object.keys(brandOptions).map((b) => <option key={b} value={b}>{b}</option>)}
+              </select>
+              <select
+                className="input-field md:col-span-2 lg:col-span-2"
+                value={filters.model}
+                aria-label="Model"
+                onChange={(e) => setFilters({ ...filters, model: e.target.value })}
+              >
+                <option value="">All Models</option>
+                {modelChoices.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
               <select
                 className="input-field md:col-span-2 lg:col-span-2"
                 value={filters.islandGroup}

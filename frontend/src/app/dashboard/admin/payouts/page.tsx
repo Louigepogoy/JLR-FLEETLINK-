@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
 import { IconChip, WalletIcon } from '@/components/illustrations/MiniIcons';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination, { usePagination } from '@/components/ui/Pagination';
 import api from '@/lib/api';
 import { bookingCode, cn, formatCurrency, formatTimestamp } from '@/lib/utils';
 
@@ -56,6 +57,8 @@ export default function AdminPayoutsPage() {
   const [payouts, setPayouts] = useState<PendingPayout[]>([]);
   const [history, setHistory] = useState<PayoutRecord[]>([]);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const pendingPager = usePagination(payouts);
+  const historyPager = usePagination(history);
 
   const fetchPayouts = () =>
     Promise.all([
@@ -105,6 +108,7 @@ export default function AdminPayoutsPage() {
       {payouts.length === 0 ? (
         <EmptyState icon={Wallet} title="No pending payouts" description="All owner earnings have been paid out." />
       ) : (
+        <>
         <div className="glass-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -118,7 +122,7 @@ export default function AdminPayoutsPage() {
               </tr>
             </thead>
             <tbody>
-              {payouts.map((p) => (
+              {pendingPager.pageItems.map((p) => (
                 <tr key={p.owner_id} className="border-b border-[var(--card-border)] hover:bg-[var(--primary)]/5">
                   <td className="p-4">
                     <p className="font-medium">{p.owner_name}</p>
@@ -151,6 +155,8 @@ export default function AdminPayoutsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={pendingPager} />
+        </>
       )}
 
       <div className="mt-10 mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -166,6 +172,7 @@ export default function AdminPayoutsPage() {
       {history.length === 0 ? (
         <EmptyState icon={History} title="No payouts yet" description="Payouts appear here as soon as they are sent." />
       ) : (
+        <>
         <div className="glass-card overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -180,7 +187,7 @@ export default function AdminPayoutsPage() {
               </tr>
             </thead>
             <tbody>
-              {history.map((p) => (
+              {historyPager.pageItems.map((p) => (
                 <tr key={p.id} className="border-b border-[var(--card-border)] hover:bg-[var(--primary)]/5">
                   <td className="p-4 whitespace-nowrap text-xs">{formatTimestamp(p.created_at)}</td>
                   <td className="p-4">
@@ -217,6 +224,8 @@ export default function AdminPayoutsPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pager={historyPager} />
+        </>
       )}
     </DashboardLayout>
   );

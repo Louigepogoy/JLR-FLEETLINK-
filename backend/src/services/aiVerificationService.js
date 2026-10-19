@@ -70,19 +70,27 @@ const generateWithFallback = async (request) => {
   );
 };
 
-const urlToLocalPath = (url) => {
+// Loads an uploaded image for Gemini: from the local /uploads folder when the file is there, otherwise by
+// downloading its URL (files stored in Cloudinary). Returns null when it can't be read.
+const urlToImagePart = async (url) => {
   if (!url) return null;
-  const filename = url.split('/uploads/')[1];
-  if (!filename) return null;
-  const filePath = path.join(uploadDir, filename);
-  return fs.existsSync(filePath) ? filePath : null;
-};
-
-const fileToImagePart = (filePath) => {
-  const ext = path.extname(filePath).toLowerCase();
+  const ext = path.extname(url.split('?')[0]).toLowerCase();
   const mimeType = MEDIA_TYPES[ext] || 'image/jpeg';
-  const data = fs.readFileSync(filePath).toString('base64');
-  return { inlineData: { mimeType, data } };
+  const filename = url.split('/uploads/')[1];
+  if (filename) {
+    const filePath = path.join(uploadDir, path.basename(filename));
+    if (fs.existsSync(filePath)) {
+      return { inlineData: { mimeType, data: fs.readFileSync(filePath).toString('base64') } };
+    }
+  }
+  if (!url.startsWith('https://') && !url.startsWith('http://')) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+    if (!res.ok) return null;
+    return { inlineData: { mimeType, data: Buffer.from(await res.arrayBuffer()).toString('base64') } };
+  } catch {
+    return null;
+  }
 };
 
 const RESULT_SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object, no markdown fences, no extra text, in exactly this shape:
@@ -116,9 +124,8 @@ const parseAiJson = (text) => {
 };
 
 const analyzeLicenseVerification = async ({ licenseImageUrl, selfieImageUrl, licenseNumber, fullName }) => {
-  const licensePath = urlToLocalPath(licenseImageUrl);
-  const selfiePath = urlToLocalPath(selfieImageUrl);
-  if (!licensePath || !selfiePath) {
+  const [licensePart, selfiePart] = await Promise.all([urlToImagePart(licenseImageUrl), urlToImagePart(selfieImageUrl)]);
+  if (!licensePart || !selfiePart) {
     const error = new Error('License or selfie image file could not be found on the server.');
     error.status = 404;
     throw error;
@@ -137,9 +144,9 @@ const analyzeLicenseVerification = async ({ licenseImageUrl, selfieImageUrl, lic
     },
     contents: [
       { text: `Applicant name: ${fullName || 'unknown'}\nStated license number: ${licenseNumber || 'unknown'}\n\nDriver's license photo:` },
-      fileToImagePart(licensePath),
+      licensePart,
       { text: 'Live selfie photo:' },
-      fileToImagePart(selfiePath),
+      selfiePart,
     ],
   });
 
@@ -147,8 +154,8 @@ const analyzeLicenseVerification = async ({ licenseImageUrl, selfieImageUrl, lic
 };
 
 const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleType, plateNumber }) => {
-  const localPaths = (imageUrls || []).map(urlToLocalPath).filter(Boolean).slice(0, 4);
-  if (!localPaths.length) {
+  const photoParts = (await Promise.all((imageUrls || []).slice(0, 4).map(urlToImagePart))).filter(Boolean);
+  if (!photoParts.length) {
     const error = new Error('No vehicle photo files could be found on the server.');
     error.status = 404;
     throw error;
@@ -170,7 +177,7 @@ const analyzeVehiclePhotos = async ({ imageUrls, title, brand, model, vehicleTyp
       {
         text: `Listing title: ${title || 'unknown'}\nStated brand/model: ${brand || ''} ${model || ''}\nStated type: ${vehicleType || 'unknown'}\nPlate number: ${plateNumber || 'unknown'}\n\nVehicle photos:`,
       },
-      ...localPaths.map(fileToImagePart),
+      ...photoParts,
     ],
   });
 

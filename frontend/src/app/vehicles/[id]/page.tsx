@@ -355,7 +355,7 @@ export default function VehicleDetailPage() {
 
                   {maintenanceDates.filter((m) => m.end_date >= new Date().toISOString().split('T')[0]).length > 0 && (
                     <div className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
-                      <p className="font-semibold mb-1">Unavailable for maintenance:</p>
+                      <p className="font-semibold mb-1">Unavailable (blocked by the owner):</p>
                       {maintenanceDates
                         .filter((m) => m.end_date >= new Date().toISOString().split('T')[0])
                         .map((m) => (

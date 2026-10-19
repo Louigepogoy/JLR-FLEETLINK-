@@ -2,6 +2,7 @@ const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
 const { createNotification } = require('../utils/notifications');
 const { canList } = require('../utils/helpers');
+const { uploadedUrl } = require('../utils/cloudStorage');
 
 // Business documents an owner can submit as proof of business.
 const BUSINESS_PROOF_TYPES = {
@@ -83,11 +84,11 @@ const submitVerification = async (req, res, next) => {
 
     const { licenseNumber } = req.body;
     const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
-    const licenseImageUrl = `${baseUrl}/uploads/${licenseFile.filename}`;
-    const selfieImageUrl = `${baseUrl}/uploads/${selfieFile.filename}`;
-    const businessProofUrl = businessFile ? `${baseUrl}/uploads/${businessFile.filename}` : null;
-    const ownerOrUrl = orFile ? `${baseUrl}/uploads/${orFile.filename}` : null;
-    const ownerCrUrl = crFile ? `${baseUrl}/uploads/${crFile.filename}` : null;
+    const licenseImageUrl = uploadedUrl(licenseFile, baseUrl);
+    const selfieImageUrl = uploadedUrl(selfieFile, baseUrl);
+    const businessProofUrl = businessFile ? uploadedUrl(businessFile, baseUrl) : null;
+    const ownerOrUrl = orFile ? uploadedUrl(orFile, baseUrl) : null;
+    const ownerCrUrl = crFile ? uploadedUrl(crFile, baseUrl) : null;
 
     const result = await query(
       `UPDATE users SET

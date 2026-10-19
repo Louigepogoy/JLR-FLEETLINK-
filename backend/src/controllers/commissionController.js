@@ -1,5 +1,6 @@
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/db');
+const { recordAudit } = require('../utils/auditLog');
 
 const getCommission = async (req, res, next) => {
   try {
@@ -20,6 +21,7 @@ const updateCommission = async (req, res, next) => {
     }
 
     const { percentage, notes } = req.body;
+    const previous = await query('SELECT commission_percentage FROM platform_settings ORDER BY id DESC LIMIT 1');
 
     await query(
       `UPDATE platform_settings SET commission_percentage = $1, updated_by = $2, updated_at = NOW()`,
@@ -34,6 +36,10 @@ const updateCommission = async (req, res, next) => {
     const result = await query(
       'SELECT commission_percentage, inspection_window_minutes, updated_at FROM platform_settings ORDER BY id DESC LIMIT 1'
     );
+    await recordAudit(req, 'commission_changed', {
+      target: { type: 'setting', label: 'Commission rate' },
+      details: { from: previous.rows[0]?.commission_percentage, to: percentage, notes: notes || null },
+    });
 
     res.json({
       success: true,
@@ -106,6 +112,10 @@ const updateInspectionWindow = async (req, res, next) => {
        RETURNING commission_percentage, inspection_window_minutes, updated_at`,
       [req.body.minutes, req.user.id]
     );
+    await recordAudit(req, 'inspection_window_changed', {
+      target: { type: 'setting', label: 'Inspection time' },
+      details: { to: req.body.minutes },
+    });
 
     res.json({
       success: true,
