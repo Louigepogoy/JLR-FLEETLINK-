@@ -78,7 +78,7 @@ export default function AuditTrailPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); pager.setPage(1); }}
           placeholder="Search by admin, action or target"
-          className="input-field pl-9 w-full"
+          className="input-field !pl-10 w-full"
         />
       </div>
 

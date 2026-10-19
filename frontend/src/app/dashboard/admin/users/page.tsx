@@ -84,7 +84,7 @@ export default function AdminUsersPage() {
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder="Search by name, email or role"
-          className="input-field pl-9 w-full"
+          className="input-field !pl-10 w-full"
         />
       </div>
       {filtered.length === 0 ? (

@@ -63,21 +63,31 @@ const getLocalOrDownload = async (url) => {
   console.log(`${urlRows.size} upload URL(s) found.${apply ? '' : ' (dry run, nothing changed)'}`);
   const moved = new Map();
   const missing = [];
-  for (const url of urlRows.keys()) {
+  // A few files at a time: each one is a download plus an upload, which is slow one by one.
+  const queue = [...urlRows.keys()];
+  const migrateOne = async (url) => {
     const file = await getLocalOrDownload(url);
-    if (!file) { missing.push(url); console.log(`  MISSING  ${url}`); continue; }
-    if (!apply) { console.log(`  would move  ${url}${file.remote ? '  (from the live site)' : '  (local file)'}`); continue; }
+    if (!file) { missing.push(url); console.log(`  MISSING  ${url}`); return; }
+    if (!apply) { console.log(`  would move  ${url}${file.remote ? '  (from the live site)' : '  (local file)'}`); return; }
     try {
-      const cloudUrl = await uploadFileToCloud(file.filePath, publicIdFor(file.filename));
+      let cloudUrl;
+      for (let attempt = 1; ; attempt++) {
+        try { cloudUrl = await uploadFileToCloud(file.filePath, publicIdFor(file.filename)); break; }
+        catch (err) { if (attempt >= 3) throw err; }
+      }
       moved.set(url, cloudUrl);
-      console.log(`  moved  ${url}\n      -> ${cloudUrl}`);
+      console.log(`  moved  ${url}
+      -> ${cloudUrl}`);
     } catch (err) {
       missing.push(url);
       console.log(`  FAILED  ${url}: ${err.message}`);
     } finally {
       if (file.temp) fs.unlinkSync(file.filePath);
     }
-  }
+  };
+  await Promise.all(Array.from({ length: 6 }, async () => {
+    while (queue.length) await migrateOne(queue.shift());
+  }));
 
   if (apply) {
     for (const [url, cloudUrl] of moved) {
