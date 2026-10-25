@@ -3,7 +3,11 @@ const { createNotification } = require('../utils/notifications');
 const { cancelUnpaidBookings } = require('./bookingExpiryService');
 const { autoPayoutOwner } = require('./payoutService');
 
-const SWEEP_INTERVAL_MS = 60 * 1000;
+// How often the background sweep runs. Every query wakes the database, and Neon's free plan only suspends
+// compute after 5 idle minutes, so a 1-minute timer kept it awake 24/7 and used up the monthly compute hours.
+// Request handlers also sweep on demand (sweepQuietly), so a longer interval only delays timer-only work such as
+// reminders. Override with SWEEP_INTERVAL_MINUTES in backend/.env.
+const SWEEP_INTERVAL_MS = (Number(process.env.SWEEP_INTERVAL_MINUTES) > 0 ? Number(process.env.SWEEP_INTERVAL_MINUTES) : 15) * 60 * 1000;
 const REMINDER_MINUTES_LEFT = 10;
 const DEFAULT_WINDOW_MINUTES = 60;
 // A paid booking that still hasn't been handed over this many hours after its pickup time is handed
