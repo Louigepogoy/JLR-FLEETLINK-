@@ -22,6 +22,11 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // A malformed id in the URL (e.g. /vehicles/abc) makes Postgres reject the UUID: that is "not found", not a server error.
+  if (err.code === '22P02') {
+    return res.status(404).json({ success: false, message: 'Not found' });
+  }
+
   if (err.name === 'ValidationError') {
     return res.status(400).json({ success: false, message: err.message, errors: err.errors });
   }
