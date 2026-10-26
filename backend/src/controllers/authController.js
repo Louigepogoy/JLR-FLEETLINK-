@@ -382,6 +382,16 @@ const googleLogin = async (req, res, next) => {
     let result = await query('SELECT * FROM users WHERE google_id = $1 OR email = $2', [googleId, email]);
     let user = result.rows[0];
 
+    if (!user && !ACCOUNT_TYPES.includes(req.body.accountType)) {
+      // Sign in with Google from the Login page only works for existing accounts; only the Register page
+      // (which sends the chosen account type) may create one.
+      return res.status(404).json({
+        success: false,
+        code: 'NOT_REGISTERED',
+        message: 'No account found for this Google email yet. Please create an account first.',
+      });
+    }
+
     if (!user) {
       const insertResult = await query(
         `INSERT INTO users (email, full_name, role, google_id, avatar_url, approval_status, is_active, account_type)

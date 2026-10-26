@@ -23,6 +23,12 @@ export default function LoginPage() {
   const handleApiError = (err: unknown, fallback: string) => {
     const error = err as { response?: { data?: { message?: string; code?: string }; status?: number } };
     let msg = error.response?.data?.message || fallback;
+    if (error.response?.data?.code === 'NOT_REGISTERED') {
+      // Signed in with a Google email that has no account yet: send them to Create Account.
+      toast.error(msg);
+      router.push('/auth/register');
+      return;
+    }
     if (!error.response) {
       msg = 'Cannot reach server. Start backend (npm run dev) and check DATABASE_URL / Neon setup.';
     } else if (error.response.status === 503) {
