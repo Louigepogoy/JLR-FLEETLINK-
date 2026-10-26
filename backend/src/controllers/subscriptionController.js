@@ -135,6 +135,33 @@ const activateSubscription = async ({ userId, plan, paymentMethod, paymentRefere
   return result.rows[0];
 };
 
+/** Admin: every owner subscription with the owner and what was paid. Free trials (payment_method 'trial') don't count as revenue. */
+const getAllSubscriptions = async (req, res, next) => {
+  try {
+    const result = await query(
+      `SELECT s.id, s.owner_id, u.full_name AS owner_name, u.email AS owner_email, s.plan_id, s.plan_name, s.price,
+              s.billing_cycle, s.extra_vehicle_slots, s.payment_method, s.payment_reference, s.card_last_four,
+              s.starts_at, s.ends_at, s.status, s.created_at,
+              (s.status = 'active' AND (s.ends_at IS NULL OR s.ends_at > NOW())) AS is_current
+       FROM owner_subscriptions s
+       JOIN users u ON u.id = s.owner_id
+       ORDER BY s.created_at DESC`
+    );
+    const paid = result.rows.filter((r) => r.payment_method !== 'trial');
+    res.json({
+      success: true,
+      data: result.rows,
+      summary: {
+        total_revenue: paid.reduce((sum, r) => sum + Number(r.price), 0),
+        paid_count: paid.length,
+        active_count: result.rows.filter((r) => r.is_current).length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /** The user's active paid subscription; only paid plans can buy extra vehicle slots. */
 const getActivePaidSubscription = async (userId) => {
   const result = await query(
@@ -216,6 +243,7 @@ const subscriptionValidation = [
 
 module.exports = {
   PLANS,
+  getAllSubscriptions,
   rejectNonOwner,
   EXTRA_VEHICLE_SLOT_PRICE,
   MAX_EXTRA_SLOTS_PER_PURCHASE,
