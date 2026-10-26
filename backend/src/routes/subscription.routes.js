@@ -5,9 +5,11 @@ const {
   getPlans,
   getMySubscription,
   subscribe,
+  getAllSubscriptions,
   subscriptionValidation,
 } = require('../controllers/subscriptionController');
 
+router.get('/admin/all', authenticate, authorize('admin'), getAllSubscriptions);
 router.get('/plans', authenticate, authorize('user', 'admin'), getPlans);
 router.get('/me', authenticate, authorize('user', 'admin'), getMySubscription);
 router.post('/subscribe', authenticate, authorize('user', 'admin'), subscriptionValidation, subscribe);
